@@ -1,0 +1,604 @@
+# mt5-mcp — Architecture
+
+**Open-source MCP server wrapping the MetaTrader 5 Python library.**
+
+**Repo:** `github.com/fintrixmarkets/mt5-mcp` (proposed)
+**Licence:** MIT
+**Status:** v0.1 architecture draft
+**Owner:** Vincent / CTO, Fintrix Markets
+**Audience:** Implementers (Claude Code, contributors, integrators)
+
+---
+
+## 1. What this is and why it exists
+
+`mt5-mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server that exposes a customer's local MetaTrader 5 terminal as a set of tools an AI agent can call.
+
+It wraps the official [`MetaTrader5` Python library](https://pypi.org/project/MetaTrader5/) (henceforth `mt5lib`) — the same library institutional traders use for algorithmic strategies — and presents its surface as MCP tools (`get_account_info`, `place_order`, `close_position`, etc.) plus a small set of MCP resources for live state.
+
+**Why it exists:**
+
+1. **Most retail forex/CFD brokers expose MT5 to clients but not directly to AI agents.** Their HTTP APIs cover account management and deposits but stop at trading. There's no broker-agnostic, standards-based way for an agent to actually place trades.
+2. **MT5 itself has no MCP server.** Existing community wrappers are either closed-source SDKs (cTrader Open API), broker-specific (custom MT5 manager APIs), or web-API gateways (mtsocketapi, mt5-rest) that require server-side deployment and broker cooperation.
+3. **`mt5lib` already runs locally**, already authenticates against the customer's broker, and already executes against the broker's liquidity. Wrapping it in MCP is a thin translation layer — not a new trading system.
+
+The project is open-source and broker-agnostic by design. Any broker's customers can use it. Fintrix is the launch reference user; nothing in the codebase should be Fintrix-specific.
+
+---
+
+## 2. Design principles
+
+These are non-negotiable. Every implementation decision should be traceable back to one of these.
+
+1. **Local-first.** The MCP server runs on the customer's machine, in the same process tree as their agent runtime. No cloud component. No telemetry by default.
+2. **Reuse existing authentication.** Customer is already logged into MT5 terminal. Don't store credentials, don't manage sessions, don't proxy logins. Read the existing terminal state.
+3. **Read tools have no consent gate; mutating tools do.** Reading positions is safe and frequent. Placing orders requires consent — configurable per customer.
+4. **Server-side is the security boundary, not the MCP.** Hard limits (max position, max daily loss, max leverage) live in the broker's MT5 server. MCP-side limits are UX feedback, not security.
+5. **Broker-agnostic.** No hardcoded broker URLs, MT5 server names, symbol conventions. Customer or agent provides them.
+6. **Minimal tool surface.** Ship 12 tools, not 50. Every tool must have a clear "agent reaches for this" use case. Power users can extend via the plugin hook.
+7. **Honest about constraints.** Windows-only at v1. Document the WSL2 / VM path for Mac/Linux. Don't pretend portability we don't have.
+8. **Standard MCP, no extensions.** Use the official Python `mcp` SDK. No custom protocols. Any MCP-compatible client should work.
+9. **Human-readable everything.** Tool descriptions, error messages, logs — all written so a human reading them can reason about what happened.
+
+---
+
+## 3. System overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Customer's machine (Windows)                                        │
+│                                                                      │
+│  ┌──────────────────────┐       ┌──────────────────────┐            │
+│  │  Agent runtime       │       │  MT5 Terminal        │            │
+│  │  (Claude Desktop /   │       │  (Windows .exe,      │            │
+│  │  OpenClaw / Cursor / │       │  logged into broker) │            │
+│  │  custom MCP client)  │       │                      │            │
+│  └──────────┬───────────┘       └──────────┬───────────┘            │
+│             │ MCP                           │ IPC                    │
+│             │ (stdio)                       │ (named pipes)          │
+│             ▼                               ▲                        │
+│  ┌──────────────────────────────────────────┴─────────┐             │
+│  │              mt5-mcp (Python process)              │             │
+│  │                                                     │             │
+│  │  ┌────────────────────────────────────────────┐    │             │
+│  │  │  MCP server (stdio transport)              │    │             │
+│  │  └────────────────────────────────────────────┘    │             │
+│  │  ┌────────────────────────────────────────────┐    │             │
+│  │  │  Policy engine (consent thresholds, soft   │    │             │
+│  │  │  limits, idempotency, audit log)           │    │             │
+│  │  └────────────────────────────────────────────┘    │             │
+│  │  ┌────────────────────────────────────────────┐    │             │
+│  │  │  mt5lib adapter (wraps MetaTrader5 calls)  │    │             │
+│  │  └────────────────────────────────────────────┘    │             │
+│  └─────────────────────────────────────────────────────┘             │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+                       ┌──────────────────────┐
+                       │   Broker MT5 Server  │
+                       │   (off-machine)      │
+                       │   Hard risk limits   │
+                       └──────────────────────┘
+```
+
+**Process model:** MT5 Terminal must be running and logged in. `mt5-mcp` is launched on demand by the agent runtime via stdio. `mt5lib.initialize()` connects to the running terminal via Windows named pipes. Tools translate MCP calls to `mt5lib` calls and return structured JSON.
+
+---
+
+## 4. Module layout
+
+```
+mt5-mcp/
+├── pyproject.toml
+├── README.md
+├── LICENCE                          MIT
+├── SECURITY.md                      Threat model, disclosure
+├── CHANGELOG.md
+├── docs/
+│   ├── installation.md              Per-platform install (Windows native, WSL2, Wine)
+│   ├── client-setup.md              Claude Desktop / OpenClaw / Cursor config snippets
+│   ├── tools.md                     Reference for all 12 tools (auto-generated from docstrings)
+│   ├── policy.md                    Consent thresholds, soft limits, config file
+│   ├── extending.md                 Plugin hooks for custom tools
+│   └── examples/
+│       ├── claude-desktop-config.json
+│       ├── openclaw-skill.md
+│       └── cursor-mcp-config.json
+├── src/
+│   └── mt5_mcp/
+│       ├── __init__.py
+│       ├── __main__.py              Entry point: `python -m mt5_mcp`
+│       ├── server.py                MCP server bootstrap, transport selection
+│       ├── config.py                Pydantic config model + file loader
+│       ├── policy/
+│       │   ├── __init__.py
+│       │   ├── consent.py           Consent threshold logic
+│       │   ├── limits.py            Soft client-side limits
+│       │   └── idempotency.py       Idempotency key tracking
+│       ├── adapter/
+│       │   ├── __init__.py
+│       │   ├── mt5_client.py        Thin wrapper around mt5lib (singleton, connection mgmt)
+│       │   ├── symbols.py           Symbol info + market hours
+│       │   └── conversions.py       mt5lib types ⇄ structured dicts
+│       ├── tools/
+│       │   ├── __init__.py          Tool registry
+│       │   ├── account.py           get_account_info
+│       │   ├── positions.py         get_positions, close_position
+│       │   ├── orders.py            place_order, modify_order, cancel_order, get_orders
+│       │   ├── history.py           get_history
+│       │   ├── market.py            get_quote, get_symbols, get_market_hours
+│       │   └── system.py            ping, get_terminal_info
+│       ├── resources/
+│       │   ├── __init__.py
+│       │   ├── account.py           account://current
+│       │   ├── positions.py         positions://current
+│       │   └── quotes.py            quotes://{symbol} (subscription)
+│       ├── audit/
+│       │   ├── __init__.py
+│       │   └── log.py               Append-only JSONL audit log
+│       └── plugins/
+│           ├── __init__.py
+│           └── loader.py            Discover and register third-party tools
+├── tests/
+│   ├── conftest.py                  Pytest fixtures, mock mt5lib
+│   ├── test_tools_account.py
+│   ├── test_tools_orders.py
+│   ├── test_policy_consent.py
+│   ├── test_policy_limits.py
+│   ├── test_adapter_conversions.py
+│   ├── test_audit_log.py
+│   └── integration/
+│       ├── README.md                How to run against a real demo MT5 terminal
+│       └── test_full_flow.py
+└── examples/
+    ├── headless_demo.py             Standalone Python script driving the MCP via stdio
+    ├── place_order_with_sl.py
+    └── close_all_positions.py
+```
+
+---
+
+## 5. Tool surface (v1)
+
+Twelve tools, two resources. Locked for v1; add more only with strong justification.
+
+### Read-only tools (no consent gate)
+
+| Tool | Purpose | Returns |
+|---|---|---|
+| `get_account_info` | Account balance, equity, margin, free margin, leverage, currency, server | `AccountInfo` |
+| `get_positions` | Open positions, optional symbol filter | `list[Position]` |
+| `get_orders` | Pending orders, optional symbol filter | `list[Order]` |
+| `get_history` | Closed trades within a time range | `list[Deal]` |
+| `get_quote` | Current bid/ask for a symbol | `Quote` |
+| `get_symbols` | Tradeable instruments, optional category filter | `list[SymbolInfo]` |
+| `get_market_hours` | Session status (open/closed/holiday) per symbol | `MarketHours` |
+| `get_terminal_info` | Connection status, MT5 build, broker name, login | `TerminalInfo` |
+| `ping` | Health check; verifies mt5lib is connected | `{ok: bool, latency_ms: int}` |
+
+### Mutating tools (consent gate at policy threshold)
+
+| Tool | Purpose | Returns |
+|---|---|---|
+| `place_order` | Market or pending order with optional SL/TP | `OrderResult` |
+| `modify_order` | Change SL/TP/expiry on an existing order or position | `OrderResult` |
+| `close_position` | Close in full or part by ticket | `OrderResult` |
+| `cancel_order` | Cancel a pending order by ticket | `OrderResult` |
+
+### Resources
+
+| URI | Purpose |
+|---|---|
+| `account://current` | Live account snapshot, refreshed on read |
+| `positions://current` | Live positions snapshot, refreshed on read |
+| `quotes://{symbol}` | Quote subscription — agent receives push updates |
+
+### Explicitly out of scope for v1
+
+- No history/analytics tools beyond `get_history` (no P&L breakdowns, no chart data — agents can compute from `get_history`)
+- No backtesting, no strategy templates, no signal generation
+- No multi-account management — one MT5 terminal at a time
+- No automation primitives ("place this order in 5 minutes" — agent runtime's job, not MCP's)
+- No copy-trading / social features
+- No symbol watchlists / favourites — read-only `get_symbols` is enough
+
+---
+
+## 6. Type system
+
+All tools return Pydantic models serialised to JSON. Concrete shapes (illustrative — full schemas in `docs/tools.md`):
+
+```python
+class AccountInfo(BaseModel):
+    login: int
+    name: str
+    server: str           # MT5 server name, e.g. "FintrixMarkets-Live"
+    currency: str         # ISO 4217, e.g. "USD"
+    balance: Decimal      # NOT float
+    equity: Decimal
+    margin: Decimal
+    margin_free: Decimal
+    margin_level: Decimal | None
+    leverage: int
+    trade_allowed: bool
+    margin_mode: Literal["retail_netting", "exchange", "retail_hedging"]
+
+class Position(BaseModel):
+    ticket: int
+    symbol: str
+    type: Literal["buy", "sell"]
+    volume: Decimal       # in lots
+    price_open: Decimal
+    price_current: Decimal
+    sl: Decimal | None
+    tp: Decimal | None
+    profit: Decimal
+    swap: Decimal
+    commission: Decimal
+    time_open: datetime   # timezone-aware
+    comment: str | None
+
+class OrderRequest(BaseModel):
+    symbol: str
+    side: Literal["buy", "sell"]
+    volume: Decimal
+    type: Literal["market", "limit", "stop", "stop_limit"]
+    price: Decimal | None         # required for limit/stop
+    sl: Decimal | None
+    tp: Decimal | None
+    deviation: int = 10           # max slippage in points
+    comment: str | None
+    idempotency_key: str | None   # client-supplied; see §8
+
+class OrderResult(BaseModel):
+    success: bool
+    ticket: int | None
+    symbol: str
+    type: str
+    volume: Decimal
+    price_filled: Decimal | None
+    requested: OrderRequest
+    error: ErrorDetail | None
+    server_response_code: int     # mt5lib retcode
+```
+
+**Conventions:**
+- All money / prices / volumes are `Decimal`, serialised to JSON as strings (`"100.50"`)
+- All timestamps are timezone-aware `datetime`, serialised as ISO 8601 with offset
+- All enum-like fields are string literals (lowercase, snake_case)
+- Errors use a structured `ErrorDetail` model with `code`, `message`, `retryable: bool`, `details: dict`
+
+---
+
+## 7. Configuration
+
+Single config file: `~/.config/mt5-mcp/config.toml` (or `%APPDATA%\mt5-mcp\config.toml` on Windows). Loaded at server start, hot-reloaded on SIGHUP.
+
+```toml
+[mt5]
+# Path to MT5 terminal executable. Auto-detected if omitted.
+terminal_path = "C:\\Program Files\\MetaTrader 5\\terminal64.exe"
+
+# Login is read from the running terminal; not configured here.
+# If multiple terminals are running, specify by login:
+# preferred_login = 12345678
+
+[policy]
+# Auto-approve trades at or below this notional in account currency.
+# Above this, the tool returns requires_approval and the agent must
+# obtain explicit consent (e.g. via 1Password biometric).
+auto_approve_notional = "1000.00"
+
+# Hard local cap. Trades above this are refused outright by mt5-mcp,
+# regardless of consent. Server-side limits still apply on top.
+max_notional_per_trade = "10000.00"
+
+# Refuse close_position requests that would realise a loss above this.
+max_realised_loss_per_close = "500.00"
+
+# Refuse new orders that would push total daily realised loss above this.
+max_daily_loss = "2000.00"
+
+[idempotency]
+# Idempotency keys are remembered for this duration. Replays within
+# the window return the original result.
+ttl_seconds = 86400  # 24h
+
+[symbols]
+# Optional allowlist. If non-empty, only listed symbols can be traded.
+allowlist = []  # e.g. ["EURUSD", "GBPUSD", "XAUUSD"]
+
+# Optional denylist. Trades on these symbols are refused.
+denylist = []
+
+[audit]
+# Append-only JSONL log of every tool call.
+path = "~/.local/share/mt5-mcp/audit.jsonl"
+
+# Rotate when the file exceeds this size.
+max_bytes = 10_485_760  # 10 MB
+
+[telemetry]
+# Off by default. If enabled, sends anonymous usage stats (tool name +
+# success/error count, no payloads) to the configured endpoint.
+enabled = false
+endpoint = ""
+```
+
+**Config validation:** Pydantic model. Server refuses to start with an invalid config and prints a clear error.
+
+---
+
+## 8. Policy engine
+
+### 8.1 Consent gate
+
+Mutating tools emit `requires_approval` when the request exceeds `policy.auto_approve_notional`. The MCP returns this as a structured response — the agent then has to obtain consent and retry with an `approval_token`.
+
+```python
+# Returned when over auto-approve threshold:
+{
+  "status": "requires_approval",
+  "reason": "Trade notional 2500.00 USD exceeds auto-approve threshold 1000.00 USD",
+  "approval_request_id": "req_01HX...",
+  "expires_at": "2026-04-21T10:35:00Z"
+}
+
+# Agent obtains consent (e.g. via 1Password CLI biometric in OpenClaw),
+# signs an approval token, and retries:
+{
+  "tool": "place_order",
+  "arguments": {
+    ...,
+    "approval_token": "<signed token>",
+    "approval_request_id": "req_01HX..."
+  }
+}
+```
+
+**The MCP does not itself enforce *who* signed the approval token.** That's the agent runtime's job (OpenClaw + 1Password CLI in the Fintrix flow). The MCP only verifies:
+- The token is well-formed (HMAC-signed with the customer's local secret, rotated quarterly)
+- The token matches the `approval_request_id`
+- The request hasn't expired
+
+This keeps the MCP broker-agnostic and runtime-agnostic. Policy enforcement happens at the agent runtime layer; the MCP just provides the hook.
+
+### 8.2 Soft limits
+
+Hard refusals (no approval can override):
+- `volume * price > max_notional_per_trade`
+- Symbol in `denylist`
+- Symbol not in `allowlist` (when allowlist is non-empty)
+- Daily realised P&L would breach `max_daily_loss`
+
+These are **client-side soft limits**. The broker's MT5 server enforces its own (typically stricter) limits server-side. MCP-side limits exist to give immediate feedback without round-tripping to the server.
+
+### 8.3 Idempotency
+
+Every mutating tool accepts an optional `idempotency_key`. If supplied:
+- First call with this key executes normally; result is cached
+- Subsequent calls with the same key within `idempotency.ttl_seconds` return the cached result without re-executing
+- Stored in a small SQLite database at `~/.local/share/mt5-mcp/idempotency.db`
+
+Agents are encouraged to always supply an idempotency key — UUIDv4 is fine. Without one, retries after timeout could double-execute.
+
+### 8.4 Audit log
+
+Every tool call appends one line of JSON to the audit log:
+
+```json
+{"ts": "2026-04-21T10:30:00Z", "tool": "place_order", "args": {...}, "result_status": "filled", "ticket": 12345, "duration_ms": 142, "approval_request_id": null}
+```
+
+Mutating-tool calls log the full request and result. Read-only tools log only the call shape (no result body — would dominate disk).
+
+Customer can `tail -f` the audit log to watch their agent in real time. Useful for debugging and for compliance reviews.
+
+---
+
+## 9. Transports
+
+### 9.1 stdio (v1, default)
+
+The server reads JSON-RPC messages from stdin and writes responses to stdout. Standard MCP transport, supported by Claude Desktop, OpenClaw, Cursor, every reference MCP client.
+
+Launched by the agent runtime as a subprocess:
+
+```json
+// Claude Desktop config snippet (~/Library/Application Support/Claude/config.json)
+{
+  "mcpServers": {
+    "mt5": {
+      "command": "python",
+      "args": ["-m", "mt5_mcp"],
+      "env": {
+        "MT5_MCP_CONFIG": "/Users/jane/.config/mt5-mcp/config.toml"
+      }
+    }
+  }
+}
+```
+
+### 9.2 HTTP + SSE (v1.5, optional)
+
+For hosted agents that can't subprocess (browser-based, cloud-hosted). Spawned as a long-running server:
+
+```bash
+python -m mt5_mcp serve --transport http --port 8765 --bind 127.0.0.1
+```
+
+**Default bind is `127.0.0.1`.** Listening on `0.0.0.0` requires `--bind 0.0.0.0` and prints a security warning. We never recommend exposing this publicly without a reverse proxy + auth.
+
+HTTP+SSE transport is documented as an opt-in feature, not a primary path. Most users should stay on stdio.
+
+---
+
+## 10. Connection lifecycle
+
+```
+1. Agent runtime spawns mt5-mcp (stdio)
+2. mt5-mcp loads config
+3. mt5-mcp calls mt5lib.initialize()
+   - If terminal_path is set in config, uses it
+   - Otherwise auto-discovers
+   - Returns False if no terminal running or login is stale
+4. On initialize failure:
+   - mt5-mcp returns a clear error on the first tool call:
+     "MT5 terminal not connected. Please open MT5 and log into your broker."
+   - Server keeps running; agent can retry after the human fixes it
+5. On initialize success:
+   - mt5-mcp registers all tools
+   - Agent calls tools normally
+6. Agent runtime closes the subprocess (SIGTERM or stdin close)
+7. mt5-mcp calls mt5lib.shutdown() and exits cleanly
+```
+
+**Connection health:** `ping` tool verifies `mt5.terminal_info()` returns non-None. Returns latency. Agents should ping after long idle periods or after errors that smell like connection loss.
+
+**Reconnection:** If `mt5lib` returns "not initialized" mid-session, mt5-mcp transparently calls `initialize()` once and retries the underlying call. If reinit fails, returns a structured error.
+
+---
+
+## 11. Error handling
+
+All errors returned to the agent are structured, never raw Python exceptions.
+
+```python
+class ErrorDetail(BaseModel):
+    code: str                     # machine-readable, e.g. "TERMINAL_NOT_CONNECTED"
+    message: str                  # human-readable, e.g. "MT5 terminal is not connected. Please open MT5."
+    retryable: bool               # whether the agent should retry without human intervention
+    requires_human: bool          # whether the agent should escalate to the human
+    details: dict | None          # error-specific structured data
+    mt5_retcode: int | None       # original mt5lib retcode if applicable
+```
+
+### Standard error codes (illustrative — full list in `docs/tools.md`)
+
+| Code | Meaning | retryable | requires_human |
+|---|---|---|---|
+| `TERMINAL_NOT_CONNECTED` | MT5 isn't running or logged in | false | true |
+| `TRADE_DISABLED` | Trading disabled on the account | false | true |
+| `MARKET_CLOSED` | Symbol's session is closed | false | false |
+| `SYMBOL_NOT_FOUND` | Symbol doesn't exist on this broker | false | false |
+| `SYMBOL_NOT_ENABLED` | Symbol exists but trading disabled (e.g. weekend on crypto pair) | true | false |
+| `INSUFFICIENT_MARGIN` | Not enough free margin for this trade | false | true |
+| `INVALID_VOLUME` | Volume doesn't satisfy symbol's lot step / min / max | false | false |
+| `INVALID_PRICE` | Price too far from market or invalid for order type | true | false |
+| `REQUOTE` | Price moved during execution; try again | true | false |
+| `REJECTED_BY_SERVER` | Broker server rejected for unspecified reason | false | true |
+| `EXCEEDS_LOCAL_LIMIT` | Hit a soft limit configured in mt5-mcp | false | true |
+| `REQUIRES_APPROVAL` | Above auto-approve threshold; consent needed | false | true |
+| `INVALID_APPROVAL` | Approval token invalid or expired | false | true |
+| `IDEMPOTENCY_REPLAY` | Returning cached result for an earlier call | false | false |
+
+mt5lib's full retcode table is mapped in `adapter/mt5_client.py`. Unknown retcodes surface as `MT5_UNKNOWN_RETCODE` with the raw code in `details`.
+
+---
+
+## 12. Security & threat model
+
+### 12.1 What mt5-mcp protects
+
+- **The audit log is append-only** — agents can't suppress evidence of their own actions
+- **Hard local limits** prevent runaway trades from a misbehaving agent
+- **Idempotency keys** prevent duplicate execution from network retries
+- **Approval tokens** are scoped to a single request and time-bound
+- **Read tools log only call shape**, not full payloads — limits leak risk if the audit log is exfiltrated
+
+### 12.2 What mt5-mcp does NOT protect
+
+- **A compromised customer machine.** Anyone with shell access can read the MT5 terminal's session, modify the config, or read the audit log. The MCP can't defend against this; it's the customer's responsibility.
+- **A malicious agent runtime.** If OpenClaw or whatever is running the show is compromised, the MCP will dutifully execute trades it sends. The server-side broker limits are the real backstop.
+- **Stolen credentials.** The MCP doesn't see the customer's login credentials — they're in the terminal already. But if those creds leak elsewhere, a separate attacker can log in and trade. That's the broker's problem.
+
+### 12.3 Network exposure
+
+- **Default: zero network surface.** stdio transport, no listening sockets.
+- **HTTP transport opt-in only**, default-binds to localhost.
+- **No telemetry by default.** Opt-in via config.
+- **No auto-update.** Customer chooses when to `pip install -U mt5-mcp`. We won't pull code at runtime.
+
+### 12.4 Disclosure
+
+`SECURITY.md` describes the disclosure process and contact (`security@fintrixmarkets.com` for the launch; ideally a separate `security@mt5-mcp.dev` once the project has its own domain).
+
+---
+
+## 13. Testing strategy
+
+Three layers:
+
+**1. Unit tests (`tests/`).** Mock `mt5lib` entirely. Cover the adapter, conversions, policy engine, idempotency store, and audit log. Run on every commit. Target ≥90% coverage on `src/mt5_mcp/policy/` and `src/mt5_mcp/adapter/`.
+
+**2. Integration tests (`tests/integration/`).** Run against a real MT5 terminal connected to a broker demo account. Not run in CI by default — requires Windows + MT5 install + broker creds. Documented in `tests/integration/README.md` for contributors to run locally.
+
+**3. Smoke test (CLI).**
+```bash
+python -m mt5_mcp doctor
+```
+Connects to the terminal, runs through every tool's read path, prints a green/red health report. Customers run this after install. If `doctor` is green, the MCP is ready.
+
+---
+
+## 14. Distribution & versioning
+
+- **PyPI:** `pip install mt5-mcp`. Wheel includes everything; no native deps beyond `MetaTrader5` itself.
+- **Source:** GitHub, MIT licensed.
+- **Releases:** SemVer. Breaking changes only on major bumps. Tool surface is stable from v1.0.
+- **Python support:** 3.10+ (matches `MetaTrader5` library's minimum).
+- **Platform support:** Windows is first-class. WSL2 + Wine paths documented but not first-class. Mac/Linux native is not supported until MetaQuotes ships a cross-platform `MetaTrader5`.
+
+---
+
+## 15. What gets built when
+
+Suggested implementation order for Claude Code. Each phase ships independently and can be tested in isolation.
+
+**Phase 1 — Skeleton + read tools (1 week)**
+- `pyproject.toml`, package layout, MIT licence, basic `README.md`
+- Config loader with Pydantic
+- `adapter/mt5_client.py` — singleton wrapper around `mt5lib`
+- `adapter/conversions.py` — type marshalling
+- All 9 read tools wired to `mt5lib`
+- Unit tests for adapter + conversions
+- `doctor` smoke command
+
+**Phase 2 — Mutating tools + policy (1 week)**
+- `place_order`, `modify_order`, `close_position`, `cancel_order`
+- Policy engine (consent gate, soft limits, idempotency, audit log)
+- Approval token verification
+- Unit tests for policy + tools
+- Integration test for happy-path order placement against demo broker
+
+**Phase 3 — Resources + transports (3 days)**
+- `account://current`, `positions://current`, `quotes://{symbol}` resources
+- HTTP + SSE transport behind a CLI flag
+- Plugin loader for third-party tools
+
+**Phase 4 — Polish (3 days)**
+- `docs/` site auto-generated from docstrings
+- Example client configs (Claude Desktop, OpenClaw, Cursor)
+- `SECURITY.md` + threat model
+- v1.0 release on PyPI
+- GitHub repo public + announcement
+
+**Total: ~3 weeks.** Realistic for one engineer working on this full-time.
+
+---
+
+## 16. Open questions for review
+
+1. **Repo home.** `github.com/fintrixmarkets/mt5-mcp` ties identity to one broker. `github.com/mt5-mcp/mt5-mcp` is more neutral but requires registering the org now. Recommend the latter — pays off for adoption.
+2. **Approval token format.** HMAC-signed JWT-like blob is straightforward but specifying a format pre-emptively constrains agent runtimes. Alternative: leave the format to the runtime and have mt5-mcp call out to a verifier callback. Less elegant, more flexible.
+3. **History tool depth.** `get_history` could return either deals (closed transactions) or orders (filled + cancelled). Most agents want deals for P&L analysis. Ship deals only in v1; add `get_orders_history` if asked for.
+4. **Quote subscriptions.** `quotes://{symbol}` as an MCP resource implies push updates. mt5lib doesn't have native streaming — we'd poll on a tick and emit changes. Polling at ≥5Hz is fine for most use cases. Document this clearly.
+5. **Symbol name normalisation.** Brokers use different naming conventions (`EURUSD`, `EURUSD.r`, `EURUSDm`, `EUR/USD`). v1 passes the customer's exact symbol string through to `mt5lib`. v2 could add a normaliser. Don't try to be clever in v1.
+6. **Multi-account support.** The `MetaTrader5` Python library supports one terminal per process. Multi-account would require launching multiple MCP processes. Not a v1 feature; document the limitation.
+7. **Audit log encryption.** Plaintext JSONL is reviewable but not encrypted. For customers who care, document how to symlink the audit file to an encrypted volume. Don't build encryption in.
+8. **Telemetry.** Opt-in only is the right default. But should we accept anonymous tool-name + success/failure counts to understand which tools matter most? Useful for prioritising v2; risk is even opt-in telemetry erodes the local-first claim. Recommend: ship with telemetry stubbed out, add later if there's demand.
+
+---
+
+*End of architecture document. Hand to Claude Code with the implementation order from §15 to begin.*

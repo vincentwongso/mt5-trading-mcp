@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mt5-mcp"
+version = "0.1.0"
+description = "Model Context Protocol server wrapping the MetaTrader 5 Python library."
+readme = "README.md"
+license = { file = "LICENCE" }
+authors = [{ name = "Fintrix Markets", email = "security@fintrixmarkets.com" }]
+requires-python = ">=3.10"
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Operating System :: Microsoft :: Windows",
+  "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+  "mcp[cli]>=1.12",
+  "pydantic>=2.6",
+  "watchdog>=4.0",
+  "tomli>=2.0; python_version < '3.11'",
+  "MetaTrader5>=5.0.45; platform_system == 'Windows'",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-mock>=3.12",
+  "freezegun>=1.4",
+]
+
+[project.scripts]
+mt5-mcp = "mt5_mcp.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mt5_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

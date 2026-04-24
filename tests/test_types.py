@@ -171,3 +171,61 @@ def test_order_and_deal_fields():
         comment=None,
     )
     assert o.type == "buy_limit" and d.type == "buy"
+
+
+def test_quote_rejects_float_bid():
+    import pytest
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        Quote(
+            symbol="EURUSD",
+            bid=1.0823,  # float — must be Decimal
+            ask=Decimal("1.0824"),
+            time=datetime(2026, 4, 21, 10, 0, tzinfo=timezone.utc),
+        )
+
+
+def test_account_info_rejects_float_balance():
+    import pytest
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        AccountInfo(
+            login=1,
+            name="x",
+            server="s",
+            currency="USD",
+            balance=100.5,  # float — must be Decimal
+            equity=Decimal("100.5"),
+            margin=Decimal("0"),
+            margin_free=Decimal("100.5"),
+            margin_level=None,
+            leverage=100,
+            trade_allowed=True,
+            margin_mode="retail_netting",
+        )
+
+
+def test_position_rejects_non_utc_datetime():
+    import pytest
+    from datetime import timezone, timedelta
+    from pydantic import ValidationError
+
+    athens = timezone(timedelta(hours=3))  # EET summer
+    with pytest.raises(ValidationError):
+        Position(
+            ticket=1,
+            symbol="EURUSD",
+            type="buy",
+            volume=Decimal("0.1"),
+            price_open=Decimal("1.0"),
+            price_current=Decimal("1.0"),
+            sl=None,
+            tp=None,
+            profit=Decimal("0"),
+            swap=Decimal("0"),
+            commission=Decimal("0"),
+            time_open=datetime(2026, 4, 21, 10, 0, tzinfo=athens),  # non-UTC aware
+            comment=None,
+        )

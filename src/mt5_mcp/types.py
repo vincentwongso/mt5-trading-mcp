@@ -7,14 +7,25 @@ place naive timestamps become aware.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator
 
 
 _JSON_OVERRIDES: dict[type, Any] = {Decimal: lambda d: format(d, "f")}
+
+
+def _annotation_mentions_decimal(ann: Any) -> bool:
+    """Return True if *ann* is or contains `Decimal` (handles Optional/Union/generics)."""
+    if ann is Decimal:
+        return True
+    # Recurse into Union / Optional / generic containers (e.g. list[Decimal]).
+    for sub in get_args(ann):
+        if _annotation_mentions_decimal(sub):
+            return True
+    return False
 
 
 class _Base(BaseModel):
@@ -29,9 +40,19 @@ class _Base(BaseModel):
 
     @field_validator("*", mode="before")
     @classmethod
-    def _reject_naive_datetimes(cls, v: Any) -> Any:
-        if isinstance(v, datetime) and v.tzinfo is None:
-            raise ValueError("datetime must be timezone-aware (UTC)")
+    def _validate_common(cls, v: Any, info: ValidationInfo) -> Any:
+        if isinstance(v, float):
+            ann = cls.model_fields[info.field_name].annotation
+            if _annotation_mentions_decimal(ann):
+                raise ValueError(
+                    f"{info.field_name}: use Decimal, not float, for money/price/volume"
+                )
+        if isinstance(v, datetime):
+            if v.tzinfo is None:
+                raise ValueError(f"{info.field_name}: datetime must be timezone-aware (UTC)")
+            # Enforce UTC — any non-zero offset is a broker-TZ leak.
+            if v.utcoffset() != timedelta(0):
+                raise ValueError(f"{info.field_name}: datetime must be UTC (offset must be 0)")
         return v
 
 
@@ -73,13 +94,6 @@ class Position(_Base):
     commission: Decimal
     time_open: datetime
     comment: str | None
-
-    @field_validator("volume", "price_open", "price_current", "profit", "swap", "commission", mode="before")
-    @classmethod
-    def _reject_float(cls, v: Any) -> Any:
-        if isinstance(v, float):
-            raise ValueError("use Decimal, not float, for money/price/volume")
-        return v
 
 
 class Order(_Base):

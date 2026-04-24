@@ -24,6 +24,10 @@ def frozen_utc(monkeypatch: pytest.MonkeyPatch) -> datetime:
         def now(tz: timezone | None = None) -> datetime:
             return fixed if tz else fixed.replace(tzinfo=None)
 
+        @staticmethod
+        def fromtimestamp(ts: float, tz: timezone | None = None) -> datetime:
+            return datetime.fromtimestamp(ts, tz=tz)
+
     monkeypatch.setattr("mt5_mcp.adapter.mt5_client.datetime", _Clock)
     monkeypatch.setattr("mt5_mcp.adapter.conversions.datetime", _Clock)
     return fixed

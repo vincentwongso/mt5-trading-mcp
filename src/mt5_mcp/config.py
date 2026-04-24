@@ -8,9 +8,7 @@ import sys
 import threading
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
-
-from pydantic import BaseModel, ConfigDict, Field, PositiveInt
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt, ValidationError
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
@@ -108,10 +106,10 @@ def load_config(path: Path | None = None) -> Config:
             return Config()
     if not path.exists():
         raise FileNotFoundError(path)
-    raw = tomllib.loads(path.read_text())
+    raw = tomllib.loads(path.read_text(encoding="utf-8"))
     try:
         return Config(**raw)
-    except Exception as exc:  # pragma: no cover — pydantic validation surface
+    except (ValidationError, TypeError) as exc:
         raise ValueError(f"invalid config at {path}: {exc}") from exc
 
 

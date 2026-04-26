@@ -293,3 +293,21 @@ def test_cancel_order_request_no_approval_fields():
     # cancel_order has NO approval fields by design (reduces exposure).
     assert not hasattr(r, "approval_confirmed")
     assert not hasattr(r, "approval_request_id")
+
+
+def test_close_position_request_rejects_float_volume():
+    import pytest
+    from pydantic import ValidationError
+    from mt5_mcp.types import ClosePositionRequest
+
+    with pytest.raises(ValidationError):
+        ClosePositionRequest(ticket=1, volume=0.5)
+
+
+def test_close_position_request_full_close_defaults():
+    from mt5_mcp.types import ClosePositionRequest
+
+    r = ClosePositionRequest(ticket=99999)
+    assert r.volume is None              # None = close in full
+    assert r.approval_confirmed is False
+    assert r.approval_request_id is None

@@ -31,3 +31,18 @@ def frozen_utc(monkeypatch: pytest.MonkeyPatch) -> datetime:
     monkeypatch.setattr("mt5_mcp.adapter.mt5_client.datetime", _Clock)
     monkeypatch.setattr("mt5_mcp.adapter.conversions.datetime", _Clock)
     return fixed
+
+
+@pytest.fixture(autouse=True)
+def _reset_app_context():
+    """Ensure each test starts with a clean app-context singleton.
+
+    The mt5_mcp.server module holds a process-wide AppContext for handler
+    convenience. Clearing it between tests prevents one test's mt5_module
+    injection from leaking into the next.
+    """
+    from mt5_mcp.server import reset_context_for_tests
+
+    reset_context_for_tests()
+    yield
+    reset_context_for_tests()

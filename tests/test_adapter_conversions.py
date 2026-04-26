@@ -139,3 +139,86 @@ def test_terminal_info_from_raw():
     )
     assert t.broker_tz_offset_minutes == 180
     assert t.latency_ms == 12
+
+
+def test_order_request_to_mt5_dict_market_buy(fake_mt5):
+    from decimal import Decimal
+    from mt5_mcp.adapter.conversions import order_request_to_mt5_dict
+    from mt5_mcp.types import OrderRequest
+    from tests.fakes import FakeSymbolInfo
+
+    req = OrderRequest(symbol="EURUSD", side="buy", type="market",
+                       volume=Decimal("0.10"), deviation=15)
+    info = FakeSymbolInfo(name="EURUSD", point=0.00001, digits=5,
+                         filling_mode=1 | 2)
+    out = order_request_to_mt5_dict(
+        req, symbol_info=info, filling_mode=fake_mt5.ORDER_FILLING_IOC,
+        price=Decimal("1.0824"), mt5=fake_mt5,
+    )
+    assert out["action"] == fake_mt5.TRADE_ACTION_DEAL
+    assert out["symbol"] == "EURUSD"
+    assert out["volume"] == 0.10
+    assert out["type"] == fake_mt5.ORDER_TYPE_BUY
+    assert out["price"] == 1.0824
+    assert out["deviation"] == 15
+    assert out["type_filling"] == fake_mt5.ORDER_FILLING_IOC
+
+
+def test_order_request_to_mt5_dict_limit_sell_includes_sl_tp(fake_mt5):
+    from decimal import Decimal
+    from mt5_mcp.adapter.conversions import order_request_to_mt5_dict
+    from mt5_mcp.types import OrderRequest
+    from tests.fakes import FakeSymbolInfo
+
+    req = OrderRequest(symbol="EURUSD", side="sell", type="limit",
+                       volume=Decimal("0.50"), price=Decimal("1.0900"),
+                       sl=Decimal("1.0950"), tp=Decimal("1.0850"),
+                       comment="strat-1")
+    info = FakeSymbolInfo()
+    out = order_request_to_mt5_dict(
+        req, symbol_info=info, filling_mode=fake_mt5.ORDER_FILLING_RETURN,
+        price=Decimal("1.0900"), mt5=fake_mt5,
+    )
+    assert out["action"] == fake_mt5.TRADE_ACTION_PENDING
+    assert out["type"] == fake_mt5.ORDER_TYPE_SELL_LIMIT
+    assert out["sl"] == 1.0950
+    assert out["tp"] == 1.0850
+    assert out["comment"] == "strat-1"
+
+
+def test_order_result_from_mt5_response_filled():
+    from decimal import Decimal
+    from mt5_mcp.adapter.conversions import order_result_from_mt5_response
+    from tests.fakes import FakeOrderSendResult, TRADE_RETCODE_DONE
+
+    raw = FakeOrderSendResult(retcode=TRADE_RETCODE_DONE, order=12345, deal=999,
+                              volume=0.1, price=1.0824)
+    result = order_result_from_mt5_response(
+        raw, action="place_order", symbol="EURUSD",
+        request_volume=Decimal("0.1"),
+        request_echo={"symbol": "EURUSD"},
+    )
+    assert result.success is True
+    assert result.ticket == 12345
+    assert result.action == "place_order"
+    assert result.price_filled == Decimal("1.0824")
+    assert result.server_response_code == TRADE_RETCODE_DONE
+    assert result.error is None
+
+
+def test_order_result_from_mt5_response_rejected():
+    from decimal import Decimal
+    from mt5_mcp.adapter.conversions import order_result_from_mt5_response
+    from tests.fakes import FakeOrderSendResult, TRADE_RETCODE_REJECT
+
+    raw = FakeOrderSendResult(retcode=TRADE_RETCODE_REJECT, comment="server says no")
+    result = order_result_from_mt5_response(
+        raw, action="place_order", symbol="EURUSD",
+        request_volume=Decimal("0.1"),
+        request_echo={"symbol": "EURUSD"},
+    )
+    assert result.success is False
+    assert result.ticket is None
+    assert result.error is not None
+    assert result.error.code == "REJECTED_BY_SERVER"
+    assert result.server_response_code == TRADE_RETCODE_REJECT

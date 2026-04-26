@@ -243,3 +243,85 @@ def terminal_info_from_raw(
         broker_tz_offset_minutes=broker_offset_minutes,
         latency_ms=latency_ms,
     )
+
+
+# --- order request / result conversion ------------------------------------
+
+# Map our string side+type to mt5lib's ORDER_TYPE_* enums.
+def _resolve_order_type(mt5: Any, side: str, type_: str) -> int:
+    table = {
+        ("buy",  "market"):     mt5.ORDER_TYPE_BUY,
+        ("sell", "market"):     mt5.ORDER_TYPE_SELL,
+        ("buy",  "limit"):      mt5.ORDER_TYPE_BUY_LIMIT,
+        ("sell", "limit"):      mt5.ORDER_TYPE_SELL_LIMIT,
+        ("buy",  "stop"):       mt5.ORDER_TYPE_BUY_STOP,
+        ("sell", "stop"):       mt5.ORDER_TYPE_SELL_STOP,
+        ("buy",  "stop_limit"): mt5.ORDER_TYPE_BUY_STOP_LIMIT,
+        ("sell", "stop_limit"): mt5.ORDER_TYPE_SELL_STOP_LIMIT,
+    }
+    return table[(side, type_)]
+
+
+def order_request_to_mt5_dict(
+    req: "OrderRequest",
+    *,
+    symbol_info: Any,
+    filling_mode: int,
+    price: Decimal,
+    mt5: Any,
+) -> dict[str, Any]:
+    """Build the dict mt5.order_send() expects.
+
+    `price` is the resolved limit/stop or current ask/bid for market orders.
+    `filling_mode` is the resolved ORDER_FILLING_* int from SymbolPrep.
+    """
+    action = mt5.TRADE_ACTION_DEAL if req.type == "market" else mt5.TRADE_ACTION_PENDING
+    out: dict[str, Any] = {
+        "action": action,
+        "symbol": req.symbol,
+        "volume": float(req.volume),
+        "type": _resolve_order_type(mt5, req.side, req.type),
+        "price": float(price),
+        "deviation": int(req.deviation),
+        "type_filling": int(filling_mode),
+        "type_time": getattr(mt5, "ORDER_TIME_GTC", 0),
+        "magic": 0,
+    }
+    if req.stop_limit_price is not None:
+        out["stoplimit"] = float(req.stop_limit_price)
+    if req.sl is not None:
+        out["sl"] = float(req.sl)
+    if req.tp is not None:
+        out["tp"] = float(req.tp)
+    if req.comment:
+        out["comment"] = req.comment
+    return out
+
+
+def order_result_from_mt5_response(
+    raw: Any,
+    *,
+    action: str,
+    symbol: str,
+    request_volume: Decimal,
+    request_echo: dict[str, Any],
+) -> "OrderResult":
+    """Convert mt5.order_send()'s return into a typed OrderResult."""
+    from mt5_mcp.errors import error_for_retcode
+    from mt5_mcp.types import OrderResult
+
+    retcode = int(raw.retcode)
+    success = retcode == 10009  # TRADE_RETCODE_DONE — published mt5lib constant
+    error = None if success else error_for_retcode(retcode, message=str(raw.comment or ""))
+    return OrderResult(
+        success=success,
+        ticket=int(raw.order) if success and raw.order else None,
+        action=action,
+        symbol=symbol,
+        volume=request_volume,
+        price_filled=Decimal(str(raw.price)) if success and raw.price else None,
+        request_echo=request_echo,
+        replayed=False,
+        error=error,
+        server_response_code=retcode,
+    )

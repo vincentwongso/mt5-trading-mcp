@@ -113,6 +113,11 @@ class MT5Client:
     def _call_with_reinit(self, fn: Callable[[], T]) -> T:
         """Invoke `fn`; if it returns None AND last_error is the
         not-initialized retcode, re-init once and retry.
+
+        NOTE (Phase 2): currently no read tool routes through this helper.
+        Tools call `ctx.client.mt5.<method>(...)` directly. Phase 2 should
+        wrap mt5lib calls so the architecture's "transparent reinit" promise
+        (§10 of mt5-mcp-architecture.md) becomes load-bearing.
         """
         result = fn()
         if result is not None:

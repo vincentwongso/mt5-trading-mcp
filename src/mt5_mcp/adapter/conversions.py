@@ -13,7 +13,6 @@ from typing import Any
 from mt5_mcp.types import (
     AccountInfo,
     Deal,
-    MarketHours,
     Order,
     Position,
     Quote,

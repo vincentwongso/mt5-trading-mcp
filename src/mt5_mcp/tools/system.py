@@ -30,10 +30,10 @@ def register(mcp: FastMCP) -> None:
     def get_terminal_info() -> TerminalInfo:
         """MT5 terminal connection state and broker TZ offset."""
         ctx = get_context()
-        raw = ctx.client.mt5.terminal_info()
+        raw = ctx.client.call(lambda m: m.terminal_info())
         if raw is None:
             raise MT5Error(terminal_not_connected_error())
-        acct = ctx.client.mt5.account_info()
+        acct = ctx.client.call(lambda m: m.account_info())
         _, latency = ctx.client.ping()
         return terminal_info_from_raw(
             raw,

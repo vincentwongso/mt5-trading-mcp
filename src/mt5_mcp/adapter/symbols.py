@@ -48,7 +48,7 @@ class SymbolPrep:
             hit = self._cache.get(symbol)
             if hit is not None and hit.expires_at > _monotonic():
                 return hit.info
-        info = self._client.mt5.symbol_info(symbol)
+        info = self._client.call(lambda m: m.symbol_info(symbol))
         if info is None:
             raise MT5Error(ErrorDetail(
                 code="SYMBOL_NOT_FOUND",
@@ -58,7 +58,7 @@ class SymbolPrep:
                 details={"symbol": symbol},
             ))
         if not getattr(info, "visible", True):
-            ok = self._client.mt5.symbol_select(symbol, True)
+            ok = self._client.call(lambda m: m.symbol_select(symbol, True))
             if not ok:
                 raise MT5Error(ErrorDetail(
                     code="SYMBOL_NOT_ENABLED",
@@ -67,7 +67,7 @@ class SymbolPrep:
                     requires_human=False,
                     details={"symbol": symbol},
                 ))
-            info = self._client.mt5.symbol_info(symbol)
+            info = self._client.call(lambda m: m.symbol_info(symbol))
             if info is None:
                 raise MT5Error(ErrorDetail(
                     code="SYMBOL_NOT_FOUND",

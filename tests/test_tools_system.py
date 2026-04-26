@@ -81,3 +81,34 @@ def test_error_envelope_catches_inner_mt5_error(server_and_mt5):
     assert out["error"]["code"] == "TERMINAL_NOT_CONNECTED"
     assert out["error"]["requires_human"] is True
     assert out["error"].get("details") is None
+
+
+def test_error_envelope_wraps_unexpected_exception_as_internal_error(
+    server_and_mt5, caplog
+):
+    """A non-MT5Error from the tool body becomes an INTERNAL_ERROR envelope.
+
+    Without the broader catch, a bare exception leaks a Python traceback to
+    the MCP client. This exercises the ``except Exception`` branch added in
+    Phase 1 cleanup.
+    """
+    import logging
+
+    from mt5_mcp.tools._common import error_envelope
+
+    @error_envelope
+    def explode() -> str:
+        raise KeyError("missing-thing")
+
+    _server, _fake = server_and_mt5
+    with caplog.at_level(logging.ERROR, logger="mt5_mcp.tools._common"):
+        out = explode()
+    assert out["error"]["code"] == "INTERNAL_ERROR"
+    assert out["error"]["retryable"] is False
+    assert out["error"]["requires_human"] is True
+    # Exception type is surfaced in details so an operator can triage from
+    # the envelope alone, but the raw traceback stays server-side (logs).
+    assert out["error"]["details"] == {"exception_type": "KeyError"}
+    assert "missing-thing" in out["error"]["message"]
+    # Server-side log should carry the traceback for ops triage.
+    assert any("explode" in r.message for r in caplog.records)

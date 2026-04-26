@@ -26,3 +26,6 @@ tmp_symbols.csv
 # Tooling caches / user-local
 .rtk/
 .claude/settings.local.json
+
+# Git worktrees (isolated branches checked out for parallel work)
+.worktrees/

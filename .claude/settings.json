@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rtk git status*)",
+      "Bash(rtk git log*)",
+      "Bash(rtk git diff*)",
+      "Bash(rtk git show*)",
+      "Bash(rtk git branch*)",
+      "Bash(rtk git fetch*)",
+      "Bash(rtk git blame*)",
+      "Bash(rtk git ls-files*)",
+      "Bash(rtk ls*)",
+      "Bash(rtk gh pr view*)",
+      "Bash(rtk gh pr list*)",
+      "Bash(rtk gh pr checks*)",
+      "Bash(rtk gh pr diff*)",
+      "Bash(rtk gh pr status*)",
+      "Bash(rtk gh run list*)",
+      "Bash(rtk gh run view*)",
+      "Bash(rtk gh issue view*)",
+      "Bash(rtk gh issue list*)",
+      "Bash(rtk gh workflow list*)",
+      "Bash(rtk gh workflow view*)",
+      "mcp__plugin_context7_context7__query-docs",
+      "mcp__plugin_context7_context7__resolve-library-id"
+    ]
+  }
+}

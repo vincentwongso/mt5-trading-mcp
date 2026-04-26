@@ -20,4 +20,9 @@ Thumbs.db
 
 # Project
 symbols.csv
+tmp_symbols.csv
 *.jsonl
+
+# Tooling caches / user-local
+.rtk/
+.claude/settings.local.json

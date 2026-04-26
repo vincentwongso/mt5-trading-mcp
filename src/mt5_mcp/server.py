@@ -79,6 +79,8 @@ def get_context() -> AppContext:
 def reset_context_for_tests() -> None:
     global _ctx
     with _ctx_lock:
+        if _ctx is not None and _ctx.config_watcher is not None:
+            _ctx.config_watcher.stop()
         _ctx = None
 
 

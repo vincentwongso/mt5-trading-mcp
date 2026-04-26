@@ -29,7 +29,7 @@ allowlist = []
 denylist = []
 
 [audit]
-path = "~/.local/share/mt5-mcp/audit.jsonl"
+path = "/tmp/test-audit.jsonl"
 max_bytes = 10485760
 
 [transport.http]
@@ -118,7 +118,7 @@ def test_default_idempotency_path_uses_platformdirs():
     cfg = Config()
     p = cfg.idempotency.path
     assert p.endswith("idempotency.db") or p.endswith("idempotency.db".replace("/", "\\"))
-    assert "mt5-mcp" in p
+    assert p.count("mt5-mcp") == 1, f"expected one 'mt5-mcp' segment, got: {p}"
 
 
 def test_default_audit_path_uses_platformdirs():
@@ -127,7 +127,7 @@ def test_default_audit_path_uses_platformdirs():
     cfg = Config()
     p = cfg.audit.path
     assert p.endswith("audit.jsonl") or p.endswith("audit.jsonl".replace("/", "\\"))
-    assert "mt5-mcp" in p
+    assert p.count("mt5-mcp") == 1, f"expected one 'mt5-mcp' segment, got: {p}"
 
 
 def test_idempotency_path_is_overridable_in_toml(tmp_path):

@@ -13,8 +13,8 @@ def main(argv: list[str] | None = None) -> int:
         mcp.run(transport="stdio")
         return 0
     if argv[0] == "doctor":
-        # Wired up in Task 15.
-        raise SystemExit("doctor not yet implemented")
+        from mt5_mcp.cli.doctor import main as doctor_main
+        return doctor_main()
     if argv[0] == "export-symbols":
         # Wired up in Task 16.
         raise SystemExit("export-symbols not yet implemented")

@@ -77,3 +77,14 @@ def test_partial_fill_retcode_is_mapped():
     assert err.code == "PARTIAL_FILL"
     assert err.retryable is False
     assert err.requires_human is False
+
+
+def test_resource_not_found_factory():
+    from mt5_mcp.errors import resource_not_found
+
+    detail = resource_not_found("quotes://XYZ")
+    assert detail.code == "RESOURCE_NOT_FOUND"
+    assert "quotes://XYZ" in detail.message
+    assert detail.retryable is False
+    assert detail.requires_human is False
+    assert detail.details == {"uri": "quotes://XYZ"}

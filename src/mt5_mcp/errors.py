@@ -150,6 +150,17 @@ def invalid_ticket_error(*, ticket: int, kind: Literal["order", "position"]) -> 
     )
 
 
+def resource_not_found(uri: str) -> ErrorDetail:
+    """MCP resource URI did not resolve (e.g. unknown symbol in quotes://)."""
+    return ErrorDetail(
+        code="RESOURCE_NOT_FOUND",
+        message=f"Resource not found: {uri}",
+        retryable=False,
+        requires_human=False,
+        details={"uri": uri},
+    )
+
+
 class MT5Error(Exception):
     """Raised by the adapter when a call fails. Carries the structured detail."""
 

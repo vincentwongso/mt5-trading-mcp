@@ -16,8 +16,8 @@ def main(argv: list[str] | None = None) -> int:
         from mt5_mcp.cli.doctor import main as doctor_main
         return doctor_main()
     if argv[0] == "export-symbols":
-        # Wired up in Task 16.
-        raise SystemExit("export-symbols not yet implemented")
+        from mt5_mcp.cli.export_symbols import main as export_main
+        return export_main(argv[1:])
     if argv[0] == "reload-config":
         # Sending SIGUSR1 isn't portable to Windows; the watchdog-based
         # auto-reload is the primary mechanism. This command just rewrites

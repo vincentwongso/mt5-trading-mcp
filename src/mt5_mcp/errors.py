@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from mt5_mcp.types import ErrorDetail
 
@@ -87,6 +87,65 @@ def terminal_not_connected_error(
         retryable=False,
         requires_human=True,
         details=details,
+    )
+
+
+def invalid_approval_error(*, reason: str) -> ErrorDetail:
+    """Approval-confirmed retry didn't match the stored preview."""
+    return ErrorDetail(
+        code="INVALID_APPROVAL",
+        message=f"Approval rejected: {reason}",
+        retryable=True,
+        requires_human=True,
+        details={"reason": reason},
+    )
+
+
+def exceeds_local_limit_error(
+    *,
+    limit_name: str,
+    configured: Any,
+    attempted: Any,
+) -> ErrorDetail:
+    """Pre-flight refusal — request would breach a configured local limit."""
+    return ErrorDetail(
+        code="EXCEEDS_LOCAL_LIMIT",
+        message=(
+            f"Request exceeds configured {limit_name}: attempted "
+            f"{attempted}, configured {configured}."
+        ),
+        retryable=False,
+        requires_human=True,
+        details={
+            "limit_name": limit_name,
+            "configured": str(configured),
+            "attempted": str(attempted),
+        },
+    )
+
+
+def idempotency_diverged_error(*, key: str, action: str) -> ErrorDetail:
+    """Same idempotency key, different request body — caller bug."""
+    return ErrorDetail(
+        code="IDEMPOTENCY_DIVERGED",
+        message=(
+            f"Idempotency key '{key}' was previously used for {action} with "
+            "a different request body. Use a fresh key for distinct requests."
+        ),
+        retryable=False,
+        requires_human=True,
+        details={"key": key, "action": action},
+    )
+
+
+def invalid_ticket_error(*, ticket: int, kind: Literal["order", "position"]) -> ErrorDetail:
+    """Ticket lookup failed — order/position doesn't exist."""
+    return ErrorDetail(
+        code="INVALID_TICKET",
+        message=f"No {kind} with ticket {ticket}.",
+        retryable=False,
+        requires_human=False,
+        details={"ticket": ticket, "kind": kind},
     )
 
 

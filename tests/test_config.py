@@ -149,3 +149,39 @@ def test_idempotency_path_is_overridable_in_toml(tmp_path):
     assert cfg.idempotency.ttl_seconds == 3600
     assert cfg.audit.path == "/custom/path/audit.jsonl"
     assert cfg.audit.max_bytes == 1048576
+
+
+def test_config_defaults_have_http_host_port_and_streaming(tmp_path):
+    cfg = Config()
+    assert cfg.transport.http.host == "127.0.0.1"
+    assert cfg.transport.http.port == 8765
+    assert cfg.transport.http.auth_token == ""
+    assert cfg.streaming.quote_poll_interval_ms == 200
+    assert cfg.streaming.account_poll_interval_ms == 1000
+    assert cfg.streaming.positions_poll_interval_ms == 1000
+
+
+def test_config_streaming_intervals_have_floor_and_ceiling(tmp_path):
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        Config(streaming={"quote_poll_interval_ms": 10})  # below 50ms floor
+    with pytest.raises(ValidationError):
+        Config(streaming={"quote_poll_interval_ms": 99999})  # above 10000ms
+
+
+def test_config_loads_streaming_and_transport_from_toml(tmp_path):
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text(
+        '[transport.http]\n'
+        'host = "127.0.0.1"\n'
+        'port = 9000\n'
+        'auth_token = "secret"\n'
+        '[streaming]\n'
+        'quote_poll_interval_ms = 100\n'
+        'account_poll_interval_ms = 500\n'
+        'positions_poll_interval_ms = 500\n'
+    )
+    cfg = load_config(cfg_file)
+    assert cfg.transport.http.port == 9000
+    assert cfg.transport.http.auth_token == "secret"
+    assert cfg.streaming.quote_poll_interval_ms == 100

@@ -63,6 +63,8 @@ class AuditSection(_Sub):
 
 
 class TransportHTTPSection(_Sub):
+    host: str = "127.0.0.1"
+    port: int = Field(8765, ge=1, le=65535)
     auth_token: str = ""
 
 
@@ -75,6 +77,12 @@ class TelemetrySection(_Sub):
     endpoint: str = ""
 
 
+class StreamingSection(_Sub):
+    quote_poll_interval_ms: int = Field(200, ge=50, le=10000)
+    account_poll_interval_ms: int = Field(1000, ge=100, le=60000)
+    positions_poll_interval_ms: int = Field(1000, ge=100, le=60000)
+
+
 class Config(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -85,6 +93,7 @@ class Config(BaseModel):
     audit: AuditSection = Field(default_factory=AuditSection)
     transport: TransportSection = Field(default_factory=TransportSection)
     telemetry: TelemetrySection = Field(default_factory=TelemetrySection)
+    streaming: StreamingSection = Field(default_factory=StreamingSection)
 
 
 def default_config_path() -> Path:

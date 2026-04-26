@@ -109,3 +109,29 @@ def test_ping_false_when_disconnected(fake_mt5: FakeMT5, frozen_utc):
     fake_mt5._terminal_info = None
     ok, _ = c.ping()
     assert ok is False
+
+
+def test_connect_falls_back_when_terminal_info_lacks_time(fake_mt5: FakeMT5, frozen_utc, caplog):
+    """Some MT5 builds omit .time from TerminalInfo. Adapter falls back to offset=0."""
+    from dataclasses import dataclass
+
+    @dataclass
+    class _BrokenTerminalInfo:
+        connected: bool = True
+        trade_allowed: bool = True
+        build: int = 4150
+        name: str = "MetaTrader 5"
+        company: str = "FintrixMarkets Ltd"
+        path: str = ""
+        # no `time` field — this is what some real MT5 builds omit
+
+    fake_mt5._terminal_info = _BrokenTerminalInfo()
+    client = MT5Client(mt5_module=fake_mt5)
+
+    import logging
+    with caplog.at_level(logging.WARNING, logger="mt5_mcp.adapter.mt5_client"):
+        client.connect()
+
+    assert client._initialised is True
+    assert client.broker_offset_minutes == 0
+    assert any("terminal_info().time not available" in r.message for r in caplog.records)

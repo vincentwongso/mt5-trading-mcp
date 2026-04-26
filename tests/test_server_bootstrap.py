@@ -9,5 +9,16 @@ def test_build_server_registers_tools():
     server = build_server(mt5_module=FakeMT5())
     # FastMCP exposes the tool manager; check registered tool count.
     tools = server._tool_manager.list_tools()
-    # Phase 1 registers 9 read tools; placeholder register() adds 0.
-    assert isinstance(tools, list)
+    names = {t.name for t in tools}
+    expected = {
+        "ping",
+        "get_terminal_info",
+        "get_account_info",
+        "get_quote",
+        "get_symbols",
+        "get_market_hours",
+        "get_positions",
+        "get_orders",
+        "get_history",
+    }
+    assert names == expected, f"missing or extra tools: {names ^ expected}"

@@ -334,66 +334,90 @@ endpoint = ""
 
 ### 8.1 Consent gate
 
-Mutating tools emit `requires_approval` when the request exceeds `policy.auto_approve_notional`. The MCP returns this as a structured response — the agent then has to obtain consent and retry with an `approval_token`.
+Mutating tools emit `requires_approval` when the request exceeds `policy.auto_approve_notional`. The MCP returns a structured `ApprovalPreview` — the agent obtains consent (e.g. via 1Password biometric in OpenClaw), then retries with `approval_confirmed: true` and the same `approval_request_id`.
 
 ```python
 # Returned when over auto-approve threshold:
 {
-  "status": "requires_approval",
-  "reason": "Trade notional 2500.00 USD exceeds auto-approve threshold 1000.00 USD",
-  "approval_request_id": "req_01HX...",
-  "expires_at": "2026-04-21T10:35:00Z"
+  "request_id": "01HX...",
+  "expires_at": "2026-04-21T10:35:00Z",
+  "summary": "BUY 0.5 EURUSD @ market (~$54000 USD)",
+  "action": "place_order",
+  "symbol": "EURUSD",
+  "notional": "54000.00",
+  "estimated_margin": "540.00",
+  "reference_quote": {"symbol": "EURUSD", "bid": "1.0823", "ask": "1.0824",
+                      "time": "2026-04-21T10:30:00Z"},
+  "request_echo": {...}
 }
 
-# Agent obtains consent (e.g. via 1Password CLI biometric in OpenClaw),
-# signs an approval token, and retries:
+# Agent retries with approval_confirmed:
 {
   "tool": "place_order",
   "arguments": {
     ...,
-    "approval_token": "<signed token>",
-    "approval_request_id": "req_01HX..."
+    "approval_confirmed": true,
+    "approval_request_id": "01HX..."
   }
 }
 ```
 
-**The MCP does not itself enforce *who* signed the approval token.** That's the agent runtime's job (OpenClaw + 1Password CLI in the Fintrix flow). The MCP only verifies:
-- The token is well-formed (HMAC-signed with the customer's local secret, rotated quarterly)
-- The token matches the `approval_request_id`
-- The request hasn't expired
+**The consent gate is a UX/policy affordance, not a cryptographic control.** Real authentication lives at the transport layer — the OS process boundary for stdio, Tailscale's WireGuard node identity for HTTP. The MCP only verifies:
 
-This keeps the MCP broker-agnostic and runtime-agnostic. Policy enforcement happens at the agent runtime layer; the MCP just provides the hook.
+- The `approval_request_id` matches a stored, un-expired preview.
+- The retry's identical fields (action / symbol / side / type / volume / ticket) match the preview.
+- The retry's price is within `max(0.5%, deviation_points × point)` of the stored `reference_quote`.
 
-### 8.2 Soft limits
+On mismatch the MCP returns `INVALID_APPROVAL`. This protects against prompt-injection "bait and switch" attacks where an agent might trick a human into approving trade A but submit trade B.
 
-Hard refusals (no approval can override):
-- `volume * price > max_notional_per_trade`
-- Symbol in `denylist`
-- Symbol not in `allowlist` (when allowlist is non-empty)
-- Daily realised P&L would breach `max_daily_loss`
+Agent runtimes are free to layer additional authentication (biometrics, multi-person approval, hardware tokens) on top of the simple flag.
 
-These are **client-side soft limits**. The broker's MT5 server enforces its own (typically stricter) limits server-side. MCP-side limits exist to give immediate feedback without round-tripping to the server.
+### 8.2 Pre-flight limits
+
+**These are not security controls.** The broker's MT5 server enforces per-trade, per-account, and leverage limits server-side; any trade exceeding broker limits gets rejected there regardless of what the MCP allows.
+
+The MCP's pre-flight checks exist for UX: catching obviously invalid trades locally (~1 ms) gives the agent immediate feedback instead of a ~200 ms round-trip to a `REJECTED_BY_SERVER`.
+
+Hard refusals (no `approval_confirmed` overrides these):
+
+- `volume * price > policy.max_notional_per_trade`
+- Symbol in `symbols.denylist`
+- Symbol not in `symbols.allowlist` (when allowlist is non-empty)
+- Daily realised P&L would breach `policy.max_daily_loss` (place_order only)
+- Realised loss on close > `policy.max_realised_loss_per_close` (close_position only)
+
+The daily P&L day boundary is **broker-server-day** — derived from the cached `broker_offset_minutes` set at `MT5Client.connect()`. P&L is `sum(deal.profit + deal.swap + deal.commission)` over `mt5.history_deals_get(broker_day_start, broker_now)`.
 
 ### 8.3 Idempotency
 
 Every mutating tool accepts an optional `idempotency_key`. If supplied:
-- First call with this key executes normally; result is cached
-- Subsequent calls with the same key within `idempotency.ttl_seconds` return the cached result without re-executing
-- Stored in a small SQLite database at `~/.local/share/mt5-mcp/idempotency.db`
 
-Agents are encouraged to always supply an idempotency key — UUIDv4 is fine. Without one, retries after timeout could double-execute.
+- First call with this key executes normally; the resulting `OrderResult` is cached.
+- Subsequent calls with the same key AND same canonical request hash within `idempotency.ttl_seconds` return the cached result with `replayed: true`.
+- Same key, **different** request hash → `IDEMPOTENCY_DIVERGED` error. This surfaces caller bugs (e.g. forgetting to vary the key between distinct trades) instead of silently masking them.
+
+Stored in a small SQLite database at `<user_data>/idempotency.db` (per-OS path via `platformdirs`; overridable in `config.toml` under `[idempotency] path`).
+
+Without a key, no caching; agents are encouraged to supply UUIDv4s. Without one, retries after a network timeout could double-execute.
 
 ### 8.4 Audit log
 
-Every tool call appends one line of JSON to the audit log:
+Every tool call appends one JSONL line to `<user_data>/audit.jsonl` (per-OS path via `platformdirs`; overridable in `config.toml` under `[audit] path`).
 
 ```json
-{"ts": "2026-04-21T10:30:00Z", "tool": "place_order", "args": {...}, "result_status": "filled", "ticket": 12345, "duration_ms": 142, "approval_request_id": null}
+{"ts": "2026-04-26T10:30:00Z", "tool": "place_order", "action": "executed",
+ "request": {...}, "result_status": "filled", "ticket": 12345,
+ "duration_ms": 142, "approval_request_id": null,
+ "idempotency_key": "01HX...", "request_hash": "sha256:..."}
 ```
 
-Mutating-tool calls log the full request and result. Read-only tools log only the call shape (no result body — would dominate disk).
+`action` is one of: `executed`, `requires_approval`, `replay`, `preflight_refused`, `invalid_approval`, `idempotency_diverged`, `error`, `called` (read-only tools log only this).
 
-Customer can `tail -f` the audit log to watch their agent in real time. Useful for debugging and for compliance reviews.
+Mutating-tool events log the full request and result. Read-only events log only the call shape — result bodies would dominate disk on tight loops.
+
+Rotation: when `os.path.getsize(audit.path) > audit.max_bytes`, the file is renamed to `audit.jsonl.<unix_epoch>` and a fresh handle opened. No compression; rotated files persist on disk indefinitely (operator's choice when to archive).
+
+Customer can `tail -f` (`Get-Content -Wait` on Windows) the audit log to watch their agent in real time. Useful for debugging and for compliance reviews.
 
 ---
 

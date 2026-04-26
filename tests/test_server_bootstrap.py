@@ -28,6 +28,7 @@ def test_build_server_registers_tools(tmp_path):
         "place_order",
         "close_position",
         "modify_order",
+        "cancel_order",
     }
     assert names == expected, f"missing or extra tools: {names ^ expected}"
 

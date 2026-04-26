@@ -229,3 +229,67 @@ def test_position_rejects_non_utc_datetime():
             time_open=datetime(2026, 4, 21, 10, 0, tzinfo=athens),  # non-UTC aware
             comment=None,
         )
+
+
+def test_order_request_rejects_float_volume():
+    import pytest
+    from pydantic import ValidationError
+    from mt5_mcp.types import OrderRequest
+
+    with pytest.raises(ValidationError):
+        OrderRequest(symbol="EURUSD", side="buy", type="market", volume=0.1)
+
+
+def test_order_request_market_allows_no_price():
+    from mt5_mcp.types import OrderRequest
+
+    req = OrderRequest(symbol="EURUSD", side="buy", type="market", volume=Decimal("0.1"))
+    assert req.price is None
+    assert req.deviation == 10
+    assert req.approval_confirmed is False
+
+
+def test_order_result_replayed_defaults_false():
+    from mt5_mcp.types import OrderResult
+
+    r = OrderResult(success=True, ticket=42, action="place_order", symbol="EURUSD",
+                    volume=Decimal("0.1"), price_filled=Decimal("1.0823"),
+                    request_echo={"x": 1}, server_response_code=10009)
+    assert r.replayed is False
+
+
+def test_approval_preview_serialises_decimals_as_strings():
+    import json
+    from mt5_mcp.types import ApprovalPreview, Quote
+
+    p = ApprovalPreview(
+        request_id="01HX0000000000000000000000",
+        expires_at=datetime(2026, 4, 26, 12, 0, tzinfo=timezone.utc),
+        summary="BUY 0.5 EURUSD @ market",
+        action="place_order", symbol="EURUSD",
+        notional=Decimal("54000.00"), estimated_margin=Decimal("540.00"),
+        reference_quote=Quote(symbol="EURUSD", bid=Decimal("1.0823"),
+                              ask=Decimal("1.0824"),
+                              time=datetime(2026, 4, 26, 12, 0, tzinfo=timezone.utc)),
+        request_echo={"x": 1},
+    )
+    blob = json.loads(p.model_dump_json())
+    assert blob["notional"] == "54000.00"
+    assert blob["reference_quote"]["bid"] == "1.0823"
+
+
+def test_modify_order_request_optional_fields_default_none():
+    from mt5_mcp.types import ModifyOrderRequest
+
+    r = ModifyOrderRequest(ticket=12345)
+    assert r.sl is None and r.tp is None and r.price is None
+    assert r.approval_confirmed is False
+
+
+def test_cancel_order_request_no_approval_fields():
+    from mt5_mcp.types import CancelOrderRequest
+
+    r = CancelOrderRequest(ticket=12345)
+    # cancel_order has NO approval fields by design (reduces exposure).
+    assert not hasattr(r, "approval_confirmed")
+    assert not hasattr(r, "approval_request_id")

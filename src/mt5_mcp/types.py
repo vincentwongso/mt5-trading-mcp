@@ -165,3 +165,68 @@ class TerminalInfo(_Base):
     server: str
     broker_tz_offset_minutes: int
     latency_ms: int
+
+
+class OrderRequest(_Base):
+    symbol: str
+    side: Literal["buy", "sell"]
+    type: Literal["market", "limit", "stop", "stop_limit"]
+    volume: _DecimalStr
+    price: _DecimalStr | None = None             # required for limit / stop / stop_limit
+    stop_limit_price: _DecimalStr | None = None  # required for stop_limit only
+    sl: _DecimalStr | None = None
+    tp: _DecimalStr | None = None
+    deviation: int = 10
+    comment: str | None = None
+    idempotency_key: str | None = None
+    approval_confirmed: bool = False
+    approval_request_id: str | None = None
+
+
+class ModifyOrderRequest(_Base):
+    ticket: int
+    sl: _DecimalStr | None = None
+    tp: _DecimalStr | None = None
+    price: _DecimalStr | None = None             # pending orders only
+    expiration: datetime | None = None
+    idempotency_key: str | None = None
+    approval_confirmed: bool = False
+    approval_request_id: str | None = None
+
+
+class CancelOrderRequest(_Base):
+    ticket: int
+    idempotency_key: str | None = None
+
+
+class ClosePositionRequest(_Base):
+    ticket: int
+    volume: _DecimalStr | None = None            # None = close in full
+    idempotency_key: str | None = None
+    approval_confirmed: bool = False
+    approval_request_id: str | None = None
+
+
+class ApprovalPreview(_Base):
+    request_id: str                              # ULID (canonical 26-char Crockford base32)
+    expires_at: datetime
+    summary: str
+    action: Literal["place_order", "modify_order", "close_position"]
+    symbol: str
+    notional: _DecimalStr
+    estimated_margin: _DecimalStr
+    reference_quote: Quote
+    request_echo: dict[str, Any]
+
+
+class OrderResult(_Base):
+    success: bool
+    ticket: int | None
+    action: str
+    symbol: str
+    volume: _DecimalStr
+    price_filled: _DecimalStr | None
+    request_echo: dict[str, Any]
+    replayed: bool = False
+    error: ErrorDetail | None = None
+    server_response_code: int

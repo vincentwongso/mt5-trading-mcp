@@ -28,7 +28,6 @@ CREATE TABLE IF NOT EXISTS idempotency (
     expires_at      INTEGER NOT NULL,
     PRIMARY KEY (key, action)
 );
-CREATE INDEX IF NOT EXISTS idx_expires_at ON idempotency(expires_at);
 """
 
 
@@ -86,12 +85,36 @@ class IdempotencyStore:
         request_hash: str,
         result_json: str,
     ) -> None:
-        """Cache `result_json` under (key, action). No-op if key is None."""
+        """Cache `result_json` under (key, action). No-op if key is None.
+
+        First-write-wins: if an unexpired entry exists for the (key, action)
+        pair, this method is a no-op. The reasoning: a divergent put would
+        silently destroy the original cached result, breaking the replay
+        guarantee for any concurrent agent still holding the old idempotency_key.
+        """
         if key is None:
             return
         now = int(time.time())
         expires_at = now + self._ttl
         with self._lock:
+            cur = self._conn.execute(
+                "SELECT request_hash, expires_at FROM idempotency "
+                "WHERE key = ? AND action = ?",
+                (key, action),
+            )
+            row = cur.fetchone()
+            if row is not None:
+                stored_hash, stored_exp = row
+                if stored_exp > now:
+                    # Unexpired entry already cached — first-write-wins.
+                    if stored_hash != request_hash:
+                        logger.warning(
+                            "idempotency.put: ignoring divergent hash for key=%r "
+                            "action=%r (existing entry has different request_hash)",
+                            key, action,
+                        )
+                    return
+                # Expired — fall through and overwrite below.
             self._conn.execute(
                 "INSERT INTO idempotency "
                 "(key, action, request_hash, result_json, created_at, expires_at) "
@@ -107,4 +130,7 @@ class IdempotencyStore:
 
     def close(self) -> None:
         with self._lock:
-            self._conn.close()
+            try:
+                self._conn.close()
+            except sqlite3.ProgrammingError:
+                pass  # already closed

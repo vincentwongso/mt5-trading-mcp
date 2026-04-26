@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -72,3 +71,36 @@ def test_persists_across_reopen(tmp_path: Path):
     assert s2.lookup(key="k1", action="place_order", request_hash="hash-1") \
            == ("hit", '{"ticket":42}')
     s2.close()
+
+
+def test_put_does_not_overwrite_existing_unexpired_entry(store: IdempotencyStore):
+    """First-write-wins: a divergent put for an active key is silently ignored.
+
+    Protects against a scenario where the engine bug-puts a second entry
+    after a successful first execute, which would destroy the original
+    cached result and break replay for any agent still holding the key.
+    """
+    store.put(key="k1", action="place_order", request_hash="hash-1",
+              result_json='{"ticket":42}')
+    # Second put with same key but different hash — must be a no-op.
+    store.put(key="k1", action="place_order", request_hash="hash-2",
+              result_json='{"ticket":99}')
+    # Original entry survives.
+    assert store.lookup(key="k1", action="place_order", request_hash="hash-1") \
+           == ("hit", '{"ticket":42}')
+
+
+def test_put_same_hash_is_idempotent(store: IdempotencyStore):
+    """Re-putting the same key+hash silently succeeds (no-op replay)."""
+    store.put(key="k1", action="place_order", request_hash="hash-1",
+              result_json='{"ticket":42}')
+    store.put(key="k1", action="place_order", request_hash="hash-1",
+              result_json='{"ticket":42}')
+    assert store.lookup(key="k1", action="place_order", request_hash="hash-1") \
+           == ("hit", '{"ticket":42}')
+
+
+def test_close_is_idempotent(tmp_path):
+    s = IdempotencyStore(path=tmp_path / "idem.db", ttl_seconds=3600)
+    s.close()
+    s.close()  # must not raise

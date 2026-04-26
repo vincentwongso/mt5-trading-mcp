@@ -12,7 +12,7 @@ from mt5_mcp.server import build_server
 from tests.fakes import (
     FakeAccountInfo, FakeMT5, FakeOrder, FakeOrderSendResult, FakePosition,
     FakeSymbolInfo, FakeTerminalInfo, FakeTick, ORDER_TYPE_BUY_LIMIT,
-    POSITION_TYPE_BUY, TRADE_RETCODE_DONE,
+    POSITION_TYPE_BUY, POSITION_TYPE_SELL, TRADE_RETCODE_DONE,
 )
 
 
@@ -113,6 +113,51 @@ def test_modify_pending_order_with_expiration_uses_specified_time(server_and_mt5
     assert sent["type_time"] == fake.ORDER_TIME_SPECIFIED
     expected_epoch = int(datetime(2026, 5, 1, 0, 0, tzinfo=timezone.utc).timestamp())
     assert sent["type_expiration"] == expected_epoch
+
+
+def test_widen_tp_on_sell_position_requires_approval(server_and_mt5):
+    """SELL position: entered short at 1.0850, TP currently 1.0700 (below
+    current 1.0823, taking profit on a drop). Moving TP to 1.0500 widens
+    the distance from current price → trips the approval gate.
+
+    Companion to test_widen_sl_on_position_requires_approval, which only
+    covered BUY+SL. This pins both the SELL leg and the TP axis."""
+    server, fake = server_and_mt5
+    fake._positions_get = (
+        FakePosition(ticket=43, symbol="EURUSD", type=POSITION_TYPE_SELL,
+                     volume=0.5, price_open=1.0850, price_current=1.0823,
+                     sl=1.0900, tp=1.0700),
+    )
+    out = _call(server, "modify_order", ticket=43, tp="1.0500")
+    assert "request_id" in out
+    assert out["action"] == "modify_order"
+    assert len(fake.order_send_calls) == 0
+
+
+def test_widen_tp_on_sell_position_round_trips_through_mt5_dict(server_and_mt5):
+    """After human approval, the new TP makes it to the broker request dict
+    (not silently dropped). Regression guard for the same class of bug
+    that hit `expiration` parsing."""
+    server, fake = server_and_mt5
+    fake._positions_get = (
+        FakePosition(ticket=43, symbol="EURUSD", type=POSITION_TYPE_SELL,
+                     volume=0.5, price_open=1.0850, price_current=1.0823,
+                     sl=1.0900, tp=1.0700),
+    )
+    # First call: gate triggers, returns preview with request_id.
+    preview = _call(server, "modify_order", ticket=43, tp="1.0500")
+    request_id = preview["request_id"]
+
+    # Retry with approval_confirmed and the same fields.
+    out = _call(server, "modify_order", ticket=43, tp="1.0500",
+                approval_confirmed=True, approval_request_id=request_id)
+    assert out["success"] is True
+    sent = fake.order_send_calls[0]
+    assert sent["action"] == fake.TRADE_ACTION_SLTP
+    assert sent["position"] == 43
+    assert sent["tp"] == 1.0500
+    # SL was not requested → preserved from the original position.
+    assert sent["sl"] == 1.0900
 
 
 def test_modify_pending_order_without_expiration_uses_gtc(server_and_mt5):

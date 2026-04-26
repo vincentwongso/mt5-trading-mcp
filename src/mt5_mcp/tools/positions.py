@@ -137,7 +137,7 @@ def register(mcp: FastMCP) -> None:
                 "price": float(close_price),
                 "deviation": 10,
                 "type_filling": ctx.symbols.pick_filling_mode(symbol, order_type="market"),
-                "type_time": getattr(mt5, "ORDER_TIME_GTC", 1),
+                "type_time": getattr(mt5, "ORDER_TIME_GTC", 0),
                 "magic": 0,
             }
             g.execute(lambda: ctx.client.call(lambda m: m.order_send(mt5_dict)))

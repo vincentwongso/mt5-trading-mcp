@@ -66,12 +66,12 @@ def check_preflight_limits(
                 attempted=inputs.notional,
             )
 
-    # Daily loss cap — applies to place_order only.
-    # Block when existing losses + this trade's notional would push total
-    # drawdown past the configured limit.
+    # Daily loss cap — applies to place_order only. Compared against the
+    # absolute value of running realised P&L (which is negative when losing).
+    # Once realised losses meet the cap, no new trade is permitted today.
     if action == "place_order" and config.policy.max_daily_loss > 0:
         loss_so_far = -inputs.running_daily_realised_pnl  # positive when losing
-        if loss_so_far + inputs.notional > config.policy.max_daily_loss:
+        if loss_so_far >= config.policy.max_daily_loss:
             return exceeds_local_limit_error(
                 limit_name="max_daily_loss",
                 configured=config.policy.max_daily_loss,

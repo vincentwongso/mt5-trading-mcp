@@ -1,7 +1,4 @@
-"""Order tools: get_orders (read), place_order, modify_order (mutating).
-
-Phase 2 adds cancel_order in a subsequent task.
-"""
+"""Order tools: get_orders (read), place_order, modify_order, cancel_order (mutating)."""
 
 from __future__ import annotations
 
@@ -291,4 +288,42 @@ def register(mcp: FastMCP) -> None:
                 request_echo=req.model_dump(mode="json", exclude={"idempotency_key"}),
                 action="modify_order", symbol=symbol,
                 request_volume=volume,
+            )
+
+    @mcp.tool()
+    @error_envelope
+    def cancel_order(
+        ticket: int,
+        idempotency_key: str | None = None,
+    ) -> dict:
+        """Cancel a pending order by ticket. No consent gate (reduces exposure)."""
+        from mt5_mcp.types import CancelOrderRequest
+        from mt5_mcp.errors import invalid_ticket_error
+
+        ctx = get_context()
+        req = CancelOrderRequest(ticket=ticket, idempotency_key=idempotency_key)
+        orders = ctx.client.call(lambda m: m.orders_get(ticket=ticket))
+        if not orders:
+            raise MT5Error(invalid_ticket_error(ticket=ticket, kind="order"))
+        target = orders[0]
+        symbol = target.symbol
+
+        with ctx.policy.guard(
+            "cancel_order", req,
+            requires_approval=False,
+            preflight_inputs=None,
+        ) as g:
+            if g.short_circuit is not None:
+                return g.short_circuit
+            mt5 = ctx.client.mt5
+            mt5_dict = {
+                "action": mt5.TRADE_ACTION_REMOVE,
+                "order": int(ticket),
+            }
+            g.execute(lambda: ctx.client.call(lambda m: m.order_send(mt5_dict)))
+            return g.finalize(
+                order_result_from_mt5_response,
+                request_echo=req.model_dump(mode="json", exclude={"idempotency_key"}),
+                action="cancel_order", symbol=symbol,
+                request_volume=Decimal(str(getattr(target, "volume_current", 0))),
             )

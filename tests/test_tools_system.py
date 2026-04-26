@@ -59,3 +59,25 @@ def test_get_terminal_info_when_disconnected(server_and_mt5):
     # surfaces TERMINAL_NOT_CONNECTED as an error detail.
     assert out["error"]["code"] == "TERMINAL_NOT_CONNECTED"
     assert out["error"]["requires_human"] is True
+
+
+def test_error_envelope_catches_inner_mt5_error(server_and_mt5):
+    """error_envelope catches MT5Error raised by the wrapped function itself.
+
+    This exercises the ``try/except MT5Error`` at _common.py:43-46 — the
+    inner-function-raise path — not the ensure_connected branch.
+    The server_and_mt5 fixture is used only to ensure get_context() is
+    initialised; the synthetic ``boom`` function stands in for a real tool.
+    """
+    from mt5_mcp.errors import MT5Error, terminal_not_connected_error
+    from mt5_mcp.tools._common import error_envelope
+
+    @error_envelope
+    def boom() -> str:
+        raise MT5Error(terminal_not_connected_error())
+
+    _server, _fake = server_and_mt5  # establishes context via build_server
+    out = boom()
+    assert out["error"]["code"] == "TERMINAL_NOT_CONNECTED"
+    assert out["error"]["requires_human"] is True
+    assert out["error"].get("details") is None

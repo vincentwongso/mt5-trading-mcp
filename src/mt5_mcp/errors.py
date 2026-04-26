@@ -47,6 +47,33 @@ def error_for_retcode(
     )
 
 
+def terminal_not_connected_error(
+    *,
+    why: str | None = None,
+    raw_error: tuple[int, str] | None = None,
+) -> ErrorDetail:
+    """Canonical 'MT5 terminal is not connected' ErrorDetail.
+
+    Used by both the adapter (during connect failure) and read tools
+    (when terminal_info() returns None mid-session). Keeps wording
+    identical so agents see one message regardless of where it surfaced.
+    """
+    details: dict[str, Any] | None = None
+    if why or raw_error is not None:
+        details = {}
+        if why:
+            details["why"] = why
+        if raw_error is not None:
+            details["raw_error"] = raw_error
+    return ErrorDetail(
+        code="TERMINAL_NOT_CONNECTED",
+        message="MT5 terminal is not connected. Please open MT5 and log into your broker.",
+        retryable=False,
+        requires_human=True,
+        details=details,
+    )
+
+
 class MT5Error(Exception):
     """Raised by the adapter when a call fails. Carries the structured detail."""
 

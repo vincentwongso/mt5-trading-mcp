@@ -127,55 +127,58 @@ class PolicyEngine:
                 yield g
                 return
 
-        # 2. Consent gate — confirmation path runs BEFORE preflight so that a
-        #    bait-and-switch (volume/symbol changed between approval and retry)
-        #    is diagnosed as INVALID_APPROVAL rather than EXCEEDS_LOCAL_LIMIT.
-        #    The first-pass (requires_approval && not confirmed) runs AFTER
-        #    preflight so we don't store a preview for requests that fail limits.
-        if requires_approval:
-            approval_confirmed = bool(getattr(request, "approval_confirmed", False))
-            request_id = getattr(request, "approval_request_id", None)
+        # Read approval state once for use across both consent branches.
+        approval_confirmed = bool(getattr(request, "approval_confirmed", False))
+        approval_request_id = getattr(request, "approval_request_id", None)
 
-            if approval_confirmed:
-                # Confirmation retry: validate approval before preflight.
-                if not request_id:
-                    err = ErrorDetail(code="INVALID_APPROVAL",
-                                      message="approval_confirmed=true requires approval_request_id",
-                                      retryable=True, requires_human=True,
-                                      details={"reason": "missing approval_request_id"})
-                    self._audit.write({"tool": action, "action": "invalid_approval",
-                                       "request_hash": request_hash})
-                    g.short_circuit = {"error": err.model_dump(mode="json")}
-                    yield g
-                    return
+        # 3. Consent (confirmed retry) — runs BEFORE preflight so a
+        # bait-and-switch surfaces as INVALID_APPROVAL rather than being
+        # masked by EXCEEDS_LOCAL_LIMIT (architecture §8.1).
+        if requires_approval and approval_confirmed:
+            if not approval_request_id:
+                err = ErrorDetail(
+                    code="INVALID_APPROVAL",
+                    message="approval_confirmed=true requires approval_request_id",
+                    retryable=True, requires_human=True,
+                    details={"reason": "missing approval_request_id"},
+                )
+                self._audit.write({"tool": action, "action": "invalid_approval",
+                                   "request_hash": request_hash})
+                g.short_circuit = {"error": err.model_dump(mode="json")}
+                yield g
+                return
 
-                stored = self._approvals.pop(request_id)
-                if stored is None:
-                    err = invalid_approval_error(reason="unknown or expired approval_request_id")
-                    self._audit.write({"tool": action, "action": "invalid_approval",
-                                       "request_id": request_id,
-                                       "request_hash": request_hash})
-                    g.short_circuit = {"error": err.model_dump(mode="json")}
-                    yield g
-                    return
+            stored = self._approvals.pop(approval_request_id)
+            if stored is None:
+                err = invalid_approval_error(reason="unknown or expired approval_request_id")
+                self._audit.write({"tool": action, "action": "invalid_approval",
+                                   "request_id": approval_request_id,
+                                   "request_hash": request_hash})
+                g.short_circuit = {"error": err.model_dump(mode="json")}
+                yield g
+                return
 
-                if current_price is None or symbol_point is None:
-                    raise RuntimeError(
-                        "guard(approval_confirmed=true) needs current_price + symbol_point"
-                    )
-                err = validate_retry(request, preview=stored,
-                                     current_price=current_price, point=symbol_point)
-                if err is not None:
-                    self._audit.write({"tool": action, "action": "invalid_approval",
-                                       "request_id": request_id,
-                                       "request_hash": request_hash,
-                                       "reason": err.details.get("reason") if err.details else None})
-                    g.short_circuit = {"error": err.model_dump(mode="json")}
-                    yield g
-                    return
+            if current_price is None or symbol_point is None:
+                raise RuntimeError(
+                    "PolicyEngine.guard(): requires_approval=True with "
+                    "approval_confirmed=True requires 'current_price' and "
+                    "'symbol_point' kwargs. Pass the current ask/bid price "
+                    "(quantised to symbol point) and symbol.point before "
+                    "calling guard()."
+                )
+            err = validate_retry(request, preview=stored,
+                                 current_price=current_price, point=symbol_point)
+            if err is not None:
+                self._audit.write({"tool": action, "action": "invalid_approval",
+                                   "request_id": approval_request_id,
+                                   "request_hash": request_hash,
+                                   "reason": err.details.get("reason") if err.details else None})
+                g.short_circuit = {"error": err.model_dump(mode="json")}
+                yield g
+                return
+            # Approval matched — fall through to preflight then execute.
 
-        # 3. Preflight checks (runs after consent-confirmation so bait-and-switch
-        #    is caught at the approval layer, not the limit layer).
+        # 4. Preflight checks.
         if preflight_inputs is not None:
             err = check_preflight_limits(action, request, preflight_inputs, self._config)
             if err is not None:
@@ -186,26 +189,27 @@ class PolicyEngine:
                 yield g
                 return
 
-        # 4. First-pass consent: request preview storage (runs after preflight
-        #    so we don't persist previews for requests that exceed limits).
-        if requires_approval:
-            approval_confirmed = bool(getattr(request, "approval_confirmed", False))
-            if not approval_confirmed:
-                if preview_factory is None:
-                    raise RuntimeError(
-                        "guard(requires_approval=True) needs preview_factory"
-                    )
-                preview = preview_factory()
-                preview = preview.model_copy(update={"request_id": new_request_id()})
-                self._approvals.put(preview)
-                self._audit.write({"tool": action, "action": "requires_approval",
-                                   "request_id": preview.request_id,
-                                   "request_hash": request_hash})
-                g.short_circuit = preview.model_dump(mode="json")
-                yield g
-                return
+        # 5. Consent (first-pass preview generation) — only when approval is
+        # required AND the agent has not yet supplied approval_confirmed=True.
+        if requires_approval and not approval_confirmed:
+            if preview_factory is None:
+                raise RuntimeError(
+                    "PolicyEngine.guard(): requires_approval=True with "
+                    "approval_confirmed=False requires a preview_factory. "
+                    "Pass a zero-arg callable that returns an ApprovalPreview "
+                    "describing the request to the human."
+                )
+            preview = preview_factory()
+            preview = preview.model_copy(update={"request_id": new_request_id()})
+            self._approvals.put(preview)
+            self._audit.write({"tool": action, "action": "requires_approval",
+                               "request_id": preview.request_id,
+                               "request_hash": request_hash})
+            g.short_circuit = preview.model_dump(mode="json")
+            yield g
+            return
 
-        # 4. Yield to the tool body for execute() + finalize().
+        # 6. Yield to the tool body for execute() + finalize().
         try:
             yield g
         except Exception as exc:
@@ -230,7 +234,7 @@ class PolicyEngine:
         result = raw_to_result_fn(
             g._raw,
             request_echo=request_echo,
-            **{k: v for k, v in kwargs.items()},
+            **kwargs,
         )
         if not isinstance(result, OrderResult):
             raise TypeError("raw_to_result_fn must return an OrderResult")

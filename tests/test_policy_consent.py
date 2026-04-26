@@ -13,18 +13,19 @@ from mt5_mcp.types import ApprovalPreview, OrderRequest, Quote
 
 def _preview(*, request_id: str, side="buy", volume="0.5",
              ref_bid="1.0823", ref_ask="1.0824",
+             symbol="EURUSD", deviation: int = 10,
              expires_in_seconds: int = 300) -> ApprovalPreview:
     now = datetime.now(timezone.utc)
     return ApprovalPreview(
         request_id=request_id,
         expires_at=now + timedelta(seconds=expires_in_seconds),
-        summary="BUY 0.5 EURUSD @ market (~$54000 USD)",
-        action="place_order", symbol="EURUSD",
+        summary=f"BUY 0.5 {symbol} @ market (~$54000 USD)",
+        action="place_order", symbol=symbol,
         notional=Decimal("54000"), estimated_margin=Decimal("540"),
-        reference_quote=Quote(symbol="EURUSD", bid=Decimal(ref_bid),
+        reference_quote=Quote(symbol=symbol, bid=Decimal(ref_bid),
                               ask=Decimal(ref_ask), time=now),
-        request_echo={"symbol": "EURUSD", "side": side, "type": "market",
-                      "volume": volume, "deviation": 10},
+        request_echo={"symbol": symbol, "side": side, "type": "market",
+                      "volume": volume, "deviation": deviation},
     )
 
 
@@ -83,6 +84,7 @@ def test_validate_retry_allows_drift_within_deviation_when_pct_tighter():
     # ref_ask = 0.5; 0.5% of 0.5 = 0.0025; deviation=100 points × point=0.001 → 0.1.
     # Tolerance = max(0.0025, 0.1) = 0.1. Drift 0.05 is within.
     p = _preview(request_id="01HX0000000000000000000006",
+                 symbol="X", deviation=100,
                  ref_bid="0.499", ref_ask="0.500")
     req = OrderRequest(symbol="X", side="buy", type="market",
                        volume=Decimal("0.5"), deviation=100,
@@ -102,6 +104,25 @@ def test_validate_retry_rejects_expired_preview():
     assert err is not None
     assert err.code == "INVALID_APPROVAL"
     assert "expired" in err.details["reason"].lower()
+
+
+def test_validate_retry_rejects_symbol_mismatch():
+    """Approval for one symbol must not be honoured for another.
+
+    Regression guard: an earlier implementation removed `symbol` from the
+    identical-fields loop, allowing an agent to receive approval for
+    EURUSD and submit GBPUSD — exactly the bait-and-switch the consent
+    gate is supposed to prevent.
+    """
+    p = _preview(request_id="01HX0000000000000000000099", symbol="EURUSD")
+    req = OrderRequest(symbol="GBPUSD", side="buy", type="market",
+                       volume=Decimal("0.5"), deviation=10,
+                       approval_confirmed=True, approval_request_id=p.request_id)
+    err = validate_retry(req, preview=p, current_price=Decimal("1.0824"),
+                         point=Decimal("0.00001"))
+    assert err is not None
+    assert err.code == "INVALID_APPROVAL"
+    assert "symbol" in err.details["reason"].lower()
 
 
 def test_new_request_id_format():

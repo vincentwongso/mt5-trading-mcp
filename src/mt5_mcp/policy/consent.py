@@ -67,10 +67,10 @@ def validate_retry(
 
     echo = preview.request_echo
 
-    # Identical fields — symbol is excluded: it was used to key the preview
-    # lookup and need not be re-validated here.  Each request type contributes
-    # a different subset of the remaining fields.
-    for field in ("side", "type", "volume", "ticket"):
+    # Identical fields. Each request type contributes a different subset.
+    # `symbol` is included: an approval for EURUSD must not be honoured
+    # for GBPUSD (architecture §8.1 bait-and-switch protection).
+    for field in ("symbol", "side", "type", "volume", "ticket"):
         if not hasattr(request, field):
             continue
         new_val = getattr(request, field)
@@ -94,12 +94,11 @@ def validate_retry(
             )
 
     # Price drift tolerance: max(0.5% of reference, deviation_points * point).
-    # Use the *request's* deviation — that's the slip tolerance the human
-    # actually agreed to; the echo value is stored for audit only.
+    # `deviation` comes from the snapshot — the human approved THAT slippage.
     ref_price = preview.reference_quote.ask if echo.get("side") == "buy" \
                 else preview.reference_quote.bid
     pct_band = ref_price * Decimal("0.005")
-    dev = int(getattr(request, "deviation", echo.get("deviation", 0)) or 0)
+    dev = int(echo.get("deviation", 0))
     dev_band = Decimal(dev) * point
     tolerance = max(pct_band, dev_band)
 

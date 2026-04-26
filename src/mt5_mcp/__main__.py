@@ -8,8 +8,10 @@ import sys
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] == "serve":
-        # Wired up in Task 9 (server bootstrap).
-        raise SystemExit("serve not yet implemented")
+        from mt5_mcp.server import build_server
+        mcp = build_server()
+        mcp.run(transport="stdio")
+        return 0
     if argv[0] == "doctor":
         # Wired up in Task 15.
         raise SystemExit("doctor not yet implemented")

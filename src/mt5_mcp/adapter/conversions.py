@@ -311,14 +311,18 @@ def order_result_from_mt5_response(
     from mt5_mcp.types import OrderResult
 
     retcode = int(raw.retcode)
-    success = retcode == 10009  # TRADE_RETCODE_DONE — published mt5lib constant
+    # 10009 = DONE (full fill); 10010 = DONE_PARTIAL (partial fill, also a success).
+    success = retcode in (10009, 10010)
     error = None if success else error_for_retcode(retcode, message=str(raw.comment or ""))
+    filled_volume = (
+        Decimal(str(raw.volume)) if success and raw.volume else request_volume
+    )
     return OrderResult(
         success=success,
         ticket=int(raw.order) if success and raw.order else None,
         action=action,
         symbol=symbol,
-        volume=request_volume,
+        volume=filled_volume,                  # actual filled amount, not requested
         price_filled=Decimal(str(raw.price)) if success and raw.price else None,
         request_echo=request_echo,
         replayed=False,

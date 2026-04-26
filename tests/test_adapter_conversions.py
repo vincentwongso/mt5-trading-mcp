@@ -222,3 +222,22 @@ def test_order_result_from_mt5_response_rejected():
     assert result.error is not None
     assert result.error.code == "REJECTED_BY_SERVER"
     assert result.server_response_code == TRADE_RETCODE_REJECT
+
+
+def test_order_result_from_mt5_response_partial_fill():
+    from decimal import Decimal
+    from mt5_mcp.adapter.conversions import order_result_from_mt5_response
+    from tests.fakes import FakeOrderSendResult
+
+    raw = FakeOrderSendResult(retcode=10010, order=12345, deal=999,
+                              volume=0.05, price=1.0824)
+    result = order_result_from_mt5_response(
+        raw, action="place_order", symbol="EURUSD",
+        request_volume=Decimal("0.10"),  # requested 0.10
+        request_echo={"symbol": "EURUSD", "volume": "0.10"},
+    )
+    assert result.success is True            # partial fill is still a success
+    assert result.ticket == 12345
+    assert result.volume == Decimal("0.05")  # actual filled, not requested
+    assert result.error is None
+    assert result.server_response_code == 10010

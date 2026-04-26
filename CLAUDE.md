@@ -1,6 +1,6 @@
 # mt5-mcp — Agent Handover Notes
 
-**Status (last updated April 2026):** Phase 1 complete. Tag `phase-1-complete` marks the version that has 89 passing unit tests and a green real-world `doctor` smoke against Vincent's local MT5 terminal. The next agent picks up Phase 2.
+**Status (last updated April 2026):** Phase 2 complete. Tag `phase-2-complete` marks the version with the four mutating tools (`place_order`, `modify_order`, `cancel_order`, `close_position`) and the `PolicyEngine` (preflight + consent + idempotency + audit) shipped on top of Phase 1. 176 passing unit tests. `doctor --smoke-trade` round-trips a place + close against the local MT5. Phase 3 picks up Resources + HTTP transport.
 
 ## Where to start
 
@@ -12,7 +12,11 @@
 
 9 read tools (`ping`, `get_terminal_info`, `get_account_info`, `get_quote`, `get_symbols`, `get_market_hours`, `get_positions`, `get_orders`, `get_history`), 2 CLI commands (`doctor`, `export-symbols`), the `MetaTrader5`-wrapping adapter (singleton client + symbol prep + type conversions), config loader with watchdog hot-reload, the FastMCP server bootstrap, and 89 unit tests against a hand-rolled `FakeMT5` (no live terminal needed).
 
-## Critical patterns Phase 2 MUST follow
+## What Phase 2 added
+
+Four mutating MCP tools (`place_order`, `modify_order`, `cancel_order`, `close_position`), a `PolicyEngine` (`src/mt5_mcp/policy/`) composing four submodules (`preflight.py`, `consent.py`, `idempotency.py`, `audit.py`), SQLite-backed idempotency replay (per-OS path via `platformdirs`), append-only JSONL audit log with size-based rotation, ~85 new unit tests, and `doctor --smoke-trade` for live-terminal verification. Architecture doc §8.* reconciled (HMAC tokens removed in favour of a simple `approval_confirmed` flag; "Soft limits" renamed "Pre-flight limits" with explicit non-security framing).
+
+## Critical patterns Phase 3 MUST follow
 
 These aren't obvious from the architecture doc — they were discovered during Phase 1:
 
@@ -61,7 +65,50 @@ The Pydantic `_Base` validator (`src/mt5_mcp/types.py`) rejects naive datetimes 
 
 `tests/fakes.py` has hand-rolled dataclasses for every MT5 type we touch. Phase 2 tests should extend `FakeMT5` (e.g. add `_order_send` slot for `place_order`) rather than reach for `unittest.mock.MagicMock`. The strong typing makes "missing test data" fail loudly.
 
-## Phase 1 carryover — resolved
+### 7. Mutating tools route through `ctx.policy.guard(...)`
+
+Every mutating tool body computes `requires_approval` itself (gate logic varies by action — notional for place/close, SL-widening for modify, never for cancel) and passes the boolean to the engine. The engine handles the retry mechanism, idempotency, and audit; the tool body is just adapter prep + `with ctx.policy.guard(...)` + `g.execute(...)` + `g.finalize(...)`.
+
+```python
+with ctx.policy.guard(
+    "place_order", req,
+    requires_approval=notional >= cfg.policy.auto_approve_notional,
+    preview_factory=build_preview if requires_approval else None,
+    preflight_inputs=PreflightInputs(notional=notional),
+    current_price=ref_price if approval_confirmed else None,
+    symbol_point=Decimal(str(info.point)) if approval_confirmed else None,
+) as g:
+    if g.short_circuit is not None:
+        return g.short_circuit
+    g.execute(lambda: ctx.client.call(lambda m: m.order_send(mt5_dict)))
+    return g.finalize(order_result_from_mt5_response, request_echo=...,
+                       action="place_order", symbol=symbol,
+                       request_volume=req.volume)
+```
+
+The engine's stage order matters: idempotency → confirmed-consent → preflight → first-pass-consent → execute. Confirmed-consent runs BEFORE preflight so a bait-and-switch surfaces as `INVALID_APPROVAL`, not `EXCEEDS_LOCAL_LIMIT`.
+
+### 8. Storage paths come from config — never hard-code
+
+Idempotency DB and audit JSONL paths default to `platformdirs.user_data_dir("mt5-mcp", appauthor=False)`. The `appauthor=False` is critical: without it, Windows produces a double `mt5-mcp\mt5-mcp\` segment. Tests MUST pass `config_path=tmp_path/"config.toml"` to `build_server(...)` to redirect both files into a sandboxed location — otherwise the tests pollute `~/.local/share/mt5-mcp/` (or `%LOCALAPPDATA%\mt5-mcp\`).
+
+### 9. Production code MUST NOT import from `tests.`
+
+A copy-paste hazard surfaced during Phase 2 (Tasks 6 and 14): tool implementations briefly imported MT5 constants like `POSITION_TYPE_BUY` from `tests.fakes` because the constant names matched. The fix is always `ctx.client.mt5.POSITION_TYPE_BUY` — the live module exposes the same constants, and `FakeMT5` mirrors them as instance fields.
+
+### 10. `request_hash` excludes `approval_*` fields
+
+Idempotency hashes the canonical JSON of the request EXCLUDING `approval_confirmed` and `approval_request_id`. This makes "send the same trade twice with the same idempotency key" return the cached result, regardless of whether the second call carried an approval token. Don't change this without thinking through retry semantics.
+
+### 11. ApprovalStore is in-memory and single-use
+
+Pending approval previews live in `ApprovalStore` (in-memory dict), keyed by ULID. They expire after `policy.approval_ttl_seconds` (default 300s). A process restart legitimately invalidates pending approvals — the human should re-confirm against the current state of the world. Single-use: `pop()` removes the entry whether the retry succeeds or fails.
+
+### 12. `validate_retry` does NOT check `action`
+
+Identical-fields validation in `policy/consent.py::validate_retry` covers `symbol`, `side`, `type`, `volume`, `ticket` — but NOT `action`. The engine dispatches by `action` at the call site, so a retry can only ever reach `validate_retry` under the same action that issued the preview. Don't move action-validation into `validate_retry` — it's the engine's responsibility.
+
+## Phase 1 + Phase 2 carryover
 
 All five Phase 1 final-review items closed before Phase 2 started:
 
@@ -73,10 +120,19 @@ All five Phase 1 final-review items closed before Phase 2 started:
 
 Still deferred: the 9 test files using `server._tool_manager.get_tool(name).fn` private API. FastMCP has not shipped a public sync accessor yet — migrate when it lands.
 
+## Phase 2 carryover (deferred to Phase 3+)
+
+- **Background TTL sweeper** for idempotency. In-band cleanup is sufficient at expected request volumes; revisit if the DB grows unbounded under heavy load.
+- **Audit log compression / archival CLI**. Operators rotate manually; a `mt5-mcp audit prune` command is reasonable Phase 4 polish.
+- **`pick_filling_mode` improvements** beyond FOK/IOC/RETURN — broker-specific edge cases may surface during Phase 3 customer onboarding.
+- **Multi-leg / OCO / partial-fill orchestration** — explicitly out of scope for v1.
+- **`SYMBOL_NOT_ENABLED` fallback for close_position** — currently if `symbol_info_tick` returns None mid-session, close_position errors out. A `pos.price_current` fallback could let agents exit positions during broker maintenance / news blackouts. Documented as v1 limitation.
+- **`expiration` round-trip test for modify_order** with a SELL position and TP widening (TP coverage is currently SL-only).
+
 ## Test workflow
 
 ```bash
-pytest -v                              # full suite (91 tests in ~1.6s)
+pytest -v                              # full suite (~176 tests in ~5s)
 pytest tests/test_tools_<x>.py -v      # one tool's tests
 pytest -k "history" -v                 # all tests matching "history"
 ```
@@ -88,6 +144,7 @@ Always run the **full** suite before committing — the autouse `_reset_app_cont
 ```bash
 python -m mt5_mcp doctor                              # 8x [PASS] expected
 python -m mt5_mcp export-symbols --output /tmp/x.csv  # writes a 13-column CSV
+python -m mt5_mcp doctor --smoke-trade               # adds a place_order+close_position round-trip
 ```
 
 If `doctor` reports `[FAIL]` on any tool, that's where Phase 2 starts.

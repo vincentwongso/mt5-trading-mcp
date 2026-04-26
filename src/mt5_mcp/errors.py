@@ -12,6 +12,7 @@ _RETCODE_MAP: dict[int, tuple[str, str, bool, bool]] = {
     # retcode: (code, message, retryable, requires_human)
     10004: ("REQUOTE", "Price moved during execution; try again.", True, False),
     10006: ("REJECTED_BY_SERVER", "Broker server rejected the trade.", False, True),
+    10010: ("PARTIAL_FILL", "Order partially filled; remainder unfilled.", False, False),
     10014: ("INVALID_VOLUME", "Volume invalid for symbol's lot step / min / max.", False, False),
     10015: ("INVALID_PRICE", "Price invalid for this order type.", True, False),
     10018: ("MARKET_CLOSED", "Symbol's session is closed.", False, False),

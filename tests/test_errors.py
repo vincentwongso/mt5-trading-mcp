@@ -68,3 +68,12 @@ def test_invalid_ticket_error():
     assert err.retryable is False
     assert err.requires_human is False
     assert err.details == {"ticket": 12345, "kind": "position"}
+
+
+def test_partial_fill_retcode_is_mapped():
+    from mt5_mcp.errors import error_for_retcode
+
+    err = error_for_retcode(10010)
+    assert err.code == "PARTIAL_FILL"
+    assert err.retryable is False
+    assert err.requires_human is False

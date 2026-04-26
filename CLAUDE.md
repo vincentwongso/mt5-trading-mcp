@@ -1,6 +1,6 @@
 # mt5-mcp — Agent Handover Notes
 
-**Status (last updated April 2026):** Phase 2 complete. Tag `phase-2-complete` marks the version with the four mutating tools (`place_order`, `modify_order`, `cancel_order`, `close_position`) and the `PolicyEngine` (preflight + consent + idempotency + audit) shipped on top of Phase 1. 176 passing unit tests. `doctor --smoke-trade` round-trips a place + close against the local MT5. Phase 3 picks up Resources + HTTP transport.
+**Status (last updated April 2026):** Phase 2 complete. Tag `phase-2-complete` marks the version with the four mutating tools (`place_order`, `modify_order`, `cancel_order`, `close_position`) and the `PolicyEngine` (preflight + consent + idempotency + audit) shipped on top of Phase 1. 181 passing unit tests. `doctor --smoke-trade` round-trips a place + close against the local MT5. Phase 3 picks up Resources + HTTP transport.
 
 ## Where to start
 
@@ -126,8 +126,6 @@ Still deferred: the 9 test files using `server._tool_manager.get_tool(name).fn` 
 - **Audit log compression / archival CLI**. Operators rotate manually; a `mt5-mcp audit prune` command is reasonable Phase 4 polish.
 - **`pick_filling_mode` improvements** beyond FOK/IOC/RETURN — broker-specific edge cases may surface during Phase 3 customer onboarding.
 - **Multi-leg / OCO / partial-fill orchestration** — explicitly out of scope for v1.
-- **`SYMBOL_NOT_ENABLED` fallback for close_position** — currently if `symbol_info_tick` returns None mid-session, close_position errors out. A `pos.price_current` fallback could let agents exit positions during broker maintenance / news blackouts. Documented as v1 limitation.
-- **`expiration` round-trip test for modify_order** with a SELL position and TP widening (TP coverage is currently SL-only).
 
 ## Test workflow
 

@@ -63,14 +63,6 @@ def register(mcp: FastMCP) -> None:
         info = ctx.symbols.get(symbol)
         close_volume = req.volume or Decimal(str(pos.volume))
 
-        tick = ctx.client.call(lambda m: m.symbol_info_tick(symbol))
-        if tick is None:
-            raise MT5Error(ErrorDetail(
-                code="SYMBOL_NOT_ENABLED",
-                message=f"No tick data for {symbol}; market may be closed.",
-                retryable=True, requires_human=False,
-                details={"symbol": symbol},
-            ))
         mt5 = ctx.client.mt5
         if pos.type not in (mt5.POSITION_TYPE_BUY, mt5.POSITION_TYPE_SELL):
             raise MT5Error(ErrorDetail(
@@ -80,7 +72,22 @@ def register(mcp: FastMCP) -> None:
                 details={"ticket": ticket, "position_type": int(pos.type)},
             ))
         is_buy_position = pos.type == mt5.POSITION_TYPE_BUY
-        close_price = Decimal(str(tick.bid if is_buy_position else tick.ask))
+
+        tick = ctx.client.call(lambda m: m.symbol_info_tick(symbol))
+        if tick is None:
+            # Fallback: use the position's last-known broker price so the
+            # agent can still exit during transient quote outages
+            # (news blackouts, broker maintenance).
+            if pos.price_current <= 0:
+                raise MT5Error(ErrorDetail(
+                    code="SYMBOL_NOT_ENABLED",
+                    message=f"No tick data for {symbol} and no last-known position price; market may be closed.",
+                    retryable=True, requires_human=False,
+                    details={"symbol": symbol},
+                ))
+            close_price = Decimal(str(pos.price_current))
+        else:
+            close_price = Decimal(str(tick.bid if is_buy_position else tick.ask))
         notional = close_volume * close_price
         # Estimated realised P&L on close (negative when realising a loss).
         sign = Decimal("1") if is_buy_position else Decimal("-1")
@@ -91,6 +98,17 @@ def register(mcp: FastMCP) -> None:
             cfg.policy.auto_approve_notional > 0
             and notional >= cfg.policy.auto_approve_notional
         )
+        # Tick fallback only applies to closes that auto-approve. If the
+        # close needs human approval, the human needs a fresh quote.
+        if tick is None and requires_approval:
+            raise MT5Error(ErrorDetail(
+                code="SYMBOL_NOT_ENABLED",
+                message=(f"No tick data for {symbol}; cannot present approval "
+                         f"preview for ~{notional} notional close. Retry "
+                         f"when quotes resume."),
+                retryable=True, requires_human=False,
+                details={"symbol": symbol, "notional": str(notional)},
+            ))
         account = ctx.client.call(lambda m: m.account_info())
         leverage = Decimal(str(account.leverage)) if account else Decimal("1")
         currency = account.currency if account else "USD"

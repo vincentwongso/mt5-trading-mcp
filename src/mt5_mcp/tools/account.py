@@ -17,7 +17,7 @@ def register(mcp: FastMCP) -> None:
     def get_account_info() -> AccountInfo:
         """Balance, equity, margin, leverage, currency, margin mode."""
         ctx = get_context()
-        raw = ctx.client.mt5.account_info()
+        raw = ctx.client.call(lambda m: m.account_info())
         if raw is None:
             raise MT5Error(terminal_not_connected_error())
         return account_info_from_raw(raw)

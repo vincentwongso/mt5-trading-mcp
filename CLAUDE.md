@@ -29,11 +29,21 @@ def my_tool(arg: str) -> SomeType:
     # ... use ctx.client, ctx.symbols, ctx.config
 ```
 
-The decorator (in `src/mt5_mcp/tools/_common.py`) catches `MT5Error` from the body and converts to `{"error": {...}}`. Read tools are wrapped; `ping` is deliberately NOT wrapped (it must work pre-connect).
+The decorator (in `src/mt5_mcp/tools/_common.py`) catches both `MT5Error` (using its carried `ErrorDetail`) and any other `Exception` (wrapping as `INTERNAL_ERROR` via `errors.internal_error`); the full traceback is logged server-side so a Python stack never escapes to the MCP client. Read tools are wrapped; `ping` is deliberately NOT wrapped (it must work pre-connect).
 
 ### 2. `terminal_not_connected_error()` factory — use it, don't inline `ErrorDetail(code="TERMINAL_NOT_CONNECTED", ...)`
 
-Lives in `src/mt5_mcp/errors.py`. Both the adapter and read tools use it. When Phase 2 mutating tools detect a connection drop, use the same factory.
+Lives in `src/mt5_mcp/errors.py`. Both the adapter and read tools use it. When Phase 2 mutating tools detect a connection drop, use the same factory. Same shape applies to `internal_error(exc)` (for unexpected exceptions inside a tool body).
+
+### 2b. Route mt5lib data calls through `ctx.client.call(...)`
+
+The reinit-aware wrapper is the canonical access pattern:
+
+```python
+raws = ctx.client.call(lambda m: m.positions_get(symbol=symbol))
+```
+
+This makes the architecture's "transparent reinit on mid-session NOT_INITIALIZED" guarantee real. Direct `ctx.client.mt5.<method>(...)` access is only acceptable for **constants** (`m.ORDER_FILLING_IOC`, `m.SYMBOL_FILLING_FOK`, etc.) and `ping` (which intentionally bypasses retry to detect connection state).
 
 ### 3. UTC-portable test timestamps
 
@@ -51,19 +61,22 @@ The Pydantic `_Base` validator (`src/mt5_mcp/types.py`) rejects naive datetimes 
 
 `tests/fakes.py` has hand-rolled dataclasses for every MT5 type we touch. Phase 2 tests should extend `FakeMT5` (e.g. add `_order_send` slot for `place_order`) rather than reach for `unittest.mock.MagicMock`. The strong typing makes "missing test data" fail loudly.
 
-## Phase 2 to-do list (carried over from Phase 1's final review)
+## Phase 1 carryover — resolved
 
-- **Wire `_call_with_reinit` into read-tool calls.** The helper exists in `mt5_client.py` but no Phase 1 tool uses it, so the architecture's "transparent reinit on mid-session disconnect" promise is technically broken. Phase 2 should route every `ctx.client.mt5.X(...)` through it (or the adapter should expose a wrapped version: `ctx.client.call(lambda mt: mt.positions_get())`).
-- **Migrate `json_encoders` → `@field_serializer(Decimal)`.** Pydantic v2 emits 29 deprecation warnings per test run; Pydantic v3 will remove `json_encoders` entirely. Half-day job.
-- **Broaden `error_envelope` exception catch.** Currently catches only `MT5Error`. Anything else (`KeyError`, `ValidationError`, etc.) leaks a Python traceback to the MCP client. Add a `INTERNAL_ERROR` envelope for non-MT5 exceptions.
-- **`get_market_hours.next_open` / `next_close`** are always `None`. Phase 2 should parse `symbol_info().sessions_quotes` (per architecture §6) or document the v1 limitation in the user-facing docstring.
-- **`_RES_IPC_TIMEOUT = -10003`** is defined in `mt5_client.py` but unused. Either wire it into a retry-on-timeout policy or remove.
-- **MCP SDK `_tool_manager` private API** is referenced in 9 test files. When FastMCP ships a public sync accessor, migrate.
+All five Phase 1 final-review items closed before Phase 2 started:
+
+- ✅ **`MT5Client.call(fn)`** is the public reinit-aware wrapper; every read tool and `SymbolPrep` route mt5lib data calls through it. Constants and `ping` skip it.
+- ✅ **Decimals serialise via `Annotated[Decimal, PlainSerializer(...)]`** (`_DecimalStr` alias in `types.py`). `model_config.json_encoders` is gone; deprecation warnings dropped from 29 → 0.
+- ✅ **`error_envelope` catches `Exception`** (not just `MT5Error`) and emits the new `INTERNAL_ERROR` envelope (`errors.internal_error`). The full traceback logs server-side; only the exception class name reaches the client.
+- ✅ **`get_market_hours` docstring** explicitly states `next_open`/`next_close` are always `None` in v1 — `sessions_quotes` parsing is deferred to a future release.
+- ✅ **`_RES_IPC_TIMEOUT` removed** from `mt5_client.py`. Phase 2 will re-introduce it with a backing test if IPC-timeout retries become necessary.
+
+Still deferred: the 9 test files using `server._tool_manager.get_tool(name).fn` private API. FastMCP has not shipped a public sync accessor yet — migrate when it lands.
 
 ## Test workflow
 
 ```bash
-pytest -v                              # full suite (89 tests in ~1.5s)
+pytest -v                              # full suite (91 tests in ~1.6s)
 pytest tests/test_tools_<x>.py -v      # one tool's tests
 pytest -k "history" -v                 # all tests matching "history"
 ```

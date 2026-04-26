@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 # mt5lib's internal retcode indicating the library wasn't initialized for
 # this call. Exact number per MetaTrader5 source.
 _RES_NOT_INITIALIZED = -10004
-_RES_IPC_TIMEOUT = -10003
 
 
 T = TypeVar("T")
@@ -110,15 +109,25 @@ class MT5Client:
 
     # --- call routing ---------------------------------------------------
 
+    def call(self, fn: Callable[[Any], T]) -> T:
+        """Invoke ``fn(mt5_module)`` with transparent re-init on NOT_INITIALIZED.
+
+        The MT5 terminal can drop its IPC link mid-session (terminal restart,
+        Windows wake-from-sleep, antivirus interruption). When this happens
+        mt5lib returns ``None`` AND sets ``last_error()`` to ``-10004``.
+        This wrapper detects that case, calls ``connect()`` once, and retries
+        ``fn`` exactly once. Other ``None`` results pass through verbatim so
+        callers can distinguish "no data" from "connection lost".
+
+        Read tools route every mt5lib data call through ``call()``; only
+        constant lookups (e.g. ``ctx.client.mt5.ORDER_FILLING_IOC``) and
+        ``ping`` skip it.
+        """
+        return self._call_with_reinit(lambda: fn(self._mt5))
+
     def _call_with_reinit(self, fn: Callable[[], T]) -> T:
         """Invoke `fn`; if it returns None AND last_error is the
-        not-initialized retcode, re-init once and retry.
-
-        NOTE (Phase 2): currently no read tool routes through this helper.
-        Tools call `ctx.client.mt5.<method>(...)` directly. Phase 2 should
-        wrap mt5lib calls so the architecture's "transparent reinit" promise
-        (§10 of mt5-mcp-architecture.md) becomes load-bearing.
-        """
+        not-initialized retcode, re-init once and retry."""
         result = fn()
         if result is not None:
             return result

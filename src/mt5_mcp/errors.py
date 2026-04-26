@@ -47,6 +47,22 @@ def error_for_retcode(
     )
 
 
+def internal_error(exc: BaseException) -> ErrorDetail:
+    """Envelope for an unexpected exception escaping a tool body.
+
+    The full traceback is logged server-side; the envelope surfaces only
+    the exception type and message so an operator can triage without the
+    server leaking file paths or local state to the MCP client.
+    """
+    return ErrorDetail(
+        code="INTERNAL_ERROR",
+        message=f"Unexpected {type(exc).__name__}: {exc}",
+        retryable=False,
+        requires_human=True,
+        details={"exception_type": type(exc).__name__},
+    )
+
+
 def terminal_not_connected_error(
     *,
     why: str | None = None,

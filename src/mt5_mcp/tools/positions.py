@@ -16,7 +16,10 @@ def register(mcp: FastMCP) -> None:
     def get_positions(symbol: str | None = None) -> list[Position]:
         """Open positions, optionally filtered to a single symbol."""
         ctx = get_context()
-        raws = ctx.client.mt5.positions_get(symbol=symbol) if symbol else ctx.client.mt5.positions_get()
+        if symbol:
+            raws = ctx.client.call(lambda m: m.positions_get(symbol=symbol))
+        else:
+            raws = ctx.client.call(lambda m: m.positions_get())
         if raws is None:
             return []
         offset = ctx.client.broker_offset_minutes

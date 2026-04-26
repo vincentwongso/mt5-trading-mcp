@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import functools
+import logging
 from typing import Any, Callable, TypeVar
 
-from mt5_mcp.errors import MT5Error
+from mt5_mcp.errors import MT5Error, internal_error
 from mt5_mcp.server import AppContext, get_context
 from mt5_mcp.types import ErrorDetail
+
+
+logger = logging.getLogger(__name__)
 
 
 R = TypeVar("R")
@@ -23,15 +27,16 @@ def ensure_connected(ctx: AppContext) -> ErrorDetail | None:
 
 
 def error_envelope(fn: Callable[..., R]) -> Callable[..., Any]:
-    """Wrap a tool handler so MT5Error becomes ``{"error": {...}}``.
+    """Wrap a tool handler so failures become a structured ``{"error": ...}``.
 
     The wrapped function must accept **no** positional ``ctx`` argument —
     it should call ``get_context()`` internally.  The envelope:
 
     1. Calls ``get_context()`` and ``ensure_connected`` before invoking ``fn``.
-    2. Catches any ``MT5Error`` raised by ``fn`` and converts it to the
-       ``{"error": {...}}`` dict, preserving the type hint on ``fn`` so
-       FastMCP does not try to serialize ``AppContext`` as a tool parameter.
+    2. Catches ``MT5Error`` (the adapter's structured failure) and emits
+       the carried ``ErrorDetail``.
+    3. Catches any other ``Exception`` as ``INTERNAL_ERROR``, logging the
+       traceback server-side so a Python stack never reaches the client.
     """
 
     @functools.wraps(fn)
@@ -44,5 +49,8 @@ def error_envelope(fn: Callable[..., R]) -> Callable[..., Any]:
             return fn(**kwargs)
         except MT5Error as exc:
             return {"error": exc.detail.model_dump(mode="json")}
+        except Exception as exc:
+            logger.exception("Unhandled exception in tool %s", fn.__name__)
+            return {"error": internal_error(exc).model_dump(mode="json")}
 
     return _wrapped

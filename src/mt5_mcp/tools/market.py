@@ -18,7 +18,7 @@ def register(mcp: FastMCP) -> None:
         """Current bid/ask for a symbol. Prepares the symbol in Market Watch if needed."""
         ctx = get_context()
         ctx.symbols.get(symbol)  # select if hidden; raises SYMBOL_NOT_FOUND if unknown
-        tick = ctx.client.mt5.symbol_info_tick(symbol)
+        tick = ctx.client.call(lambda m: m.symbol_info_tick(symbol))
         if tick is None:
             raise MT5Error(ErrorDetail(
                 code="SYMBOL_NOT_ENABLED",
@@ -33,7 +33,7 @@ def register(mcp: FastMCP) -> None:
     def get_symbols(category: str | None = None) -> list[SymbolInfo]:
         """List tradeable instruments, optionally filtered by category (e.g. 'Forex', 'Metals')."""
         ctx = get_context()
-        raws = ctx.client.mt5.symbols_get()
+        raws = ctx.client.call(lambda m: m.symbols_get())
         out = [symbol_info_from_raw(r) for r in raws]
         if category is not None:
             out = [s for s in out if s.category.lower() == category.lower()]
@@ -44,15 +44,17 @@ def register(mcp: FastMCP) -> None:
     def get_market_hours(symbol: str) -> MarketHours:
         """Whether the given symbol's session is open right now.
 
-        v1 returns a simplified is_open derived from `trade_mode`; session
-        windows (next_open, next_close) are populated if the broker exposes
-        them but left None otherwise.
+        v1 limitation: ``is_open`` is derived from ``trade_mode`` (open
+        when non-zero). ``next_open`` and ``next_close`` are always
+        ``None`` in v1 — parsing ``symbol_info().sessions_quotes`` is
+        scheduled for a later release. Agents needing precise session
+        boundaries should consult their broker's published schedule.
         """
         ctx = get_context()
         info = ctx.symbols.get(symbol)
         return MarketHours(
             symbol=symbol,
             is_open=getattr(info, "trade_mode", 0) != 0,
-            next_open=None,  # broker session schedule parsing deferred
+            next_open=None,
             next_close=None,
         )

@@ -56,7 +56,9 @@ def register(mcp: FastMCP) -> None:
         start_broker = (start_utc + offset).replace(tzinfo=None)
         end_broker = (end_utc + offset).replace(tzinfo=None)
         kwargs = {"group": f"*{symbol}*"} if symbol else {}
-        raws = ctx.client.mt5.history_deals_get(start_broker, end_broker, **kwargs)
+        raws = ctx.client.call(
+            lambda m: m.history_deals_get(start_broker, end_broker, **kwargs)
+        )
         if raws is None:
             return []
         return [

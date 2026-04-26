@@ -145,6 +145,19 @@ class FakeDeal:
 
 
 @dataclass
+class FakeOrderSendResult:
+    """Mimics the NamedTuple `mt5.order_send()` returns."""
+    retcode: int = TRADE_RETCODE_DONE          # 10009 = DONE
+    order: int = 0                             # ticket of the created/affected order
+    deal: int = 0                              # ticket of the resulting deal (market orders)
+    volume: float = 0.0
+    price: float = 0.0
+    comment: str = ""
+    request_id: int = 0
+    external_id: str = ""
+
+
+@dataclass
 class FakeMT5:
     """
     Stand-in for the MetaTrader5 module. Pre-populate slots for whatever
@@ -183,6 +196,10 @@ class FakeMT5:
     _positions_get: tuple[FakePosition, ...] = field(default_factory=tuple)
     _orders_get: tuple[FakeOrder, ...] = field(default_factory=tuple)
     _history_deals_get: tuple[FakeDeal, ...] = field(default_factory=tuple)
+    _order_send: FakeOrderSendResult | None = field(default_factory=FakeOrderSendResult)
+    # `order_send_calls` records the request dict passed to each order_send
+    # call, in order. Tests use `len()` to count and indexing to inspect.
+    order_send_calls: list[dict[str, Any]] = field(default_factory=list)
     _last_error: tuple[int, str] = (0, "")
 
     # Call-counter bookkeeping — useful for cache-hit assertions.
@@ -255,6 +272,12 @@ class FakeMT5:
     ) -> tuple[FakeDeal, ...]:
         self._bump("history_deals_get")
         return self._history_deals_get
+
+    def order_send(self, request: dict[str, Any]) -> FakeOrderSendResult | None:
+        self._bump("order_send")
+        # Defensive copy — tests may mutate the dict afterwards.
+        self.order_send_calls.append(dict(request))
+        return self._order_send
 
     def last_error(self) -> tuple[int, str]:
         return self._last_error

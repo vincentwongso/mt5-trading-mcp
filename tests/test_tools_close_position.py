@@ -11,7 +11,8 @@ import pytest
 from mt5_mcp.server import build_server
 from tests.fakes import (
     FakeAccountInfo, FakeMT5, FakeOrderSendResult, FakePosition, FakeSymbolInfo,
-    FakeTerminalInfo, FakeTick, POSITION_TYPE_BUY, TRADE_RETCODE_DONE,
+    FakeTerminalInfo, FakeTick, POSITION_TYPE_BUY, POSITION_TYPE_SELL,
+    TRADE_RETCODE_DONE,
 )
 
 
@@ -101,3 +102,39 @@ def test_close_blocked_by_max_realised_loss_per_close(tmp_path):
     assert "error" in out
     assert out["error"]["code"] == "EXCEEDS_LOCAL_LIMIT"
     assert out["error"]["details"]["limit_name"] == "max_realised_loss_per_close"
+
+
+def test_close_sell_position_uses_ask_and_buy_order(server_and_mt5):
+    """Sell positions close at ASK with a BUY order (mirror of the buy-close path).
+
+    Regression guard: a swap of bid/ask or a wrong order-type branch would
+    silently produce a wrong-direction close. This test pins both."""
+    server, fake = server_and_mt5
+    fake._positions_get = (
+        FakePosition(ticket=43, symbol="EURUSD", type=fake.POSITION_TYPE_SELL,
+                     volume=0.3, price_open=1.0850, price_current=1.0824,
+                     profit=8.0),
+    )
+    out = _call(server, "close_position", ticket=43)
+    assert out["success"] is True
+    sent = fake.order_send_calls[0]
+    assert sent["type"] == fake.ORDER_TYPE_BUY      # sell position closed by BUY
+    assert sent["price"] == 1.0824                  # closing at ASK
+
+
+def test_close_unsupported_position_type_returns_explicit_error(server_and_mt5):
+    """A position with an unrecognised type (neither BUY nor SELL) must
+    surface UNSUPPORTED_POSITION_TYPE — not silently default to one side."""
+    server, fake = server_and_mt5
+    fake._positions_get = (
+        FakePosition(ticket=44, symbol="EURUSD", type=99,  # bogus type
+                     volume=0.5, price_open=1.0800, price_current=1.0824,
+                     profit=12.0),
+    )
+    out = _call(server, "close_position", ticket=44)
+    assert "error" in out
+    assert out["error"]["code"] == "UNSUPPORTED_POSITION_TYPE"
+    assert out["error"]["details"]["ticket"] == 44
+    assert out["error"]["details"]["position_type"] == 99
+    # Critically, no order was sent — the guard fires before order_send.
+    assert len(fake.order_send_calls) == 0

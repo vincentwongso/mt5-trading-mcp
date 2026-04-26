@@ -71,7 +71,15 @@ def register(mcp: FastMCP) -> None:
                 retryable=True, requires_human=False,
                 details={"symbol": symbol},
             ))
-        is_buy_position = pos.type == ctx.client.mt5.POSITION_TYPE_BUY
+        mt5 = ctx.client.mt5
+        if pos.type not in (mt5.POSITION_TYPE_BUY, mt5.POSITION_TYPE_SELL):
+            raise MT5Error(ErrorDetail(
+                code="UNSUPPORTED_POSITION_TYPE",
+                message=f"Position {ticket} has unrecognised type {pos.type!r}; cannot close.",
+                retryable=False, requires_human=True,
+                details={"ticket": ticket, "position_type": int(pos.type)},
+            ))
+        is_buy_position = pos.type == mt5.POSITION_TYPE_BUY
         close_price = Decimal(str(tick.bid if is_buy_position else tick.ask))
         notional = close_volume * close_price
         # Estimated realised P&L on close (negative when realising a loss).
@@ -120,7 +128,6 @@ def register(mcp: FastMCP) -> None:
         ) as g:
             if g.short_circuit is not None:
                 return g.short_circuit
-            mt5 = ctx.client.mt5
             mt5_dict = {
                 "action": mt5.TRADE_ACTION_DEAL,
                 "symbol": symbol,

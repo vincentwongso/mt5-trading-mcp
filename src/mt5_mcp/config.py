@@ -25,6 +25,13 @@ class _Sub(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+def _user_data_path(filename: str) -> str:
+    """Per-OS default path under platformdirs.user_data_dir('mt5-mcp')."""
+    from platformdirs import user_data_dir
+
+    return str(Path(user_data_dir("mt5-mcp")) / filename)
+
+
 class MT5Section(_Sub):
     terminal_path: str = ""
     preferred_login: int | None = None
@@ -41,6 +48,7 @@ class PolicySection(_Sub):
 
 
 class IdempotencySection(_Sub):
+    path: str = Field(default_factory=lambda: _user_data_path("idempotency.db"))
     ttl_seconds: PositiveInt = 86_400
 
 
@@ -50,7 +58,7 @@ class SymbolsSection(_Sub):
 
 
 class AuditSection(_Sub):
-    path: str = "~/.local/share/mt5-mcp/audit.jsonl"
+    path: str = Field(default_factory=lambda: _user_data_path("audit.jsonl"))
     max_bytes: PositiveInt = 10_485_760
 
 

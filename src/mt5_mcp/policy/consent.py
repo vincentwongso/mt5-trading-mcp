@@ -40,14 +40,19 @@ class ApprovalStore:
             self._previews[preview.request_id] = preview
 
     def pop(self, request_id: str) -> ApprovalPreview | None:
-        """Remove and return the preview if it exists and is un-expired."""
+        """Remove and return the preview if it exists and is un-expired.
+
+        Returns None for both "unknown id" and "expired id" — the engine
+        converts both into the generic INVALID_APPROVAL response, so the
+        distinction is not exposed to callers.
+        """
         with self._lock:
             preview = self._previews.pop(request_id, None)
-        if preview is None:
-            return None
-        if preview.expires_at <= datetime.now(timezone.utc):
-            return None
-        return preview
+            if preview is None:
+                return None
+            if preview.expires_at <= datetime.now(timezone.utc):
+                return None
+            return preview
 
 
 def validate_retry(
@@ -58,6 +63,16 @@ def validate_retry(
     point: Decimal,
 ) -> ErrorDetail | None:
     """Check that `request` matches the stored `preview` within tolerances.
+
+    Validated here:
+      - identical fields: symbol, side, type, volume, ticket (per arch §8.1)
+      - price drift within max(0.5% of reference, deviation × point)
+      - preview not expired
+
+    Validated elsewhere:
+      - `action` (place_order vs close_position vs ...) — the engine
+        dispatches by action at the call site, so a retry can only ever
+        reach validate_retry under the action that issued the preview.
 
     Returns an ErrorDetail on mismatch, None on success. The caller is
     expected to have already retrieved `preview` via ApprovalStore.pop().

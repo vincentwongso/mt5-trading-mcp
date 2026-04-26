@@ -29,7 +29,7 @@ def _user_data_path(filename: str) -> str:
     """Per-OS default path under platformdirs.user_data_dir('mt5-mcp')."""
     from platformdirs import user_data_dir
 
-    return str(Path(user_data_dir("mt5-mcp")) / filename)
+    return str(Path(user_data_dir("mt5-mcp", appauthor=False)) / filename)
 
 
 class MT5Section(_Sub):

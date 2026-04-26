@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, TypeVar
 
 from mt5_mcp.adapter.conversions import infer_broker_tz_offset
-from mt5_mcp.errors import MT5Error
+from mt5_mcp.errors import MT5Error, terminal_not_connected_error
 from mt5_mcp.types import ErrorDetail
 
 
@@ -132,11 +132,4 @@ class MT5Client:
 
     def _connection_error(self, message: str) -> ErrorDetail:
         raw = self._mt5.last_error()
-        details = {"raw_error": raw, "why": message}
-        return ErrorDetail(
-            code="TERMINAL_NOT_CONNECTED",
-            message="MT5 terminal is not connected. Please open MT5 and log into your broker.",
-            retryable=False,
-            requires_human=True,
-            details=details,
-        )
+        return terminal_not_connected_error(why=message, raw_error=raw)

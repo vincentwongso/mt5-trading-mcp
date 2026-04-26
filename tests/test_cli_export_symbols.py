@@ -20,7 +20,12 @@ def test_export_writes_csv_with_all_symbols(tmp_path: Path):
         FakeSymbolInfo(name="XAUUSD", path="Metals\\XAUUSD"),
     )
     out = tmp_path / "symbols.csv"
-    rc = run_export(output=out, mt5_module=fake)
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+    rc = run_export(output=out, mt5_module=fake, config_path=cfg)
     assert rc == 0
 
     with out.open(newline="") as f:
@@ -35,5 +40,10 @@ def test_export_exits_nonzero_when_disconnected(tmp_path: Path):
     fake = FakeMT5()
     fake._terminal_info = None
     out = tmp_path / "symbols.csv"
-    rc = run_export(output=out, mt5_module=fake)
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+    rc = run_export(output=out, mt5_module=fake, config_path=cfg)
     assert rc != 0

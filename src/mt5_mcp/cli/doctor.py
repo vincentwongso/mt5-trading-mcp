@@ -20,9 +20,14 @@ def _check(label: str, fn: Callable[[], Any]) -> bool:
         return False
 
 
-def run_doctor(*, mt5_module: Any | None = None, probe_symbol: str = "EURUSD") -> int:
+def run_doctor(
+    *,
+    mt5_module: Any | None = None,
+    probe_symbol: str = "EURUSD",
+    config_path: Any | None = None,
+) -> int:
     reset_context_for_tests()
-    server = build_server(mt5_module=mt5_module)
+    server = build_server(mt5_module=mt5_module, config_path=config_path)
     tm = server._tool_manager
 
     def call(name: str, **kwargs):

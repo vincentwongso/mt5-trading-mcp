@@ -110,3 +110,42 @@ def test_reload_survives_broken_edit(tmp_path: Path, caplog):
         assert watcher.current is original
     finally:
         watcher.stop()
+
+
+def test_default_idempotency_path_uses_platformdirs():
+    from mt5_mcp.config import Config
+
+    cfg = Config()
+    p = cfg.idempotency.path
+    assert p.endswith("idempotency.db") or p.endswith("idempotency.db".replace("/", "\\"))
+    assert "mt5-mcp" in p
+
+
+def test_default_audit_path_uses_platformdirs():
+    from mt5_mcp.config import Config
+
+    cfg = Config()
+    p = cfg.audit.path
+    assert p.endswith("audit.jsonl") or p.endswith("audit.jsonl".replace("/", "\\"))
+    assert "mt5-mcp" in p
+
+
+def test_idempotency_path_is_overridable_in_toml(tmp_path):
+    import textwrap
+    from mt5_mcp.config import load_config
+
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text(textwrap.dedent("""
+        [idempotency]
+        path = "/custom/path/idem.db"
+        ttl_seconds = 3600
+
+        [audit]
+        path = "/custom/path/audit.jsonl"
+        max_bytes = 1048576
+    """).strip())
+    cfg = load_config(cfg_file)
+    assert cfg.idempotency.path == "/custom/path/idem.db"
+    assert cfg.idempotency.ttl_seconds == 3600
+    assert cfg.audit.path == "/custom/path/audit.jsonl"
+    assert cfg.audit.max_bytes == 1048576

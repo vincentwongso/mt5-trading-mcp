@@ -11,12 +11,17 @@ from tests.fakes import FakeMT5, FakeTerminalInfo
 
 
 @pytest.fixture
-def server_and_mt5(frozen_utc):
+def server_and_mt5(frozen_utc, tmp_path):
     fake = FakeMT5()
     fake._terminal_info = FakeTerminalInfo(
         time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp()),
     )
-    server = build_server(mt5_module=fake)
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+    server = build_server(mt5_module=fake, config_path=cfg)
     return server, fake
 
 

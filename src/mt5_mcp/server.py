@@ -17,6 +17,7 @@ from mcp.server.fastmcp import FastMCP
 from mt5_mcp.adapter.mt5_client import MT5Client
 from mt5_mcp.adapter.symbols import SymbolPrep
 from mt5_mcp.config import Config, ConfigWatcher, default_config_path, load_config
+from mt5_mcp.policy import PolicyEngine
 
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ class AppContext:
     client: MT5Client
     symbols: SymbolPrep
     config_watcher: ConfigWatcher | None
+    policy: PolicyEngine
 
     @property
     def config(self) -> Config:
@@ -66,7 +68,13 @@ def build_context(
             mt5_module=mt5_module,
         )
         symbols = SymbolPrep(client)
-        _ctx = AppContext(client=client, symbols=symbols, config_watcher=watcher)
+        policy = PolicyEngine(
+            config=cfg,
+            idempotency_path=cfg.idempotency.path,
+            audit_path=cfg.audit.path,
+        )
+        _ctx = AppContext(client=client, symbols=symbols,
+                          config_watcher=watcher, policy=policy)
         return _ctx
 
 
@@ -79,8 +87,10 @@ def get_context() -> AppContext:
 def reset_context_for_tests() -> None:
     global _ctx
     with _ctx_lock:
-        if _ctx is not None and _ctx.config_watcher is not None:
-            _ctx.config_watcher.stop()
+        if _ctx is not None:
+            if _ctx.config_watcher is not None:
+                _ctx.config_watcher.stop()
+            _ctx.policy.close()
         _ctx = None
 
 

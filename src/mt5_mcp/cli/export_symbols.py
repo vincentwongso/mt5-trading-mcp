@@ -28,9 +28,9 @@ _COLUMNS = [
 ]
 
 
-def run_export(*, output: Path, mt5_module: Any | None = None) -> int:
+def run_export(*, output: Path, mt5_module: Any | None = None, config_path: Any | None = None) -> int:
     reset_context_for_tests()
-    server = build_server(mt5_module=mt5_module)
+    server = build_server(mt5_module=mt5_module, config_path=config_path)
     tm = server._tool_manager
     result = tm.get_tool("get_symbols").fn()
     if isinstance(result, dict) and "error" in result:

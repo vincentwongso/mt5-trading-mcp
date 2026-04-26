@@ -1,3 +1,100 @@
+# mt5-mcp — Agent Handover Notes
+
+**Status (last updated April 2026):** Phase 1 complete. Tag `phase-1-complete` marks the version that has 89 passing unit tests and a green real-world `doctor` smoke against Vincent's local MT5 terminal. The next agent picks up Phase 2.
+
+## Where to start
+
+1. **Architecture spec:** `mt5-mcp-architecture.md` (single source of truth for design).
+2. **Phase 1 plan:** `docs/superpowers/plans/2026-04-24-phase-1-skeleton-and-read-tools.md` (TDD-style, every step has the actual code).
+3. **What's left:** Phase 2 (mutating tools + policy), Phase 3 (resources + HTTP transport), Phase 4 (polish + PyPI release). See architecture §15.
+
+## What Phase 1 shipped
+
+9 read tools (`ping`, `get_terminal_info`, `get_account_info`, `get_quote`, `get_symbols`, `get_market_hours`, `get_positions`, `get_orders`, `get_history`), 2 CLI commands (`doctor`, `export-symbols`), the `MetaTrader5`-wrapping adapter (singleton client + symbol prep + type conversions), config loader with watchdog hot-reload, the FastMCP server bootstrap, and 89 unit tests against a hand-rolled `FakeMT5` (no live terminal needed).
+
+## Critical patterns Phase 2 MUST follow
+
+These aren't obvious from the architecture doc — they were discovered during Phase 1:
+
+### 1. `error_envelope` decorator: tool body must call `get_context()` itself
+
+FastMCP's Pydantic-based tool-schema generator can't JSON-schemafy `AppContext.client: MT5Client`. So the planned `def my_tool(ctx: AppContext, ...) -> X:` pattern **does not work**. Use:
+
+```python
+@mcp.tool()
+@error_envelope
+def my_tool(arg: str) -> SomeType:
+    """Docstring."""
+    ctx = get_context()  # FIRST line, always
+    # ... use ctx.client, ctx.symbols, ctx.config
+```
+
+The decorator (in `src/mt5_mcp/tools/_common.py`) catches `MT5Error` from the body and converts to `{"error": {...}}`. Read tools are wrapped; `ping` is deliberately NOT wrapped (it must work pre-connect).
+
+### 2. `terminal_not_connected_error()` factory — use it, don't inline `ErrorDetail(code="TERMINAL_NOT_CONNECTED", ...)`
+
+Lives in `src/mt5_mcp/errors.py`. Both the adapter and read tools use it. When Phase 2 mutating tools detect a connection drop, use the same factory.
+
+### 3. UTC-portable test timestamps
+
+When a test needs an epoch, write `int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())` — never naive `.timestamp()`. Naive `.timestamp()` is interpreted as local time and breaks tests on non-UTC dev machines.
+
+### 4. `infer_broker_tz_offset` AttributeError fallback
+
+Some real-world MT5 builds omit `terminal_info().time`. `MT5Client.connect()` catches `AttributeError` and falls back to `broker_offset_minutes=0` with a warning. Regression test: `tests/test_adapter_mt5_client.py::test_connect_falls_back_when_terminal_info_lacks_time`. If Phase 2 changes connect-time behaviour, preserve this fallback.
+
+### 5. Timestamps: aware UTC ONLY, enforced at the type system
+
+The Pydantic `_Base` validator (`src/mt5_mcp/types.py`) rejects naive datetimes AND non-UTC offsets. The adapter's `epoch_to_utc(epoch, broker_offset_minutes)` is the single producer. Don't add another timestamp source — every datetime that ends up in a tool output must pass through `adapter/conversions.py`.
+
+### 6. Test fakes, not `MagicMock`
+
+`tests/fakes.py` has hand-rolled dataclasses for every MT5 type we touch. Phase 2 tests should extend `FakeMT5` (e.g. add `_order_send` slot for `place_order`) rather than reach for `unittest.mock.MagicMock`. The strong typing makes "missing test data" fail loudly.
+
+## Phase 2 to-do list (carried over from Phase 1's final review)
+
+- **Wire `_call_with_reinit` into read-tool calls.** The helper exists in `mt5_client.py` but no Phase 1 tool uses it, so the architecture's "transparent reinit on mid-session disconnect" promise is technically broken. Phase 2 should route every `ctx.client.mt5.X(...)` through it (or the adapter should expose a wrapped version: `ctx.client.call(lambda mt: mt.positions_get())`).
+- **Migrate `json_encoders` → `@field_serializer(Decimal)`.** Pydantic v2 emits 29 deprecation warnings per test run; Pydantic v3 will remove `json_encoders` entirely. Half-day job.
+- **Broaden `error_envelope` exception catch.** Currently catches only `MT5Error`. Anything else (`KeyError`, `ValidationError`, etc.) leaks a Python traceback to the MCP client. Add a `INTERNAL_ERROR` envelope for non-MT5 exceptions.
+- **`get_market_hours.next_open` / `next_close`** are always `None`. Phase 2 should parse `symbol_info().sessions_quotes` (per architecture §6) or document the v1 limitation in the user-facing docstring.
+- **`_RES_IPC_TIMEOUT = -10003`** is defined in `mt5_client.py` but unused. Either wire it into a retry-on-timeout policy or remove.
+- **MCP SDK `_tool_manager` private API** is referenced in 9 test files. When FastMCP ships a public sync accessor, migrate.
+
+## Test workflow
+
+```bash
+pytest -v                              # full suite (89 tests in ~1.5s)
+pytest tests/test_tools_<x>.py -v      # one tool's tests
+pytest -k "history" -v                 # all tests matching "history"
+```
+
+Always run the **full** suite before committing — the autouse `_reset_app_context` fixture in `tests/conftest.py` is load-bearing for test isolation, and a slow-burn breakage in one test can propagate.
+
+## Live-terminal smoke check
+
+```bash
+python -m mt5_mcp doctor                              # 8x [PASS] expected
+python -m mt5_mcp export-symbols --output /tmp/x.csv  # writes a 13-column CSV
+```
+
+If `doctor` reports `[FAIL]` on any tool, that's where Phase 2 starts.
+
+## Memory
+
+User memories for this project live at `~/.claude/projects/C--projects-mt5-trading-mcp/memory/`. Notable entries:
+
+- `feedback_subagent_model.md` — use sonnet (not haiku) for general-purpose subagents.
+- `project_fastmcp_envelope_pattern.md` — the no-`ctx`-parameter rule (above).
+- `project_terminal_info_time_quirk.md` — the AttributeError fallback (above).
+
+## Don't surprise the user
+
+- This project is **broker-agnostic**. No hardcoded broker URLs / server names / symbol conventions. Fintrix is the launch reference user, not an embedded constraint.
+- This project is **local-first**. No cloud component, no telemetry by default, no auto-update. The MCP runs on the customer's machine in the same process tree as their agent runtime.
+- The MCP is **not the security boundary** — the broker's MT5 server enforces hard limits. Pre-flight checks in the policy engine (Phase 2) are UX guardrails, not security controls.
+
+---
+
 <!-- rtk-instructions v2 -->
 # RTK (Rust Token Killer) - Token-Optimized Commands
 

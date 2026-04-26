@@ -278,8 +278,13 @@ def register(mcp: FastMCP) -> None:
                     "price": float(req.price) if req.price is not None else float(target.price_open),
                     "sl": float(req.sl) if req.sl is not None else 0.0,
                     "tp": float(req.tp) if req.tp is not None else 0.0,
-                    "type_time": getattr(mt5, "ORDER_TIME_GTC", 1),
                 }
+                if req.expiration is not None:
+                    # Specific expiry timestamp (mt5lib expects Unix seconds + ORDER_TIME_SPECIFIED).
+                    mt5_dict["type_time"] = getattr(mt5, "ORDER_TIME_SPECIFIED", 2)
+                    mt5_dict["type_expiration"] = int(req.expiration.timestamp())
+                else:
+                    mt5_dict["type_time"] = getattr(mt5, "ORDER_TIME_GTC", 0)
             g.execute(lambda: ctx.client.call(lambda m: m.order_send(mt5_dict)))
             return g.finalize(
                 order_result_from_mt5_response,

@@ -94,3 +94,33 @@ def test_modify_unknown_ticket(server_and_mt5):
     server, fake = server_and_mt5
     out = _call(server, "modify_order", ticket=99999, sl="1.07")
     assert out["error"]["code"] == "INVALID_TICKET"
+
+
+def test_modify_pending_order_with_expiration_uses_specified_time(server_and_mt5):
+    """Passing an expiration switches type_time to ORDER_TIME_SPECIFIED and
+    includes type_expiration as a Unix timestamp.
+
+    Regression guard: a previous version of modify_order parsed `expiration`
+    into the request model but silently dropped it from the mt5 dict.
+    """
+    from datetime import datetime, timezone
+    server, fake = server_and_mt5
+    out = _call(server, "modify_order", ticket=77,
+                price="1.0680",
+                expiration="2026-05-01T00:00:00Z")
+    assert out["success"] is True
+    sent = fake.order_send_calls[0]
+    assert sent["type_time"] == fake.ORDER_TIME_SPECIFIED
+    expected_epoch = int(datetime(2026, 5, 1, 0, 0, tzinfo=timezone.utc).timestamp())
+    assert sent["type_expiration"] == expected_epoch
+
+
+def test_modify_pending_order_without_expiration_uses_gtc(server_and_mt5):
+    """When expiration is omitted, type_time defaults to ORDER_TIME_GTC (=0
+    in the real mt5lib)."""
+    server, fake = server_and_mt5
+    out = _call(server, "modify_order", ticket=77, price="1.0680")
+    assert out["success"] is True
+    sent = fake.order_send_calls[0]
+    assert sent["type_time"] == fake.ORDER_TIME_GTC
+    assert "type_expiration" not in sent

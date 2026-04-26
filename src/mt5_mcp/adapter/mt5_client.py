@@ -72,9 +72,17 @@ class MT5Client:
             ti = self._mt5.terminal_info()
             if ti is None:
                 raise MT5Error(self._connection_error("terminal_info returned None"))
-            self.broker_offset_minutes = infer_broker_tz_offset(
-                ti.time, datetime.now(timezone.utc)
-            )
+            try:
+                self.broker_offset_minutes = infer_broker_tz_offset(
+                    ti.time, datetime.now(timezone.utc)
+                )
+            except AttributeError:
+                # Some MT5 builds / demo accounts omit .time from TerminalInfo.
+                # Fall back to offset=0 (UTC); the server still works.
+                logger.warning(
+                    "terminal_info().time not available; assuming broker TZ offset = 0"
+                )
+                self.broker_offset_minutes = 0
             self._initialised = True
             logger.info(
                 "MT5 connected; broker TZ offset = %+d min", self.broker_offset_minutes

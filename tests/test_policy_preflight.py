@@ -71,15 +71,32 @@ def test_blocks_when_allowlist_set_and_symbol_missing():
     assert err.details["limit_name"] == "allowlist"
 
 
-def test_blocks_when_running_daily_loss_would_breach_threshold():
+def test_blocks_when_running_daily_loss_at_or_above_cap():
+    """Once realised daily loss meets the cap, no new trades are allowed.
+
+    The cap is about realised drawdown — notional doesn't enter the
+    decision because notional is not equal to the trade's potential loss.
+    """
     req = OrderRequest(symbol="EURUSD", side="buy", type="market", volume=Decimal("0.1"))
     err = check_preflight_limits(
         "place_order", req,
-        _inputs(running_daily_pnl="-1950"),
+        _inputs(running_daily_pnl="-2050"),  # over the 2000 cap
         _config(max_daily_loss="2000"),
     )
     assert err is not None
     assert err.details["limit_name"] == "max_daily_loss"
+
+
+def test_passes_when_daily_loss_below_cap():
+    """A trade goes through when realised loss hasn't yet hit the cap,
+    regardless of the new trade's notional."""
+    req = OrderRequest(symbol="EURUSD", side="buy", type="market", volume=Decimal("0.1"))
+    err = check_preflight_limits(
+        "place_order", req,
+        _inputs(running_daily_pnl="-1500", notional="50000"),  # large notional
+        _config(max_daily_loss="2000"),
+    )
+    assert err is None  # at -1500 with 2000 cap, even a 50k notional trade is OK
 
 
 def test_close_position_blocks_when_realised_loss_above_per_close_cap():

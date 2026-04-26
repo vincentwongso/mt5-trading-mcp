@@ -5,7 +5,7 @@
 **Repo:** `github.com/fintrixmarkets/mt5-mcp` (proposed)
 **Licence:** MIT
 **Status:** v0.1 architecture draft
-**Owner:** Vincent / CTO, Fintrix Markets
+**Owner:** Vincent - Fintrix Markets
 **Audience:** Implementers (Claude Code, contributors, integrators)
 
 ---

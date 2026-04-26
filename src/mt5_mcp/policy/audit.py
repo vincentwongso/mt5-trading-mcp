@@ -1,8 +1,25 @@
 """Append-only JSONL audit log with size-based rotation.
 
-One file handle per process; an RLock guards the write+rotate transition.
-Rotation renames the current file to `audit.jsonl.<unix_epoch>` and opens
-a fresh handle. No compression — operators rotate or archive manually.
+One file handle per process; an RLock guards both `write()` and rotation
+so the file remains consistent under concurrent FastMCP request threads.
+The `ts` field is generated inside the lock so file order matches wall
+clock order — important for operators reconstructing event sequences.
+
+Durability trade-offs (acceptable for a local-first developer tool):
+- Line-buffered mode means each `\\n`-terminated write reaches the OS,
+  but `close()` does NOT call `os.fsync`. Events in the OS page cache
+  are lost on power failure. We accept this risk because the MCP runs
+  on the customer's local machine and the audit log volume is low.
+- `json.dumps(..., default=str)` silently stringifies non-serialisable
+  values (Decimal, datetime, etc.). The expected callers (PolicyEngine
+  in Task 11) construct explicit primitive dicts; if a complex object
+  ever leaks through, it appears in the log as its repr rather than
+  raising. Acceptable for this phase; revisit if the audit log gains
+  programmatic consumers.
+
+Rotation renames the current file to `audit.jsonl.<unix_epoch>` (with a
+`.<suffix>` counter for same-second collisions) and opens a fresh handle.
+No compression — operators rotate or archive manually.
 """
 
 from __future__ import annotations
@@ -50,26 +67,26 @@ class AuditLog:
         if size < self._max_bytes:
             return
         self._close_handle()
-        rotated = self._path.with_name(f"{self._path.name}.{int(time.time())}")
-        # If two writes race past the size check before either rotates, the
-        # second rename target may already exist — fall back to a counter.
+        epoch = int(time.time())
+        rotated = self._path.with_name(f"{self._path.name}.{epoch}")
         suffix = 0
         candidate = rotated
         while candidate.exists():
             suffix += 1
-            candidate = self._path.with_name(f"{self._path.name}.{int(time.time())}.{suffix}")
+            candidate = self._path.with_name(f"{self._path.name}.{epoch}.{suffix}")
         os.replace(self._path, candidate)
         logger.info("audit log rotated: %s -> %s", self._path, candidate)
         self._open()
 
     def write(self, event: dict[str, Any]) -> None:
-        """Append one JSONL event. A 'ts' field is added automatically."""
-        record = {"ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                  **event}
-        line = json.dumps(record, separators=(",", ":"), default=str)
+        """Append one JSONL event. A 'ts' field is added inside the lock so
+        file order matches wall-clock order under concurrent writers."""
         with self._lock:
             if self._fp is None:
                 self._open()
+            ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            record = {"ts": ts, **event}
+            line = json.dumps(record, separators=(",", ":"), default=str)
             self._fp.write(line + "\n")
             self._rotate_if_needed()
 

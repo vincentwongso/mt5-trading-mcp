@@ -69,3 +69,31 @@ def test_concurrent_writers_serialise_correctly(tmp_path: Path):
     assert len(lines) == n_threads * n_per
     for ln in lines:
         json.loads(ln)
+
+
+def test_concurrent_writes_preserve_file_order_with_timestamps(tmp_path: Path):
+    """Under concurrent load, the in-lock `ts` generation guarantees that
+    file order matches timestamp order (no apparent time regressions)."""
+    a = AuditLog(path=tmp_path / "audit.jsonl", max_bytes=1_000_000)
+    n_threads = 4
+    n_per = 100
+
+    def worker(wid: int):
+        for i in range(n_per):
+            a.write({"tool": "x", "action": "called", "wid": wid, "i": i})
+
+    threads = [threading.Thread(target=worker, args=(w,)) for w in range(n_threads)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    a.close()
+
+    lines = (tmp_path / "audit.jsonl").read_text().splitlines()
+    assert len(lines) == n_threads * n_per
+    timestamps = [json.loads(ln)["ts"] for ln in lines]
+    # File order must match timestamp order. Equal timestamps allowed
+    # (sub-second resolution); strictly decreasing timestamps would mean
+    # `ts` was generated outside the lock.
+    for prev, curr in zip(timestamps, timestamps[1:]):
+        assert prev <= curr, f"out-of-order ts: {prev!r} then {curr!r}"

@@ -71,6 +71,7 @@ class FakeAccountInfo:
     server: str = "FintrixMarkets-Demo"
     currency: str = "USD"
     balance: float = 10_000.0
+    credit: float = 0.0
     equity: float = 10_050.0
     margin: float = 100.0
     margin_free: float = 9_950.0

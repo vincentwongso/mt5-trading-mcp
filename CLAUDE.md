@@ -1,12 +1,12 @@
 # mt5-mcp — Agent Handover Notes
 
-**Status (last updated April 2026):** Phase 3 complete. Tag `phase-2-complete` marks the previous milestone. Phase 3 added 3 MCP resources (`account://current`, `positions://current`, `quotes://{symbol}`), a shared streaming subsystem (Poller + Dispatcher), and HTTP transport (`serve --transport http`, loopback-only). 243 passing unit tests. Phase 4 picks up polish + PyPI release.
+**Status (last updated April 2026):** Phase 4 complete — `mt5-mcp` v1.0.0 shipped to PyPI. Tag `phase-3-complete` marks the previous milestone. Phase 4 added the public README, `SECURITY.md`, `CHANGELOG.md`, example MCP client configs (Claude Desktop stdio + HTTP, Cursor), GitHub Actions test CI, and the `1.0.0` PyPI release. 243 passing unit tests (unchanged from Phase 3). Phase 5 (automated integration tests against a real MT5 demo) is queued.
 
 ## Where to start
 
 1. **Architecture spec:** `mt5-mcp-architecture.md` (single source of truth for design).
 2. **Phase 1 plan:** `docs/superpowers/plans/2026-04-24-phase-1-skeleton-and-read-tools.md` (TDD-style, every step has the actual code).
-3. **What's left:** Phase 4 (polish + PyPI release). See architecture §15.
+3. **What's next:** Phase 5 (automated integration tests against a real MT5 demo). Spec to be written; user has demo account access. Architecture §15 currently ends at Phase 4 — Phase 5 will require an architecture-doc update.
 
 ## What Phase 1 shipped
 
@@ -19,6 +19,10 @@ Four mutating MCP tools (`place_order`, `modify_order`, `cancel_order`, `close_p
 ## What Phase 3 added
 
 Three MCP resources (`account://current`, `positions://current`, `quotes://{symbol}`), all readable and subscribable. A shared streaming subsystem (`src/mt5_mcp/streaming/`) with a `Poller` daemon thread and a `Dispatcher` for per-URI change-fanout. Change-detection excludes floating P&L by design (see architecture §17). HTTP transport (`serve --transport http`), loopback-only, with optional bearer-token auth (`transport.http.auth_token`). A `FastMCPSubscriber` adapter bridges the Poller daemon thread to the FastMCP asyncio event loop via `asyncio.run_coroutine_threadsafe`. `doctor` gained a `[streaming]` check. Test helper `tests/_resource_helpers.py::read_resource(server, uri)` is the canonical way to drive resource handlers from tests. ~62 new unit tests (243 total). Architecture doc §17 and §18 added.
+
+## What Phase 4 added
+
+No production code changes — this was a packaging and docs phase. Bumped `pyproject.toml` to `1.0.0`, re-authored to "Vincent" with a personal security contact, added `[project.urls]`. Rewrote `README.md` for first-time PyPI users (with a Windows VPS deployment section covering both agent-on-VPS stdio and agent-local-via-SSH-tunnel HTTP patterns). Added `SECURITY.md`, `CHANGELOG.md`, three example client configs (`examples/clients/`), and a single GitHub Actions test workflow on Windows runners across Python 3.10/3.11/3.12. Tagged `v1.0.0` and published to PyPI. Repo moved from `Broker/mt5-trading-mcp` to `vincentwongso/mt5-mcp`.
 
 ## Critical patterns all future phases MUST follow
 
@@ -160,7 +164,7 @@ mcp._mcp_server.subscribe_resource(uri_str, on_subscribe)
 mcp._mcp_server.unsubscribe_resource(uri_str, on_unsubscribe)
 ```
 
-`FastMCPSubscriber` (`src/mt5_mcp/streaming/fastmcp_subscriber.py`) wraps this. The subscribe callback bridges the Poller daemon thread to the asyncio event loop via `asyncio.run_coroutine_threadsafe`. Do not call the asyncio session methods directly from the Poller thread.
+`FastMCPSubscriber` (`src/mt5_mcp/server.py`) wraps this. The subscribe callback bridges the Poller daemon thread to the asyncio event loop via `asyncio.run_coroutine_threadsafe`. Do not call the asyncio session methods directly from the Poller thread.
 
 ### 16. `Poller.poll_once()` calls `dispatcher.reap_dead_subscribers()` each cycle
 
@@ -180,6 +184,17 @@ This is the canonical way to drive a resource handler through FastMCP from a tes
 - **HTTP transport non-loopback bind** — currently raises `ConfigError` at startup if a non-loopback host is configured. Phase 4 if a customer asks for LAN-accessible deployment.
 - **Per-subscriber backpressure / outbox queues** — current sequential fanout is fine for local-first with few subscribers. Revisit if observed lag under multiple concurrent HTTP sessions.
 - **Background TTL sweeper for HTTP-session-detached subscriptions** — `reap_dead_subscribers` runs on poll cycles, so subscriptions that never see a fanout (during long quiet periods on stable markets) may not reap promptly. Acceptable today; revisit if it becomes load-bearing.
+
+## Phase 4 carryover (deferred to Phase 5+ or to ad-hoc fixes)
+
+All items below were explicitly out of scope for v1.0; revisit as customer reports come in or as part of Phase 5 if integration tests surface them:
+
+- **Auto-generated docs site** (was on the original Phase 4 list; deferred to v1.1+).
+- **Plugin loader for third-party tools** (`src/mt5_mcp/plugins/` stub stays unwired; deferred to v1.1+).
+- **Trusted Publishing GitHub Actions workflow** — manual `uv publish` worked for `1.0.0`; wire OIDC publishing if releases get frequent.
+- **All Phase 2/3 carryovers** still deferred (idempotency TTL sweeper, audit prune CLI, `pick_filling_mode` improvements, non-loopback HTTP bind, per-subscriber backpressure, dead-subscriber TTL sweeper, test migration off `_tool_manager.get_tool().fn`).
+- **`LICENCE` → `LICENSE` rename** — non-blocking; can roll into a future doc-only commit.
+- **`CONTRIBUTING.md`** — non-blocking; add when the first external contribution lands.
 
 ## Test workflow
 

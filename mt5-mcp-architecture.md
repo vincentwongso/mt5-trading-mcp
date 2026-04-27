@@ -324,6 +324,17 @@ max_bytes = 10_485_760  # 10 MB
 # success/error count, no payloads) to the configured endpoint.
 enabled = false
 endpoint = ""
+
+[transport.http]
+# Only applies when running serve --transport http.
+port = 8765
+auth_token = ""  # optional bearer token; leave empty to disable auth
+
+[streaming]
+# Background poll cadences for MCP resource subscriptions.
+# Clients that subscribe receive notifications/resources/updated on change.
+quote_poll_ms = 200    # quotes://{symbol} — bid/ask diff
+account_poll_ms = 1000 # account://current and positions://current
 ```
 
 **Config validation:** Pydantic model. Server refuses to start with an invalid config and prints a clear error.
@@ -444,17 +455,31 @@ Launched by the agent runtime as a subprocess:
 }
 ```
 
-### 9.2 HTTP + SSE (v1.5, optional)
+### 9.2 HTTP (v0.3, optional)
 
-For hosted agents that can't subprocess (browser-based, cloud-hosted). Spawned as a long-running server:
+For agent runtimes that prefer a persistent HTTP endpoint over a managed subprocess. Spawned as a long-running server:
 
 ```bash
-python -m mt5_mcp serve --transport http --port 8765 --bind 127.0.0.1
+python -m mt5_mcp serve --transport http
 ```
 
-**Default bind is `127.0.0.1`.** Listening on `0.0.0.0` requires `--bind 0.0.0.0` and prints a security warning. We never recommend exposing this publicly without a reverse proxy + auth.
+Port and auth token come from `config.toml`:
 
-HTTP+SSE transport is documented as an opt-in feature, not a primary path. Most users should stay on stdio.
+```toml
+[transport.http]
+port = 8765
+auth_token = ""  # optional bearer token; leave empty to disable auth
+```
+
+**Loopback-only in v0.3.** The server binds to `127.0.0.1` (and `::1` / `localhost`). Attempting to bind any other address raises `ConfigError` at startup. Phase 4 may lift this if a customer asks for a LAN-accessible deployment.
+
+**Optional bearer-token auth.** When `transport.http.auth_token` is non-empty, every incoming request must carry `Authorization: Bearer <token>`. The comparison is constant-time (`hmac.compare_digest`) to resist timing attacks. Setting `auth_token = ""` disables auth entirely (suitable when the caller is already bound to loopback and the OS provides process-level isolation).
+
+**Underlying transport.** FastMCP's `streamable-http` transport handles both request/response and SSE streaming on the same endpoint. Port and host are configured by mutating `mcp.settings.host` / `mcp.settings.port` before calling `mcp.run(transport="streamable-http")` — FastMCP 3.x does not accept these as `run()` kwargs.
+
+See §18 for the full HTTP transport design notes.
+
+HTTP transport is documented as an opt-in feature, not the primary path. Most users should stay on stdio.
 
 ---
 
@@ -596,15 +621,17 @@ Suggested implementation order for Claude Code. Each phase ships independently a
 - Unit tests for policy + tools
 - Integration test for happy-path order placement against demo broker
 
-**Phase 3 — Resources + transports (3 days)**
+**Phase 3 — Resources + transports (3 days)** ✅ complete
 - `account://current`, `positions://current`, `quotes://{symbol}` resources
-- HTTP + SSE transport behind a CLI flag
-- Plugin loader for third-party tools
+- HTTP transport behind a CLI flag (`serve --transport http`), loopback-only
+- Shared Poller + Dispatcher streaming subsystem; see §17
+- Plugin loader for third-party tools moved to Phase 4
 
 **Phase 4 — Polish (3 days)**
 - `docs/` site auto-generated from docstrings
 - Example client configs (Claude Desktop, OpenClaw, Cursor)
 - `SECURITY.md` + threat model
+- Plugin loader for third-party tools (moved from Phase 3)
 - v1.0 release on PyPI
 - GitHub repo public + announcement
 
@@ -617,11 +644,102 @@ Suggested implementation order for Claude Code. Each phase ships independently a
 1. **Repo home.** `github.com/fintrixmarkets/mt5-mcp` ties identity to one broker. `github.com/mt5-mcp/mt5-mcp` is more neutral but requires registering the org now. Recommend the latter — pays off for adoption.
 2. **Approval token format.** HMAC-signed JWT-like blob is straightforward but specifying a format pre-emptively constrains agent runtimes. Alternative: leave the format to the runtime and have mt5-mcp call out to a verifier callback. Less elegant, more flexible.
 3. **History tool depth.** `get_history` could return either deals (closed transactions) or orders (filled + cancelled). Most agents want deals for P&L analysis. Ship deals only in v1; add `get_orders_history` if asked for.
-4. **Quote subscriptions.** `quotes://{symbol}` as an MCP resource implies push updates. mt5lib doesn't have native streaming — we'd poll on a tick and emit changes. Polling at ≥5Hz is fine for most use cases. Document this clearly.
+4. **Quote subscriptions.** ✅ Resolved. `quotes://{symbol}` is backed by a single shared Poller that polls `get_quote` at a configurable cadence (default 200 ms). Multiple subscriptions to different symbols each run through the same poller loop; the Dispatcher fans out change notifications per URI. Poll cadence is configurable via `[streaming] quote_poll_ms` in `config.toml`. See §17 for the full streaming subsystem design.
 5. **Symbol name normalisation.** Brokers use different naming conventions (`EURUSD`, `EURUSD.r`, `EURUSDm`, `EUR/USD`). v1 passes the customer's exact symbol string through to `mt5lib`. v2 could add a normaliser. Don't try to be clever in v1.
 6. **Multi-account support.** The `MetaTrader5` Python library supports one terminal per process. Multi-account would require launching multiple MCP processes. Not a v1 feature; document the limitation.
 7. **Audit log encryption.** Plaintext JSONL is reviewable but not encrypted. For customers who care, document how to symlink the audit file to an encrypted volume. Don't build encryption in.
 8. **Telemetry.** Opt-in only is the right default. But should we accept anonymous tool-name + success/failure counts to understand which tools matter most? Useful for prioritising v2; risk is even opt-in telemetry erodes the local-first claim. Recommend: ship with telemetry stubbed out, add later if there's demand.
+
+---
+
+---
+
+## 17. Streaming subsystem (Phase 3)
+
+The streaming subsystem drives MCP resource subscriptions for `account://current`, `positions://current`, and `quotes://{symbol}`.
+
+### 17.1 Components
+
+**`Poller` (`src/mt5_mcp/streaming/poller.py`)** — a single background daemon thread that runs a tight poll loop. On each cycle it:
+
+1. Fetches the current snapshot for every registered URI from the MT5 adapter.
+2. Compares the snapshot to the previous one using the URI-specific diff rule (see §17.2).
+3. If a change is detected, calls `dispatcher.dispatch(uri, new_snapshot)`.
+4. Calls `dispatcher.reap_dead_subscribers()` — this is the only mechanism that removes subscriptions from dead HTTP sessions.
+
+The poller is lazy-started: it does not run until the first `dispatcher.subscribe(uri, callback)` call. It stops (daemon thread exits on next loop iteration) when the last subscriber unsubscribes.
+
+**`Dispatcher` (`src/mt5_mcp/streaming/dispatcher.py`)** — holds the subscriber registry and fans out notifications. Each subscriber is a `(uri, callback)` pair. Fanout is sequential and synchronous within the poll cycle; callbacks must not block. The `FastMCPSubscriber` adapter (registered via `mcp._mcp_server.subscribe_resource()`) bridges the Poller's daemon thread to the FastMCP asyncio event loop via `asyncio.run_coroutine_threadsafe`.
+
+**`snapshots.py` (`src/mt5_mcp/streaming/snapshots.py`)** — frozen dataclasses used as snapshot tokens. These live in production code, not in `tests/fakes.py`. Production MUST NOT import snapshot types from the test tree.
+
+### 17.2 Change-detection rules
+
+| Resource | Rule |
+|---|---|
+| `account://current` | Structural equality of the account snapshot, excluding floating P&L fields (`equity`, `margin`, `margin_free`, `margin_level`). Only balance-sheet changes (`balance`, `credit`, `leverage`, `trade_allowed`) trigger a notification. |
+| `positions://current` | Set of (ticket, symbol, type, volume, price_open, sl, tp). Floating P&L (`profit`, `swap`) deliberately excluded. Notifications fire on position open/close or SL/TP modification — not on continuous mark-to-market. |
+| `quotes://{symbol}` | Full bid/ask snapshot. Any price change triggers a notification. |
+
+The deliberate exclusion of floating P&L from account and positions change-detection is a design choice, not a bug. Without this exclusion, every 200 ms tick would wake every subscribed client — generating noise with no actionable signal.
+
+### 17.3 Lifecycle
+
+```
+subscribe(uri, cb)     → if first subscriber: start Poller thread
+unsubscribe(uri, cb)   → if last subscriber: set Poller._stop flag
+reap_dead_subscribers  → called by Poller each cycle; removes callbacks that raise on invocation
+```
+
+The Poller thread is a `threading.Thread(daemon=True)`. It will not prevent process exit. HTTP-session-detached subscriptions are reaped on the next dispatch cycle after their callback raises.
+
+### 17.4 AppContext integration
+
+`AppContext` gains two new fields:
+
+```python
+dispatcher: Dispatcher   # always present after build_server()
+poller: Poller           # always present; started lazily on first subscribe
+```
+
+Resources call `ctx.dispatcher.subscribe(uri, cb)` / `ctx.dispatcher.unsubscribe(uri, cb)` directly. They do not interact with the Poller directly.
+
+---
+
+## 18. HTTP transport design notes (Phase 3)
+
+### 18.1 Loopback constraint
+
+The server calls `socket.getaddrinfo(host, None)` on the configured `host` and rejects any address that does not resolve to a loopback address (`127.x.x.x` for IPv4, `::1` for IPv6). This check runs at startup before `mcp.run()`. The error message is explicit: "HTTP transport only binds to loopback addresses in v0.3. Use stdio for remote deployments."
+
+### 18.2 Bearer-token middleware
+
+When `transport.http.auth_token` is non-empty, a Starlette middleware intercepts every request before routing. It extracts the `Authorization` header, compares the token via `hmac.compare_digest`, and returns `401 Unauthorized` on mismatch. The comparison is constant-time to prevent timing-oracle attacks.
+
+The token is never logged. Server startup prints: "HTTP transport: bearer-token auth enabled" (no token value).
+
+### 18.3 FastMCP settings mutation
+
+FastMCP 3.x's `mcp.run()` does not accept `host` or `port` keyword arguments for the `streamable-http` transport. The transport module sets them on `mcp.settings` before calling `run()`:
+
+```python
+mcp.settings.host = resolved_host   # e.g. "127.0.0.1"
+mcp.settings.port = cfg.transport.http.port
+mcp.run(transport="streamable-http")
+```
+
+This pattern is fragile against FastMCP version upgrades. If a future FastMCP release changes how settings are applied, the transport module is the single place to update.
+
+### 18.4 Subscribe hooks
+
+FastMCP does not expose resource subscribe/unsubscribe hooks at its high-level surface. The low-level `mcp._mcp_server` (`mcp.server.Server`) does. `FastMCPSubscriber` registers handlers via:
+
+```python
+mcp._mcp_server.subscribe_resource(uri_str, on_subscribe)
+mcp._mcp_server.unsubscribe_resource(uri_str, on_unsubscribe)
+```
+
+The subscribe callback calls `ctx.dispatcher.subscribe(uri, cb)` where `cb` is a coroutine that calls `mcp._mcp_server.request_context.session.send_resource_updated(uri)`. The `asyncio.run_coroutine_threadsafe` bridge is necessary because the Dispatcher's fanout runs in the Poller daemon thread, not in the asyncio event loop.
 
 ---
 

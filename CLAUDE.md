@@ -1,12 +1,12 @@
 # mt5-mcp — Agent Handover Notes
 
-**Status (last updated April 2026):** Phase 2 complete. Tag `phase-2-complete` marks the version with the four mutating tools (`place_order`, `modify_order`, `cancel_order`, `close_position`) and the `PolicyEngine` (preflight + consent + idempotency + audit) shipped on top of Phase 1. 181 passing unit tests. `doctor --smoke-trade` round-trips a place + close against the local MT5. Phase 3 picks up Resources + HTTP transport.
+**Status (last updated April 2026):** Phase 3 complete. Tag `phase-2-complete` marks the previous milestone. Phase 3 added 3 MCP resources (`account://current`, `positions://current`, `quotes://{symbol}`), a shared streaming subsystem (Poller + Dispatcher), and HTTP transport (`serve --transport http`, loopback-only). 243 passing unit tests. Phase 4 picks up polish + PyPI release.
 
 ## Where to start
 
 1. **Architecture spec:** `mt5-mcp-architecture.md` (single source of truth for design).
 2. **Phase 1 plan:** `docs/superpowers/plans/2026-04-24-phase-1-skeleton-and-read-tools.md` (TDD-style, every step has the actual code).
-3. **What's left:** Phase 2 (mutating tools + policy), Phase 3 (resources + HTTP transport), Phase 4 (polish + PyPI release). See architecture §15.
+3. **What's left:** Phase 4 (polish + PyPI release). See architecture §15.
 
 ## What Phase 1 shipped
 
@@ -16,9 +16,13 @@
 
 Four mutating MCP tools (`place_order`, `modify_order`, `cancel_order`, `close_position`), a `PolicyEngine` (`src/mt5_mcp/policy/`) composing four submodules (`preflight.py`, `consent.py`, `idempotency.py`, `audit.py`), SQLite-backed idempotency replay (per-OS path via `platformdirs`), append-only JSONL audit log with size-based rotation, ~85 new unit tests, and `doctor --smoke-trade` for live-terminal verification. Architecture doc §8.* reconciled (HMAC tokens removed in favour of a simple `approval_confirmed` flag; "Soft limits" renamed "Pre-flight limits" with explicit non-security framing).
 
-## Critical patterns Phase 3 MUST follow
+## What Phase 3 added
 
-These aren't obvious from the architecture doc — they were discovered during Phase 1:
+Three MCP resources (`account://current`, `positions://current`, `quotes://{symbol}`), all readable and subscribable. A shared streaming subsystem (`src/mt5_mcp/streaming/`) with a `Poller` daemon thread and a `Dispatcher` for per-URI change-fanout. Change-detection excludes floating P&L by design (see architecture §17). HTTP transport (`serve --transport http`), loopback-only, with optional bearer-token auth (`transport.http.auth_token`). A `FastMCPSubscriber` adapter bridges the Poller daemon thread to the FastMCP asyncio event loop via `asyncio.run_coroutine_threadsafe`. `doctor` gained a `[streaming]` check. Test helper `tests/_resource_helpers.py::read_resource(server, uri)` is the canonical way to drive resource handlers from tests. ~62 new unit tests (243 total). Architecture doc §17 and §18 added.
+
+## Critical patterns all future phases MUST follow
+
+These aren't obvious from the architecture doc — they were discovered during Phases 1–3:
 
 ### 1. `error_envelope` decorator: tool body must call `get_context()` itself
 
@@ -120,17 +124,68 @@ All five Phase 1 final-review items closed before Phase 2 started:
 
 Still deferred: the 9 test files using `server._tool_manager.get_tool(name).fn` private API. FastMCP has not shipped a public sync accessor yet — migrate when it lands.
 
-## Phase 2 carryover (deferred to Phase 3+)
+## Phase 2 carryover (still deferred to Phase 4)
 
 - **Background TTL sweeper** for idempotency. In-band cleanup is sufficient at expected request volumes; revisit if the DB grows unbounded under heavy load.
 - **Audit log compression / archival CLI**. Operators rotate manually; a `mt5-mcp audit prune` command is reasonable Phase 4 polish.
-- **`pick_filling_mode` improvements** beyond FOK/IOC/RETURN — broker-specific edge cases may surface during Phase 3 customer onboarding.
+- **`pick_filling_mode` improvements** beyond FOK/IOC/RETURN — broker-specific edge cases may surface during Phase 4 customer onboarding.
 - **Multi-leg / OCO / partial-fill orchestration** — explicitly out of scope for v1.
+
+## Phase 3 patterns Phase 4 MUST preserve
+
+These were discovered during Phase 3 implementation and are not obvious from the architecture doc.
+
+### 13. Resources do NOT use `@error_envelope`
+
+The `@error_envelope` decorator is tools-only. Resources raise `MT5Error(...)` directly; FastMCP catches it and renders the MCP-protocol `error` response. Do not wrap resource handlers with `@error_envelope`.
+
+### 14. `mcp.settings.host/port` mutation, not `run()` kwargs
+
+FastMCP 3.x's `mcp.run()` does not accept `host` or `port` keyword arguments for the `streamable-http` transport. The transport module sets them on `mcp.settings` before calling `run()`:
+
+```python
+mcp.settings.host = resolved_host
+mcp.settings.port = cfg.transport.http.port
+mcp.run(transport="streamable-http")
+```
+
+If a future FastMCP version changes this, `src/mt5_mcp/transport.py` is the single place to update.
+
+### 15. Subscribe hooks via `mcp._mcp_server.subscribe_resource()`
+
+FastMCP does not expose resource subscribe/unsubscribe hooks at its high-level surface. Use the low-level `Server` underneath:
+
+```python
+mcp._mcp_server.subscribe_resource(uri_str, on_subscribe)
+mcp._mcp_server.unsubscribe_resource(uri_str, on_unsubscribe)
+```
+
+`FastMCPSubscriber` (`src/mt5_mcp/streaming/fastmcp_subscriber.py`) wraps this. The subscribe callback bridges the Poller daemon thread to the asyncio event loop via `asyncio.run_coroutine_threadsafe`. Do not call the asyncio session methods directly from the Poller thread.
+
+### 16. `Poller.poll_once()` calls `dispatcher.reap_dead_subscribers()` each cycle
+
+This is the only mechanism that removes subscriptions from dead HTTP sessions. There is no separate sweeper. HTTP-session-detached subscriptions are reaped on the next dispatch attempt after their callback raises. This is acceptable at current load; see Phase 3 carryover for the known gap.
+
+### 17. Streaming snapshot dataclasses live in `streaming/snapshots.py`
+
+`src/mt5_mcp/streaming/snapshots.py` holds the frozen dataclasses used as snapshot tokens for change-detection. These are production code. `tests/fakes.py` does NOT export snapshot types. Production code MUST NOT import from `tests.`.
+
+### 18. Test helper `tests/_resource_helpers.py::read_resource(server, uri)`
+
+This is the canonical way to drive a resource handler through FastMCP from a test. Do not duplicate the helper per test file. See `tests/test_resources_*.py` for usage patterns.
+
+## Phase 3 carryover (deferred to Phase 4)
+
+- **Plugin loader for third-party tools** — was in Phase 3 spec; moved to Phase 4 to keep scope clean. The `src/mt5_mcp/plugins/` stub exists but loader is not wired.
+- **HTTP transport non-loopback bind** — currently raises `ConfigError` at startup if a non-loopback host is configured. Phase 4 if a customer asks for LAN-accessible deployment.
+- **Per-subscriber backpressure / outbox queues** — current sequential fanout is fine for local-first with few subscribers. Revisit if observed lag under multiple concurrent HTTP sessions.
+- **Background TTL sweeper for HTTP-session-detached subscriptions** — `reap_dead_subscribers` runs on poll cycles, so subscriptions that never see a fanout (during long quiet periods on stable markets) may not reap promptly. Acceptable today; revisit if it becomes load-bearing.
 
 ## Test workflow
 
 ```bash
-pytest -v                              # full suite (~176 tests in ~5s)
+pytest -v                              # full suite (243 tests)
+pytest -v -m "not integration"         # unit tests only (no live terminal needed)
 pytest tests/test_tools_<x>.py -v      # one tool's tests
 pytest -k "history" -v                 # all tests matching "history"
 ```
@@ -140,12 +195,13 @@ Always run the **full** suite before committing — the autouse `_reset_app_cont
 ## Live-terminal smoke check
 
 ```bash
-python -m mt5_mcp doctor                              # 8x [PASS] expected
+python -m mt5_mcp doctor                              # 9x [PASS] expected (includes [streaming])
 python -m mt5_mcp export-symbols --output /tmp/x.csv  # writes a 13-column CSV
 python -m mt5_mcp doctor --smoke-trade               # adds a place_order+close_position round-trip
+python -m mt5_mcp serve --transport http             # start HTTP server (loopback, port 8765)
 ```
 
-If `doctor` reports `[FAIL]` on any tool, that's where Phase 2 starts.
+If `doctor` reports `[FAIL]` on any check, that's where investigation starts.
 
 ## Memory
 

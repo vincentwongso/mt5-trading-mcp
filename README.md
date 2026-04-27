@@ -2,7 +2,7 @@
 
 Model Context Protocol server wrapping the MetaTrader 5 Python library — exposes a logged-in MT5 terminal as a set of MCP tools an AI agent can call.
 
-**Status:** v0.2, Phase 2 complete (skeleton + 9 read tools + 4 mutating tools + policy engine). Tag `phase-2-complete` at the most recent main. Phase 3 (Resources + HTTP transport) is the next milestone.
+**Status:** v0.3, Phase 3 complete (skeleton + 9 read tools + 4 mutating tools + policy engine + 3 resources + HTTP transport). Tag `phase-2-complete` marks the previous milestone. 243 passing unit tests.
 
 ## Requirements
 
@@ -42,6 +42,9 @@ python -m mt5_mcp export-symbols --output symbols.csv
 # Run the MCP server on stdio (default — what an MCP client invokes)
 python -m mt5_mcp serve
 
+# Run the MCP server over HTTP (loopback-only; see Transports section)
+python -m mt5_mcp serve --transport http
+
 # Force a config reload in a running server
 python -m mt5_mcp reload-config
 ```
@@ -76,6 +79,16 @@ ttl_seconds = 86400  # 24h replay window for mutating tools that pass an idempot
 
 [telemetry]
 enabled = false
+
+[transport.http]
+# Only relevant when using --transport http. Loopback-only in v0.3.
+port = 8765
+auth_token = ""  # optional bearer token; leave empty to disable auth
+
+[streaming]
+# Poll cadences for MCP resource subscriptions.
+quote_poll_ms = 200      # how often quotes://{symbol} checks for price changes
+account_poll_ms = 1000   # how often account://current and positions://current are checked
 ```
 
 The config file is hot-reloaded via `watchdog` whenever it changes on disk; broken edits are logged and ignored (last-good config is retained).
@@ -133,13 +146,70 @@ When a tool returns an `ApprovalPreview`, the agent shows it to the human, then 
 
 All mutating tools accept an optional `idempotency_key`; pass a UUIDv4 to dedupe retries within `idempotency.ttl_seconds`.
 
+## Resources (v0.3)
+
+MCP resources differ from tools: a client *reads* a resource by URI and can *subscribe* to receive push notifications whenever the resource changes. Subscribed clients receive a `notifications/resources/updated` message; they then re-read the resource to get the latest snapshot.
+
+Three resources are available:
+
+| URI | What it returns |
+|---|---|
+| `account://current` | Live account snapshot (balance, equity, margin, leverage, …) |
+| `positions://current` | All open positions |
+| `quotes://{symbol}` | Current bid/ask for `symbol` (e.g. `quotes://EURUSD`) |
+
+All three are subscribable. The server runs a background poller; when a change is detected, subscribed clients are notified.
+
+**Change detection rules:**
+
+- `account://current` and `positions://current`: identity + structural equality. Floating P&L (`profit`, `swap`) is deliberately excluded from the diff — subscribers are only woken on balance-sheet or position-count changes, not on continuous mark-to-market drift.
+- `quotes://{symbol}`: full bid/ask snapshot diff — any price change triggers a notification.
+
+**Default poll cadences** (configurable via `[streaming]` in `config.toml`):
+
+- Quotes: 200 ms
+- Account + positions: 1000 ms
+
+## Transports
+
+### stdio (default)
+
+`python -m mt5_mcp` and `python -m mt5_mcp serve` both run in stdio mode. This is the correct choice for Claude Desktop, Cursor, and any agent runtime that manages the server as a subprocess.
+
+```json
+{
+  "mcpServers": {
+    "mt5": {
+      "command": "python",
+      "args": ["-m", "mt5_mcp"]
+    }
+  }
+}
+```
+
+### HTTP (opt-in, v0.3)
+
+For agent runtimes that prefer a long-running HTTP server instead of a subprocess:
+
+```bash
+python -m mt5_mcp serve --transport http
+```
+
+**Constraints in v0.3:**
+
+- Loopback-only (`127.0.0.1`, `::1`, `localhost`). Binding to any other address raises a startup error.
+- Optional bearer-token authentication via `transport.http.auth_token` in `config.toml`. When set, every request must carry `Authorization: Bearer <token>`. Comparison is constant-time to resist timing attacks.
+- Uses the `streamable-http` FastMCP transport under the hood, which supports both request/response and SSE streaming in a single endpoint.
+
+Default port: 8765 (configurable via `[transport.http] port`).
+
 ## Tests
 
 ```bash
 pytest -v
 ```
 
-176 unit tests run against a hand-rolled `FakeMT5` — no real terminal needed. The `doctor --smoke-trade` round-trip exercises `place_order` + `close_position` against a live demo broker.
+243 unit tests run against a hand-rolled `FakeMT5` — no real terminal needed. The `doctor --smoke-trade` round-trip exercises `place_order` + `close_position` against a live demo broker.
 
 ## Architecture
 
@@ -147,6 +217,7 @@ Full design in [`mt5-mcp-architecture.md`](./mt5-mcp-architecture.md). Implement
 
 - Phase 1 (skeleton + read tools): [`docs/superpowers/plans/2026-04-24-phase-1-skeleton-and-read-tools.md`](./docs/superpowers/plans/2026-04-24-phase-1-skeleton-and-read-tools.md)
 - Phase 2 (mutating tools + policy engine): [`docs/superpowers/plans/2026-04-26-phase-2-mutating-tools-and-policy-engine.md`](./docs/superpowers/plans/2026-04-26-phase-2-mutating-tools-and-policy-engine.md) (spec: [`docs/superpowers/specs/2026-04-26-phase-2-mutating-tools-and-policy-engine-design.md`](./docs/superpowers/specs/2026-04-26-phase-2-mutating-tools-and-policy-engine-design.md))
+- Phase 3 (resources + HTTP transport): [`docs/superpowers/plans/2026-04-27-phase-3-resources-and-http-transport.md`](./docs/superpowers/plans/2026-04-27-phase-3-resources-and-http-transport.md)
 
 ## Licence
 

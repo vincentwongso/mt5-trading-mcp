@@ -8,6 +8,7 @@ import pytest
 
 from mt5_mcp.adapter.mt5_client import MT5Client
 from mt5_mcp.config import StreamingSection
+from mt5_mcp.errors import MT5Error, terminal_not_connected_error
 from mt5_mcp.streaming.dispatcher import Dispatcher
 from mt5_mcp.streaming.poller import Poller
 from mt5_mcp.streaming.snapshots import (
@@ -159,3 +160,74 @@ def test_poller_skips_positions_when_only_floating_pnl_changed():
     time.sleep(0.20)
     p.poll_once()
     assert disp.positions == initial  # profit-only drift does NOT fire
+
+
+class _FakeFailingClient:
+    """Client stand-in that raises MT5Error on every call."""
+    def __init__(self, n_failures: int) -> None:
+        self._remaining = n_failures
+        self.broker_offset_minutes = 0
+
+    def call(self, fn):
+        if self._remaining > 0:
+            self._remaining -= 1
+            raise MT5Error(terminal_not_connected_error())
+        return None
+
+
+def test_quote_error_dispatch_fires_after_three_failures():
+    disp = RecordingDispatcher(symbols={"EURUSD"})
+    p = Poller(client=_FakeFailingClient(n_failures=10), dispatcher=disp,
+               config=_streaming_cfg())
+    p.poll_once()
+    p.poll_once()
+    assert disp.quote_errors == []
+    p.poll_once()
+    assert disp.quote_errors == ["EURUSD"]
+
+
+def test_account_error_dispatch_fires_after_three_failures():
+    disp = RecordingDispatcher()
+    p = Poller(client=_FakeFailingClient(n_failures=10), dispatcher=disp,
+               config=_streaming_cfg(account_poll_interval_ms=100))
+    p.poll_once()
+    time.sleep(0.20); p.poll_once()
+    time.sleep(0.20); p.poll_once()
+    assert disp.account_errors == 1
+
+
+def test_positions_error_dispatch_fires_after_three_failures():
+    disp = RecordingDispatcher()
+    p = Poller(client=_FakeFailingClient(n_failures=10), dispatcher=disp,
+               config=_streaming_cfg(positions_poll_interval_ms=100))
+    p.poll_once()
+    time.sleep(0.20); p.poll_once()
+    time.sleep(0.20); p.poll_once()
+    assert disp.positions_errors == 1
+
+
+def test_recovery_resets_failure_counter():
+    fake = FakeMT5()
+    fake._symbol_info_tick["EURUSD"] = FakeTick(time=1, bid=1.10, ask=1.11)
+    disp = RecordingDispatcher(symbols={"EURUSD"})
+    # Use a real client that we patch transiently.
+    client = _client(fake)
+    p = Poller(client=client, dispatcher=disp, config=_streaming_cfg())
+
+    # Force two failures via a patched call.
+    real_call = client.call
+    fail_count = {"n": 2}
+
+    def flaky_call(fn):
+        if fail_count["n"] > 0:
+            fail_count["n"] -= 1
+            raise MT5Error(terminal_not_connected_error())
+        return real_call(fn)
+
+    client.call = flaky_call  # type: ignore[assignment]
+    p.poll_once(); p.poll_once()
+    # Third call succeeds → counter resets, no error fired.
+    p.poll_once()
+    assert disp.quote_errors == []
+    # And the success delivered a tick.
+    assert len(disp.ticks) >= 1

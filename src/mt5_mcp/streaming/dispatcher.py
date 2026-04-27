@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol
 
 from mt5_mcp.streaming.snapshots import (
@@ -121,3 +121,51 @@ class Dispatcher:
 
     def dispatch_tick(self, symbol: str, snap: TickSnapshot) -> None:
         self._fanout(f"quotes://{symbol}")
+
+    def dispatch_account(self, snap: AccountSnapshot) -> None:
+        self._fanout("account://current")
+
+    def dispatch_positions(self) -> None:
+        self._fanout("positions://current")
+
+    def dispatch_quote_error(self, symbol: str) -> None:
+        """Fan out an updated notification on persistent quote-poll failure.
+
+        Subscribers re-read the resource; the read path's own ctx.client.call
+        is what surfaces the underlying MT5 error envelope.
+        """
+        self._fanout(f"quotes://{symbol}")
+
+    def dispatch_account_error(self) -> None:
+        self._fanout("account://current")
+
+    def dispatch_positions_error(self) -> None:
+        self._fanout("positions://current")
+
+    def reap_dead_subscribers(self) -> int:
+        """Remove subscribers marked dead during fanout. Returns count reaped."""
+        reaped: list[_Subscription] = []
+        symbols_to_release: list[str] = []
+        now_empty: bool = False
+        with self._lock:
+            for sub in list(self._subs_by_handle.values()):
+                if not sub.dead:
+                    continue
+                self._subs_by_handle.pop(sub.handle, None)
+                self._subs_by_uri[sub.uri].remove(sub)
+                if not self._subs_by_uri[sub.uri]:
+                    del self._subs_by_uri[sub.uri]
+                if sub.uri.startswith("quotes://"):
+                    sym = sub.uri.removeprefix("quotes://")
+                    self._symbol_refcount[sym] -= 1
+                    if self._symbol_refcount[sym] == 0:
+                        del self._symbol_refcount[sym]
+                        symbols_to_release.append(sym)
+                reaped.append(sub)
+            now_empty = not self._subs_by_handle
+        if self._poller is not None:
+            for sym in symbols_to_release:
+                self._poller.remove_symbol(sym)
+            if now_empty and reaped:
+                self._poller.stop()
+        return len(reaped)

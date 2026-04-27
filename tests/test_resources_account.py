@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
 
 from mt5_mcp.server import build_server
+from tests._resource_helpers import read_resource as _read_resource
 from tests.fakes import FakeAccountInfo, FakeMT5, FakeTerminalInfo
 
 
@@ -29,18 +29,6 @@ def server_and_mt5(frozen_utc, tmp_path):
         f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
     )
     return build_server(mt5_module=fake, config_path=cfg), fake
-
-
-def _read_resource(server, uri: str) -> str:
-    """Resolve a FastMCP fixed-URI resource and return its JSON payload.
-
-    account://current is a fixed URI (no template parameters), so we use
-    rm.get_resource(uri) rather than the template-matching path used for
-    quotes://{symbol}.
-    """
-    rm = server._resource_manager
-    resource = asyncio.run(rm.get_resource(uri))
-    return asyncio.run(resource.read())
 
 
 def test_account_resource_returns_account_info(server_and_mt5):

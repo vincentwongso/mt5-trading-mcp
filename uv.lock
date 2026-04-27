@@ -404,7 +404,7 @@ wheels = [
 
 [[package]]
 name = "mt5-mcp"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
@@ -419,6 +419,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "freezegun" },
+    { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-mock" },
 ]
@@ -426,6 +427,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "freezegun", marker = "extra == 'dev'", specifier = ">=1.4" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.12" },
     { name = "metatrader5", marker = "sys_platform == 'win32'", specifier = ">=5.0.45" },
     { name = "platformdirs", specifier = ">=4.0" },

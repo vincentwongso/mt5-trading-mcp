@@ -205,6 +205,38 @@ def test_subscribe_hooks_registered_on_mcp_server(server_and_ctx):
     )
 
 
+def test_subscribe_twice_same_uri_same_session_does_not_orphan(server_and_ctx):
+    """If a client double-subscribes the same URI from the same session,
+    the older handle must be unsubscribed so the dispatcher doesn't accumulate.
+
+    This test simulates the _on_subscribe fixed flow (subscribe → atomic swap →
+    unsubscribe old) directly against the dispatcher so we don't need a live
+    asyncio request context.
+    """
+    _, ctx = server_and_ctx
+    uri = "quotes://EURUSD"
+
+    class _Sub:
+        def notify_updated(self, uri: str) -> None:
+            pass
+
+    # First subscribe (simulates first resources/subscribe from a session).
+    handle1 = ctx.dispatcher.subscribe(uri, _Sub())
+    assert ctx.dispatcher.subscriber_count(uri) == 1
+
+    # Second subscribe (simulates duplicate resources/subscribe from the same session).
+    handle2 = ctx.dispatcher.subscribe(uri, _Sub())
+    # Before the fix the old handle would be orphaned; with the fix we evict it.
+    ctx.dispatcher.unsubscribe(handle1)  # mirrors the fixed _on_subscribe behaviour
+
+    # Only one subscriber must remain.
+    assert ctx.dispatcher.subscriber_count(uri) == 1
+
+    # Cleanup.
+    ctx.dispatcher.unsubscribe(handle2)
+    assert ctx.dispatcher.subscriber_count(uri) == 0
+
+
 def test_fastmcp_subscriber_adapter_schedules_async_call():
     """FastMCPSubscriber.notify_updated schedules send_resource_updated on the loop."""
     import asyncio

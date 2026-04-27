@@ -102,6 +102,11 @@ class Dispatcher:
         with self._lock:
             return set(self._symbol_refcount.keys())
 
+    def subscriber_count(self, uri: str) -> int:
+        """Return the number of live subscribers for *uri*. For tests."""
+        with self._lock:
+            return len(self._subs_by_uri.get(uri, []))
+
     # ----- fanout -----
 
     def _fanout(self, uri: str) -> None:

@@ -109,6 +109,9 @@ class Poller:
         if now - self._last_positions_poll >= self._cfg.positions_poll_interval_ms / 1000.0:
             self._poll_positions()
             self._last_positions_poll = now
+        # Best-effort cleanup of subscribers that died on a previous fanout
+        # (e.g. HTTP session disconnected without unsubscribing).
+        self._dispatcher.reap_dead_subscribers()
 
     def _poll_quotes(self) -> None:
         for sym in self._dispatcher.subscribed_symbols():

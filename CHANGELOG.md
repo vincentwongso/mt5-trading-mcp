@@ -1,0 +1,79 @@
+# Changelog
+
+All notable changes to `mt5-mcp` are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
+
+## [1.0.0] - 2026-04-28
+
+First public release on PyPI. The underlying feature set is the cumulative output of phases 1–3; this release adds packaging, public-facing documentation, and CI.
+
+### Added
+
+- Public PyPI distribution: `pip install mt5-mcp`.
+- `SECURITY.md` with vulnerability disclosure policy and explicit scope statement (`mt5-mcp` is not the security boundary; the broker is).
+- `CHANGELOG.md` (this file), retroactively documenting phases 1–3.
+- `examples/clients/` directory with drop-in MCP-client configs:
+  - `claude-desktop-stdio.json` — Claude Desktop stdio transport.
+  - `claude-desktop-http.json` — Claude Desktop HTTP transport (for VPS / SSH-tunnel deployments).
+  - `cursor.json` — Cursor stdio transport.
+- README section on deploying `mt5-mcp` to a Windows VPS (Pattern A: agent on VPS; Pattern B: agent local with SSH tunnel to loopback HTTP).
+- GitHub Actions test CI workflow (`pytest -m "not integration"` on Windows runners across Python 3.10 / 3.11 / 3.12, on push to `main` and on PRs).
+- `[project.urls]` block in `pyproject.toml` (Repository, Issues, Changelog).
+
+### Changed
+
+- Bumped version `0.1.0` → `1.0.0`.
+- README rewritten for first-time PyPI users; install instructions now lead with `pip install mt5-mcp`. Repo URL updated from `Fintrix-Markets/mt5-trading-mcp` to `vincentwongso/mt5-mcp`.
+- `pyproject.toml` author updated from "Fintrix Markets" to "Vincent". Security contact moved to a personal email.
+
+### Removed
+
+- Internal phase-tracking references (`phase-2-complete`, "243 passing unit tests" status lines, etc.) removed from public-facing docs. They remain in `CLAUDE.md` for contributors.
+
+## [0.3.0] - 2026-04-27
+
+Resources, HTTP transport, and streaming subsystem (Phase 3, internal release).
+
+### Added
+
+- Three subscribable MCP resources: `account://current`, `positions://current`, `quotes://{symbol}`.
+- Streaming subsystem (`src/mt5_mcp/streaming/`): a single shared `Poller` daemon thread + `Dispatcher` for per-URI change-fanout.
+- HTTP transport (`serve --transport http`), loopback-only, with optional bearer-token auth (`transport.http.auth_token`).
+- `[streaming]` config section with configurable poll cadences (`quote_poll_ms`, `account_poll_ms`).
+- `doctor` gained a `[streaming]` check.
+- `FastMCPSubscriber` adapter bridging the Poller's daemon thread to the FastMCP asyncio event loop.
+
+### Changed
+
+- Change-detection for `account://current` and `positions://current` excludes floating P&L by design — only identity/structural changes wake subscribers.
+
+## [0.2.0] - 2026-04-26
+
+Mutating tools and policy engine (Phase 2, internal release).
+
+### Added
+
+- Four mutating MCP tools: `place_order`, `modify_order`, `cancel_order`, `close_position`.
+- Policy engine (`src/mt5_mcp/policy/`) composing four submodules: `preflight`, `consent`, `idempotency`, `audit`.
+- SQLite-backed idempotency replay (per-OS path via `platformdirs`).
+- Append-only JSONL audit log with size-based rotation.
+- `doctor --smoke-trade` flag for live-terminal verification of the place-then-close round-trip.
+
+### Changed
+
+- Approval flow simplified to a single `approval_confirmed` boolean + `approval_request_id`; the earlier HMAC-signed token design was dropped.
+- "Soft limits" renamed "Pre-flight limits" with explicit non-security framing (architecture §8).
+
+## [0.1.0] - 2026-04-24
+
+Skeleton and read tools (Phase 1, internal release).
+
+### Added
+
+- Nine read MCP tools: `ping`, `get_terminal_info`, `get_account_info`, `get_quote`, `get_symbols`, `get_market_hours`, `get_positions`, `get_orders`, `get_history`.
+- Two CLI commands: `doctor`, `export-symbols`.
+- `MetaTrader5`-wrapping adapter with a singleton client, symbol prep, and type conversions.
+- Config loader with `watchdog`-based hot-reload.
+- FastMCP server bootstrap.
+- 89 unit tests against a hand-rolled `FakeMT5` (no live terminal needed).

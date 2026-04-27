@@ -101,6 +101,9 @@ def test_http_resources_list_contains_quotes_template(http_server):
     port = http_server
     base_url = f"http://127.0.0.1:{port}"
 
+    # Initialised before the try so the assertion below is always in scope.
+    all_uris: list[str] = []
+
     try:
         from mcp.client.session import ClientSession
 
@@ -129,15 +132,10 @@ def test_http_resources_list_contains_quotes_template(http_server):
         # Fixed-URI resources (account://current, positions://current) come
         # from list_resources(); URI templates (quotes://{symbol}) come from
         # list_resource_templates() — the MCP spec keeps them separate.
-        all_uris: list[str] = []
         if hasattr(resources_result, "resources") and resources_result.resources:
             all_uris.extend(str(r.uri) for r in resources_result.resources)
         if hasattr(templates_result, "resourceTemplates") and templates_result.resourceTemplates:
             all_uris.extend(t.uriTemplate for t in templates_result.resourceTemplates)
-
-        assert any("quotes://" in u for u in all_uris), (
-            f"Expected a quotes:// resource/template in resources/list but got: {all_uris}"
-        )
 
     except ImportError:
         pytest.skip("mcp.client.streamable_http not available in this environment")  # noqa: TRY203
@@ -146,3 +144,8 @@ def test_http_resources_list_contains_quotes_template(http_server):
             f"Integration test could not complete in this environment: "
             f"{type(e).__name__}: {e}"
         )
+
+    # Assertion is OUTSIDE the try — failures here surface as FAILED, not SKIPPED.
+    assert any("quotes://" in u for u in all_uris), (
+        f"Expected a quotes:// resource/template in resources/list but got: {all_uris}"
+    )

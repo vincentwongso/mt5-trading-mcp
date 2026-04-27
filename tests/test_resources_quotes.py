@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -46,6 +45,8 @@ def _read_resource(server, uri: str) -> Quote:
     - resource.read() returns a JSON string; we parse it back to Quote so
       callers can assert on typed fields.
     """
+    # Verified against the installed mcp / FastMCP at the time of writing —
+    # look at `_resource_manager._templates` if FastMCP changes shape.
     rm = server._resource_manager
     for _key, template in rm._templates.items():
         params = template.matches(uri)
@@ -85,4 +86,4 @@ def test_quotes_read_unknown_symbol_raises_resource_not_found(server_and_mt5):
     fake._symbol_info["XYZ"] = None
     with pytest.raises(MT5Error) as exc_info:
         _read_resource(server, "quotes://XYZ")
-    assert exc_info.value.detail.code in ("RESOURCE_NOT_FOUND", "SYMBOL_NOT_FOUND")
+    assert exc_info.value.detail.code == "RESOURCE_NOT_FOUND"

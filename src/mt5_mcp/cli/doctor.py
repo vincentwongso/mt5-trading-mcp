@@ -21,12 +21,42 @@ def _check(label: str, fn: Callable[[], Any]) -> bool:
         return False
 
 
+def _streaming_check(symbol: str) -> bool:
+    """Subscribe to quotes://{symbol}, run the poller for ~1s, assert >=1 tick."""
+    from mt5_mcp.server import get_context
+
+    ctx = get_context()
+    received: list[str] = []
+
+    class _Recorder:
+        def notify_updated(self, uri: str) -> None:
+            received.append(uri)
+
+    handle = ctx.dispatcher.subscribe(f"quotes://{symbol}", _Recorder())
+    try:
+        # Poll up to ten short cycles or until we see a tick.
+        for _ in range(10):
+            ctx.poller.poll_once()
+            if received:
+                break
+            time.sleep(0.1)
+    finally:
+        ctx.dispatcher.unsubscribe(handle)
+
+    if received:
+        print(f"[PASS] streaming({symbol}) — {len(received)} tick(s) dispatched")
+        return True
+    print(f"[FAIL] streaming({symbol}) — no ticks observed in ~1s")
+    return False
+
+
 def run_doctor(
     *,
     mt5_module: Any | None = None,
     probe_symbol: str = "EURUSD",
     config_path: Any | None = None,
     smoke_trade: bool = False,
+    check_streaming: bool = True,
 ) -> int:
     reset_context_for_tests()
     server = build_server(mt5_module=mt5_module, config_path=config_path)
@@ -44,6 +74,9 @@ def run_doctor(
     results.append(_check(f"get_market_hours({probe_symbol})", lambda: call("get_market_hours", symbol=probe_symbol)))
     results.append(_check("get_positions", lambda: call("get_positions")))
     results.append(_check("get_orders", lambda: call("get_orders")))
+
+    if check_streaming:
+        results.append(_streaming_check(probe_symbol))
 
     if smoke_trade:
         place = tm.get_tool("place_order").fn(
@@ -92,8 +125,16 @@ def main(argv: list[str] | None = None) -> int:
         "--probe-symbol", default="EURUSD",
         help="Symbol used for read-tool probes (default: EURUSD).",
     )
+    parser.add_argument(
+        "--no-streaming-check", action="store_true",
+        help="Skip the [streaming] subscribe-and-poll check.",
+    )
     args = parser.parse_args(argv)
-    return run_doctor(probe_symbol=args.probe_symbol, smoke_trade=args.smoke_trade)
+    return run_doctor(
+        probe_symbol=args.probe_symbol,
+        smoke_trade=args.smoke_trade,
+        check_streaming=not args.no_streaming_check,
+    )
 
 
 if __name__ == "__main__":

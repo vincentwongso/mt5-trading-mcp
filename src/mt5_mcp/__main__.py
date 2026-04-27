@@ -1,31 +1,60 @@
 """Entry point: `python -m mt5_mcp <command>`.
 
 Commands:
-  serve              Run the MCP server on stdio (default).
-  doctor             Run read-tool health check.
-  export-symbols     Dump broker symbols to CSV.
-  reload-config      Touch the config file so a running server reloads.
+  serve [--transport stdio|http]   Run the MCP server (default: stdio).
+  doctor                            Run read-tool health check.
+  export-symbols                    Dump broker symbols to CSV.
+  reload-config                     Touch the config file so a running server reloads.
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
+
+
+def _run_serve(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog="mt5-mcp serve")
+    parser.add_argument(
+        "--transport", choices=["stdio", "http"], default="stdio",
+        help="MCP transport to run on (default: stdio).",
+    )
+    parser.add_argument(
+        "--config", default=None,
+        help="Path to config TOML (default: per-OS user config dir).",
+    )
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        return int(exc.code) if exc.code is not None else 2
+
+    from pathlib import Path
+    from mt5_mcp.config import load_config
+    from mt5_mcp.server import build_server
+    from mt5_mcp.transport import TransportConfigError, run
+
+    config_path = Path(args.config) if args.config else None
+    server = build_server(config_path=config_path)
+    cfg = load_config(config_path)
+    try:
+        run(server, transport=args.transport, config=cfg)
+    except TransportConfigError as exc:
+        print(f"transport error: {exc}", file=sys.stderr)
+        return 2
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
 
     if not argv or argv[0] == "serve":
-        from mt5_mcp.server import build_server
-        server = build_server()
-        server.run(transport="stdio")
-        return 0
+        return _run_serve(argv[1:] if argv else [])
 
     cmd = argv[0]
 
     if cmd == "doctor":
         from mt5_mcp.cli.doctor import main as doctor_main
-        return doctor_main()
+        return doctor_main(argv[1:])
 
     if cmd == "export-symbols":
         from mt5_mcp.cli.export_symbols import main as export_main

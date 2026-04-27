@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: windows-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -17,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Set up uv with Python ${{ matrix.python-version }}
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v8
         with:
           python-version: ${{ matrix.python-version }}
 

@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mt5-mcp"
-version = "0.1.0"
+version = "1.0.0"
 description = "Model Context Protocol server wrapping the MetaTrader 5 Python library."
 readme = "README.md"
 license = { file = "LICENCE" }
-authors = [{ name = "Broker", email = "security@example.com" }]
+authors = [{ name = "Vincent", email = "vincent.wongso.saputro@gmail.com" }]
 requires-python = ">=3.10"
 classifiers = [
   "License :: OSI Approved :: MIT License",
@@ -38,6 +38,11 @@ dev = [
 
 [project.scripts]
 mt5-mcp = "mt5_mcp.__main__:main"
+
+[project.urls]
+Repository = "https://github.com/vincentwongso/mt5-mcp"
+Issues = "https://github.com/vincentwongso/mt5-mcp/issues"
+Changelog = "https://github.com/vincentwongso/mt5-mcp/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mt5_mcp"]

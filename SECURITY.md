@@ -17,7 +17,7 @@ You should receive an acknowledgement within 7 days. Please do not file public G
 | `1.x`   | ✅ Yes    |
 | `0.x`   | ❌ No (pre-release; please upgrade to `1.x`) |
 
-Security fixes ship as patch releases on the latest minor of the `1.x` line.
+Security fixes ship as patch releases. Only the current release on PyPI is actively maintained.
 
 ## Scope
 
@@ -31,7 +31,7 @@ Bug reports against any of the following will get a fix release:
 
 - **Idempotency-replay correctness** — a request with the same `idempotency_key` returning a different result than the first call.
 - **Audit-log integrity** — a mutating action that completes without a corresponding entry in the audit JSONL, or a forged/missing field in an audit entry.
-- **Consent-flow integrity** — a retry passing `approval_confirmed=true` succeeding when its fields don't match the original `ApprovalPreview` (within tolerance).
+- **Consent-flow integrity** — a retry passing `approval_confirmed=true` succeeding when the fields the engine validates (`symbol`, `side`, `type`, `volume`, `ticket`) don't match the original `ApprovalPreview`.
 - **HTTP transport bearer-token check** — non-constant-time token comparison, or a path that bypasses the check.
 - **Config-file loading** — a config that should be rejected (invalid type, missing required field) being silently accepted, or a path-traversal in any user-supplied path field.
 

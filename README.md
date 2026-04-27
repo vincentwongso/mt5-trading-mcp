@@ -141,17 +141,17 @@ port = 8765
 auth_token = ""  # optional bearer token; leave empty to disable auth
 
 [streaming]
-quote_poll_ms = 200      # how often quotes://{symbol} checks for price changes
-account_poll_ms = 1000   # how often account:// and positions:// are checked
+quote_poll_interval_ms = 200       # how often quotes://{symbol} checks for price changes
+account_poll_interval_ms = 1000    # how often account://current is checked
+positions_poll_interval_ms = 1000  # how often positions://current is checked
 ```
 
-The config file is hot-reloaded via `watchdog` whenever it changes on disk; broken edits are logged and ignored (the last-good config is retained).
+The config file is hot-reloaded via `watchdog` whenever it changes on disk; broken edits are logged and ignored (the last-good config is retained). A running server can also be forced to reload immediately with `python -m mt5_mcp reload-config`.
 
 **Storage paths** (idempotency DB and audit JSONL log) default to `platformdirs.user_data_dir("mt5-mcp", appauthor=False)`:
 
 - Windows: `%LOCALAPPDATA%\mt5-mcp\{idempotency.db, audit.jsonl}`
-- macOS: `~/Library/Application Support/mt5-mcp/{idempotency.db, audit.jsonl}`
-- Linux: `~/.local/share/mt5-mcp/{idempotency.db, audit.jsonl}`
+- Linux/WSL: `~/.local/share/mt5-mcp/{idempotency.db, audit.jsonl}`
 
 Both are overridable in `config.toml` under `[idempotency] path` and `[audit] path`.
 
@@ -194,7 +194,7 @@ Run your MCP client (Claude Desktop, Cursor, or another) on the VPS itself and r
 
 Practical notes:
 
-- Keep the MT5 terminal logged in across reboots — Windows Task Scheduler "At log on" is the simplest path. (Auto-login at the OS level is a separate concern; consult your VPS provider's docs.)
+- The MT5 terminal needs an active Windows desktop session to connect to the broker, so on an unattended VPS you'll want auto-logon configured at the OS level (your VPS provider's docs cover this) plus a Windows Task Scheduler trigger of "At log on" to launch MT5. "At system startup" alone won't work — MT5 needs a logged-in user.
 - The `config.toml` watchdog hot-reload still works — just edit the file on the VPS.
 
 ### Pattern B — Agent local, MCP on the VPS via SSH tunnel

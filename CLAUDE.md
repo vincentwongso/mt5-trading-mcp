@@ -128,14 +128,14 @@ All five Phase 1 final-review items closed before Phase 2 started:
 
 Still deferred: the 9 test files using `server._tool_manager.get_tool(name).fn` private API. FastMCP has not shipped a public sync accessor yet — migrate when it lands.
 
-## Phase 2 carryover (still deferred to Phase 4)
+## Phase 2 carryover
 
 - **Background TTL sweeper** for idempotency. In-band cleanup is sufficient at expected request volumes; revisit if the DB grows unbounded under heavy load.
 - **Audit log compression / archival CLI**. Operators rotate manually; a `mt5-mcp audit prune` command is reasonable Phase 4 polish.
 - **`pick_filling_mode` improvements** beyond FOK/IOC/RETURN — broker-specific edge cases may surface during Phase 4 customer onboarding.
 - **Multi-leg / OCO / partial-fill orchestration** — explicitly out of scope for v1.
 
-## Phase 3 patterns Phase 4 MUST preserve
+## Phase 3 patterns all future phases MUST preserve
 
 These were discovered during Phase 3 implementation and are not obvious from the architecture doc.
 
@@ -178,9 +178,9 @@ This is the only mechanism that removes subscriptions from dead HTTP sessions. T
 
 This is the canonical way to drive a resource handler through FastMCP from a test. Do not duplicate the helper per test file. See `tests/test_resources_*.py` for usage patterns.
 
-## Phase 3 carryover (deferred to Phase 4)
+## Phase 3 carryover
 
-- **Plugin loader for third-party tools** — was in Phase 3 spec; moved to Phase 4 to keep scope clean. The `src/mt5_mcp/plugins/` stub exists but loader is not wired.
+- **Plugin loader for third-party tools** — was in Phase 3 spec; moved to Phase 4, then deferred again to v1.1+ during Phase 4 scoping. No stub or scaffolding exists yet.
 - **HTTP transport non-loopback bind** — currently raises `ConfigError` at startup if a non-loopback host is configured. Phase 4 if a customer asks for LAN-accessible deployment.
 - **Per-subscriber backpressure / outbox queues** — current sequential fanout is fine for local-first with few subscribers. Revisit if observed lag under multiple concurrent HTTP sessions.
 - **Background TTL sweeper for HTTP-session-detached subscriptions** — `reap_dead_subscribers` runs on poll cycles, so subscriptions that never see a fanout (during long quiet periods on stable markets) may not reap promptly. Acceptable today; revisit if it becomes load-bearing.
@@ -190,7 +190,7 @@ This is the canonical way to drive a resource handler through FastMCP from a tes
 All items below were explicitly out of scope for v1.0; revisit as customer reports come in or as part of Phase 5 if integration tests surface them:
 
 - **Auto-generated docs site** (was on the original Phase 4 list; deferred to v1.1+).
-- **Plugin loader for third-party tools** (`src/mt5_mcp/plugins/` stub stays unwired; deferred to v1.1+).
+- **Plugin loader for third-party tools** — no stub or scaffolding yet; deferred to v1.1+.
 - **Trusted Publishing GitHub Actions workflow** — manual `uv publish` worked for `1.0.0`; wire OIDC publishing if releases get frequent.
 - **All Phase 2/3 carryovers** still deferred (idempotency TTL sweeper, audit prune CLI, `pick_filling_mode` improvements, non-loopback HTTP bind, per-subscriber backpressure, dead-subscriber TTL sweeper, test migration off `_tool_manager.get_tool().fn`).
 - **`LICENCE` → `LICENSE` rename** — non-blocking; can roll into a future doc-only commit.

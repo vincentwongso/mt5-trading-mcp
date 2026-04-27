@@ -137,12 +137,63 @@ class Poller:
             self._quote_failures.pop(sym, None)
 
     def _poll_account(self) -> None:
-        # Filled in by Task 7.
-        pass
+        try:
+            info = self._client.call(lambda m: m.account_info())
+        except MT5Error:
+            self._record_account_failure()
+            return
+        except Exception:
+            logger.exception("unexpected exception polling account_info")
+            self._record_account_failure()
+            return
+        if info is None:
+            return
+        snap = AccountSnapshot(
+            balance=info.balance,
+            credit=info.credit,
+            currency=info.currency,
+        )
+        if self._last_account != snap:
+            self._last_account = snap
+            self._dispatcher.dispatch_account(snap)
+        self._account_failures = 0
 
     def _poll_positions(self) -> None:
-        # Filled in by Task 7.
-        pass
+        try:
+            raws = self._client.call(lambda m: m.positions_get())
+        except MT5Error:
+            self._record_positions_failure()
+            return
+        except Exception:
+            logger.exception("unexpected exception polling positions_get")
+            self._record_positions_failure()
+            return
+        if raws is None:
+            raws = ()
+        new_map: dict[int, PositionSnapshot] = {
+            p.ticket: PositionSnapshot(
+                ticket=p.ticket, volume=p.volume, sl=p.sl, tp=p.tp,
+            )
+            for p in raws
+        }
+        if new_map != self._last_positions:
+            self._last_positions = new_map
+            self._dispatcher.dispatch_positions()
+        self._positions_failures = 0
+
+    def _record_account_failure(self) -> None:
+        self._account_failures += 1
+        if self._account_failures == _FAILURE_THRESHOLD:
+            logger.warning("account poll failed %dx; firing error notification",
+                           self._account_failures)
+            self._dispatcher.dispatch_account_error()
+
+    def _record_positions_failure(self) -> None:
+        self._positions_failures += 1
+        if self._positions_failures == _FAILURE_THRESHOLD:
+            logger.warning("positions poll failed %dx; firing error notification",
+                           self._positions_failures)
+            self._dispatcher.dispatch_positions_error()
 
     def _record_quote_failure(self, symbol: str) -> None:
         n = self._quote_failures.get(symbol, 0) + 1

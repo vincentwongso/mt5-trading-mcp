@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "mt5-mcp": {
+      "url": "http://localhost:8765/mcp"
+    }
+  }
+}

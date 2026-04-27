@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mt5-mcp": {
+      "command": "python",
+      "args": ["-m", "mt5_mcp", "serve"]
+    }
+  }
+}

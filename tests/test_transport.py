@@ -18,13 +18,27 @@ def test_is_loopback_accepts_localhost_and_127_loopback():
 
 
 @dataclass
+class _StubSettings:
+    """Mutable settings bag matching FastMCP's real settings object."""
+    host: str = "127.0.0.1"
+    port: int = 8000
+
+
+@dataclass
 class _StubFastMCP:
-    """Captures run() args for assertions."""
+    """Captures run() args for assertions.
+
+    FastMCP 3.x reads host/port from mcp.settings, not from run() kwargs.
+    The stub exposes a real `settings` attribute so transport.run() can
+    write to it, and records the kwargs actually passed to run().
+    """
     last_args: dict | None = None
     middlewares: list = None  # populated below
+    settings: _StubSettings = None  # populated below
 
     def __post_init__(self):
         self.middlewares = []
+        self.settings = _StubSettings()
 
     def add_middleware(self, mw):
         self.middlewares.append(mw)
@@ -53,8 +67,9 @@ def test_run_http_loopback_no_token_does_not_install_middleware():
     run(mcp, transport="http", config=_cfg(host="127.0.0.1", port=8765))
     assert mcp.middlewares == []
     assert mcp.last_args["transport"] == "streamable-http"
-    assert mcp.last_args["host"] == "127.0.0.1"
-    assert mcp.last_args["port"] == 8765
+    # FastMCP 3.x: host/port are set on mcp.settings, not passed to run().
+    assert mcp.settings.host == "127.0.0.1"
+    assert mcp.settings.port == 8765
 
 
 def test_run_http_with_token_installs_bearer_middleware():

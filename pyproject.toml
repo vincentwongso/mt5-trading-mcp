@@ -33,6 +33,7 @@ dev = [
   "pytest>=8.0",
   "pytest-mock>=3.12",
   "freezegun>=1.4",
+  "httpx>=0.27",
 ]
 
 [project.scripts]
@@ -44,3 +45,6 @@ packages = ["src/mt5_mcp"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+  "integration: marks tests requiring a live HTTP server (deselect with -m 'not integration')",
+]

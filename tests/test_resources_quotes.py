@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -11,6 +10,7 @@ import pytest
 from mt5_mcp.errors import MT5Error
 from mt5_mcp.server import build_server
 from mt5_mcp.types import Quote
+from tests._resource_helpers import read_resource as _read_resource_raw
 from tests.fakes import FakeMT5, FakeSymbolInfo, FakeTerminalInfo, FakeTick
 
 
@@ -30,41 +30,9 @@ def server_and_mt5(frozen_utc, tmp_path):
 
 
 def _read_resource(server, uri: str) -> Quote:
-    """Resolve a FastMCP URI-templated resource and call its handler.
-
-    FastMCP stores templated resources in rm._templates (a dict keyed by
-    uri_template string). Each template exposes:
-      - template.matches(uri) -> dict of path params, or falsy if no match
-      - template.create_resource(uri, params) -> awaitable Resource
-      - resource.read() -> awaitable str (JSON serialisation of the return value)
-
-    Implementation notes (verified against installed FastMCP):
-    - The handler is called eagerly inside create_resource (not lazily in read).
-      Exceptions raised by the handler are wrapped in ValueError by FastMCP.
-      We unwrap them here so tests see MT5Error directly.
-    - resource.read() returns a JSON string; we parse it back to Quote so
-      callers can assert on typed fields.
-    """
-    # Verified against the installed mcp / FastMCP at the time of writing —
-    # look at `_resource_manager._templates` if FastMCP changes shape.
-    rm = server._resource_manager
-    for _key, template in rm._templates.items():
-        params = template.matches(uri)
-        if params:
-            try:
-                resource = asyncio.run(template.create_resource(uri, params))
-            except ValueError as exc:
-                # FastMCP wraps handler exceptions in ValueError.
-                # Re-raise the original MT5Error if it's in the cause chain.
-                cause = exc.__context__
-                while cause is not None:
-                    if isinstance(cause, MT5Error):
-                        raise cause
-                    cause = cause.__context__
-                raise
-            content = asyncio.run(resource.read())
-            return Quote.model_validate_json(content)
-    raise KeyError(f"No resource template matched URI: {uri!r}")
+    """Resolve a FastMCP resource URI and return a parsed Quote."""
+    content = _read_resource_raw(server, uri)
+    return Quote.model_validate_json(content)
 
 
 def test_quotes_read_returns_quote(server_and_mt5):

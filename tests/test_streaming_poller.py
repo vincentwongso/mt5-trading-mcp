@@ -39,6 +39,7 @@ class RecordingDispatcher:
     def dispatch_quote_error(self, symbol): self.quote_errors.append(symbol)
     def dispatch_account_error(self): self.account_errors += 1
     def dispatch_positions_error(self): self.positions_errors += 1
+    def reap_dead_subscribers(self) -> int: return 0
 
 
 def _client(mt5_module) -> MT5Client:

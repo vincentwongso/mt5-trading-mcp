@@ -198,7 +198,12 @@ def _wire_subscribe_hooks(mcp: FastMCP) -> None:
         handle = ctx.dispatcher.subscribe(uri_str, subscriber)
         key = (uri_str, id(session))
         with _active_lock:
+            old_handle = _active.get(key)
             _active[key] = handle
+        if old_handle is not None:
+            # Previous subscription for same (uri, session) — clean up the
+            # orphan before it accumulates in the dispatcher.
+            ctx.dispatcher.unsubscribe(old_handle)
         logger.debug("subscribe_resource: registered %s (session %s)", uri_str, id(session))
 
     @mcp._mcp_server.unsubscribe_resource()

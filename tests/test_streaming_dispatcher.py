@@ -112,3 +112,86 @@ def test_subscribed_symbols_returns_current_set():
     d.subscribe("quotes://EURUSD", FakeSubscriber())
     d.subscribe("quotes://GBPUSD", FakeSubscriber())
     assert d.subscribed_symbols() == {"EURUSD", "GBPUSD"}
+
+
+def test_dispatch_account_fanout():
+    d, _ = _disp()
+    s1, s2 = FakeSubscriber(), FakeSubscriber()
+    d.subscribe("account://current", s1)
+    d.subscribe("account://current", s2)
+    d.dispatch_account(AccountSnapshot(balance=100.0, credit=0.0, currency="USD"))
+    assert s1.notifications == ["account://current"]
+    assert s2.notifications == ["account://current"]
+
+
+def test_dispatch_positions_fanout():
+    d, _ = _disp()
+    s = FakeSubscriber()
+    d.subscribe("positions://current", s)
+    d.dispatch_positions()
+    assert s.notifications == ["positions://current"]
+
+
+def test_subscribing_to_account_does_not_touch_poller_symbol_set():
+    d, poller = _disp()
+    d.subscribe("account://current", FakeSubscriber())
+    d.subscribe("positions://current", FakeSubscriber())
+    assert poller.added == []
+    assert poller.started == 1  # first subscription overall starts the poller
+
+
+def test_dead_subscriber_marked_after_send_failure():
+    d, _ = _disp()
+    bad = FakeSubscriber(raise_on_send=True)
+    good = FakeSubscriber()
+    d.subscribe("quotes://EURUSD", bad)
+    d.subscribe("quotes://EURUSD", good)
+    d.dispatch_tick("EURUSD", TickSnapshot(1, 1.1, 1.2, 0.0, 0))
+    # Good subscriber still receives even though the bad one raised.
+    assert good.notifications == ["quotes://EURUSD"]
+    # On next dispatch, bad is skipped (no exception escapes)
+    d.dispatch_tick("EURUSD", TickSnapshot(2, 1.11, 1.21, 0.0, 0))
+    assert good.notifications == ["quotes://EURUSD", "quotes://EURUSD"]
+
+
+def test_reap_dead_subscribers_removes_them():
+    d, poller = _disp()
+    bad = FakeSubscriber(raise_on_send=True)
+    good = FakeSubscriber()
+    d.subscribe("quotes://EURUSD", bad)
+    d.subscribe("quotes://EURUSD", good)
+    d.dispatch_tick("EURUSD", TickSnapshot(1, 1.1, 1.2, 0.0, 0))  # marks bad dead
+    reaped = d.reap_dead_subscribers()
+    assert reaped == 1
+    # Refcount unchanged because good subscriber holds the symbol.
+    d.dispatch_tick("EURUSD", TickSnapshot(2, 1.1, 1.2, 0.0, 0))
+    assert good.notifications == ["quotes://EURUSD", "quotes://EURUSD"]
+
+
+def test_reap_releases_symbol_when_last_subscriber_dies():
+    d, poller = _disp()
+    bad = FakeSubscriber(raise_on_send=True)
+    d.subscribe("quotes://EURUSD", bad)
+    d.dispatch_tick("EURUSD", TickSnapshot(1, 1.1, 1.2, 0.0, 0))  # marks dead
+    d.reap_dead_subscribers()
+    assert poller.removed == ["EURUSD"]
+    assert poller.stopped == 1  # no subscriptions left
+
+
+def test_dispatch_quote_error_fanouts_to_symbol_subscribers():
+    d, _ = _disp()
+    s = FakeSubscriber()
+    d.subscribe("quotes://EURUSD", s)
+    d.dispatch_quote_error("EURUSD")
+    assert s.notifications == ["quotes://EURUSD"]
+
+
+def test_dispatch_account_and_positions_error_fanouts():
+    d, _ = _disp()
+    sa, sp = FakeSubscriber(), FakeSubscriber()
+    d.subscribe("account://current", sa)
+    d.subscribe("positions://current", sp)
+    d.dispatch_account_error()
+    d.dispatch_positions_error()
+    assert sa.notifications == ["account://current"]
+    assert sp.notifications == ["positions://current"]

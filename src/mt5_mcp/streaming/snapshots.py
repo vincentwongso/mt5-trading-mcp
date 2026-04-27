@@ -12,6 +12,11 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class TickSnapshot:
+    """Tracks price and volume fields that signal a meaningful quote change.
+
+    Excluded by design: spread, volume_real, flags — these are either
+    derivable from bid/ask or too noisy to trigger notifications.
+    """
     time_msc: int
     bid: float
     ask: float

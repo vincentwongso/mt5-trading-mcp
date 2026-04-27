@@ -113,10 +113,12 @@ def build_server(
     config_path: Path | None = None,
     mt5_module=None,
 ) -> FastMCP:
-    """Build a FastMCP server with all Phase 1 read tools registered."""
+    """Build a FastMCP server with all tools and resources registered."""
     build_context(config_path=config_path, mt5_module=mt5_module)
     mcp = FastMCP("mt5-mcp")
     from mt5_mcp.tools import register_tools
+    from mt5_mcp.resources import register_resources
 
     register_tools(mcp)
+    register_resources(mcp)
     return mcp

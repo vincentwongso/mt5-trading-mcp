@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -95,8 +96,7 @@ def test_poller_dispatches_account_on_balance_change():
     assert len(disp.accounts) == 1  # initial diff (None vs first snapshot)
     fake._account_info = FakeAccountInfo(balance=10_500.0, credit=0.0, currency="USD")
     # Wait long enough for the cadence guard to allow a second account poll.
-    import time
-    time.sleep(0.15)
+    time.sleep(0.20)
     p.poll_once()
     assert len(disp.accounts) == 2
 
@@ -110,8 +110,7 @@ def test_poller_skips_account_when_only_equity_changed():
     p.poll_once()
     n = len(disp.accounts)
     fake._account_info = FakeAccountInfo(balance=10_000.0, equity=10_999.0, currency="USD")
-    import time
-    time.sleep(0.15)
+    time.sleep(0.20)
     p.poll_once()
     assert len(disp.accounts) == n  # equity-only drift does NOT fire
 
@@ -125,12 +124,11 @@ def test_poller_dispatches_positions_on_open_close():
     p.poll_once()
     initial = disp.positions
     fake._positions_get = (FakePosition(ticket=1, volume=0.1, sl=0.0, tp=0.0),)
-    import time
-    time.sleep(0.15)
+    time.sleep(0.20)
     p.poll_once()
     assert disp.positions == initial + 1
     fake._positions_get = ()
-    time.sleep(0.15)
+    time.sleep(0.20)
     p.poll_once()
     assert disp.positions == initial + 2
 
@@ -144,8 +142,7 @@ def test_poller_dispatches_positions_on_sl_change():
     p.poll_once()
     initial = disp.positions
     fake._positions_get = (FakePosition(ticket=1, volume=0.1, sl=1.05, tp=0.0),)
-    import time
-    time.sleep(0.15)
+    time.sleep(0.20)
     p.poll_once()
     assert disp.positions == initial + 1
 
@@ -159,7 +156,6 @@ def test_poller_skips_positions_when_only_floating_pnl_changed():
     p.poll_once()
     initial = disp.positions
     fake._positions_get = (FakePosition(ticket=1, volume=0.1, sl=0.0, tp=0.0, profit=99.0),)
-    import time
-    time.sleep(0.15)
+    time.sleep(0.20)
     p.poll_once()
     assert disp.positions == initial  # profit-only drift does NOT fire

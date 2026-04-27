@@ -71,10 +71,14 @@ def run(mcp: Any, *, transport: str, config: Config) -> None:
                 f"transport.http.host must be a loopback address in v0.3 "
                 f"(got {host!r}); set 127.0.0.1, ::1, or localhost"
             )
+        # FastMCP 3.x reads host/port from mcp.settings, not from run() kwargs.
+        # Mutate settings here so the correct address is used by uvicorn.
+        mcp.settings.host = host
+        mcp.settings.port = port
         token = config.transport.http.auth_token
         if token:
             mcp.add_middleware(_make_bearer_middleware_factory(token))
-        mcp.run(transport="streamable-http", host=host, port=port)
+        mcp.run(transport="streamable-http")
         return
     raise TransportConfigError(f"unknown transport: {transport!r}")
 

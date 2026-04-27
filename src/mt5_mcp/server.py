@@ -18,6 +18,8 @@ from mt5_mcp.adapter.mt5_client import MT5Client
 from mt5_mcp.adapter.symbols import SymbolPrep
 from mt5_mcp.config import Config, ConfigWatcher, default_config_path, load_config
 from mt5_mcp.policy import PolicyEngine
+from mt5_mcp.streaming.dispatcher import Dispatcher
+from mt5_mcp.streaming.poller import Poller
 
 
 logger = logging.getLogger(__name__)
@@ -25,12 +27,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AppContext:
-    """Hands-off wiring passed from the server to each tool module."""
+    """Hands-off wiring passed from the server to each tool/resource module."""
 
     client: MT5Client
     symbols: SymbolPrep
     config_watcher: ConfigWatcher | None
     policy: PolicyEngine
+    dispatcher: Dispatcher
+    poller: Poller
 
     @property
     def config(self) -> Config:
@@ -48,7 +52,7 @@ def build_context(
     config_path: Path | None = None,
     mt5_module=None,
 ) -> AppContext:
-    """Instantiate the client + symbol prep + config watcher."""
+    """Instantiate the client + symbol prep + config watcher + streaming."""
     global _ctx
     with _ctx_lock:
         if _ctx is not None:
@@ -73,8 +77,14 @@ def build_context(
             idempotency_path=cfg.idempotency.path,
             audit_path=cfg.audit.path,
         )
-        _ctx = AppContext(client=client, symbols=symbols,
-                          config_watcher=watcher, policy=policy)
+        # Streaming (lazy-start: poller not started here).
+        dispatcher = Dispatcher()
+        poller = Poller(client=client, dispatcher=dispatcher, config=cfg.streaming)
+        dispatcher.bind_poller(poller)
+        _ctx = AppContext(
+            client=client, symbols=symbols, config_watcher=watcher,
+            policy=policy, dispatcher=dispatcher, poller=poller,
+        )
         return _ctx
 
 
@@ -88,6 +98,10 @@ def reset_context_for_tests() -> None:
     global _ctx
     with _ctx_lock:
         if _ctx is not None:
+            try:
+                _ctx.poller.stop()
+            except Exception:
+                pass
             if _ctx.config_watcher is not None:
                 _ctx.config_watcher.stop()
             _ctx.policy.close()

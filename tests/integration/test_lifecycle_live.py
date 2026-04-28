@@ -66,14 +66,19 @@ def test_lifecycle_market_buy_then_close(
     # Cleanup-safety no longer needed; remove so teardown skips this ticket.
     opened_tickets.remove(ticket)
 
-    # 5. Validate audit log (sandboxed under tmp_path_factory)
+    # 5. Validate audit log (sandboxed under tmp_path_factory).
+    # The engine writes records with shape {"tool", "action", "request_hash",
+    # "ticket", "duration_ms", "result_status"}. Tool name is in `tool`;
+    # `action` is the event type (always "executed" for successful fills).
+    # `symbol` is NOT in the audit schema — it lives in the request_echo
+    # of the OrderResult, not the audit record.
     audit_lines = [
         json.loads(line)
         for line in live_server.audit_path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    actions = [(e.get("action"), e.get("symbol")) for e in audit_lines]
-    assert ("place_order", probe_symbol) in actions, \
-        f"expected place_order/{probe_symbol} in audit; got {actions}"
-    assert ("close_position", probe_symbol) in actions, \
-        f"expected close_position/{probe_symbol} in audit; got {actions}"
+    events = [(e.get("tool"), e.get("action")) for e in audit_lines]
+    assert ("place_order", "executed") in events, \
+        f"expected (place_order, executed) in audit; got {events}"
+    assert ("close_position", "executed") in events, \
+        f"expected (close_position, executed) in audit; got {events}"

@@ -6,7 +6,7 @@
 
 1. **Architecture spec:** `mt5-mcp-architecture.md` (single source of truth for design).
 2. **Phase 1 plan:** `docs/superpowers/plans/2026-04-24-phase-1-skeleton-and-read-tools.md` (TDD-style, every step has the actual code).
-3. **What's next:** Phase 5 (automated integration tests against a real MT5 demo). Spec to be written; user has demo account access. Architecture §15 currently ends at Phase 4 — Phase 5 will require an architecture-doc update.
+3. **What's next:** Run `pytest -m integration -v` against a clean demo terminal to gate the deferred v1.0.0 release ops (`git push origin main && git push origin v1.0.0 && uv publish`). Then v1.1+ scoping (plugin loader, Tier 3 integration coverage, OIDC publishing). The Phase 5 spec lives at `docs/superpowers/specs/2026-04-28-phase-5-integration-testing-design.md`.
 
 ## What Phase 1 shipped
 

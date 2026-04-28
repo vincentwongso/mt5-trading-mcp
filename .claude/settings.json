@@ -22,7 +22,16 @@
       "Bash(rtk gh workflow list*)",
       "Bash(rtk gh workflow view*)",
       "mcp__plugin_context7_context7__query-docs",
-      "mcp__plugin_context7_context7__resolve-library-id"
+      "mcp__plugin_context7_context7__resolve-library-id",
+      "mcp__mt5-mcp__ping",
+      "mcp__mt5-mcp__get_terminal_info",
+      "mcp__mt5-mcp__get_account_info",
+      "mcp__mt5-mcp__get_quote",
+      "mcp__mt5-mcp__get_symbols",
+      "mcp__mt5-mcp__get_market_hours",
+      "mcp__mt5-mcp__get_positions",
+      "mcp__mt5-mcp__get_orders",
+      "mcp__mt5-mcp__get_history"
     ]
   }
 }

@@ -119,7 +119,7 @@ def position_from_raw(raw: Any, *, broker_offset_minutes: int) -> Position:
         tp=_opt_d(raw.tp),
         profit=_d(raw.profit),
         swap=_d(raw.swap),
-        commission=_d(raw.commission),
+        # No `commission` — TradePosition does not expose it. See Position type.
         time_open=epoch_to_utc(raw.time, broker_offset_minutes),
         comment=_opt_str(raw.comment),
     )

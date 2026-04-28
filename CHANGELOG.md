@@ -6,12 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [1.0.1] - 2026-04-28
 
-Two production fixes surfaced by Phase 5 integration testing against a real MT5 demo terminal. `1.0.0` was tagged but never reached PyPI; `1.0.1` is the first build actually published.
+Production fixes surfaced by Phase 5 integration testing against a real MT5 demo terminal. `1.0.0` was tagged but never reached PyPI; `1.0.1` is the first build actually published.
 
 ### Fixed
 
 - `place_order` (and any tool that goes through `pick_filling_mode`) crashed with `AttributeError: module 'MetaTrader5' has no attribute 'SYMBOL_FILLING_IOC'` against any live broker. The Python `MetaTrader5` module exports only `ORDER_FILLING_*` constants — the `SYMBOL_FILLING_*` symbol-side bitmask values must be inlined. Fixed in `src/mt5_mcp/adapter/symbols.py`. The `FakeMT5` test helper used to expose those attributes, masking the bug; it no longer does, so any future regression of this shape fails immediately in the unit suite.
 - MT5 retcode `10027` ("AutoTrading disabled by client") was mapped to the generic `MT5_UNKNOWN_RETCODE` envelope. Now mapped to a dedicated `AUTO_TRADING_DISABLED` code with an actionable message ("Click the 'AlgoTrading' button in the MT5 toolbar so it turns green, then retry.").
+- `get_positions` crashed with `AttributeError: 'TradePosition' object has no attribute 'commission'` against any live broker. The real MT5 `TradePosition` does not expose commission for open positions — commission is recorded per-deal at close time. Removed the `commission` field from the `Position` Pydantic model and from `position_from_raw` in `adapter/conversions.py`. Agents that need commission data should query `get_history`, where `Deal.commission` lives. `FakePosition` no longer exposes the field either.
 
 ## [1.0.0] - 2026-04-28
 

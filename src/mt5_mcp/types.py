@@ -94,7 +94,9 @@ class Position(_Base):
     tp: _DecimalStr | None
     profit: _DecimalStr
     swap: _DecimalStr
-    commission: _DecimalStr
+    # NOTE: no `commission` field — the real MT5 `TradePosition` does not
+    # expose commission for open positions. Commission is recorded per-deal
+    # at close time; query `get_history` to read it from the closing Deal.
     time_open: datetime
     comment: str | None
 

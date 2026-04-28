@@ -119,6 +119,9 @@ class FakeTick:
 
 @dataclass
 class FakePosition:
+    """Mirrors the real `mt5.TradePosition` named tuple shape — note: NO
+    `commission` field. The real MT5 module does not expose commission on
+    open positions; it lives on the closing deal (see `FakeDeal`)."""
     ticket: int = 1
     symbol: str = "EURUSD"
     type: int = POSITION_TYPE_BUY
@@ -129,7 +132,6 @@ class FakePosition:
     tp: float = 0.0
     profit: float = 4.0
     swap: float = 0.0
-    commission: float = 0.0
     time: int = 1_745_000_000
     comment: str = ""
 

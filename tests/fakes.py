@@ -57,6 +57,17 @@ ORDER_TYPE_SELL_STOP = 5
 ORDER_TYPE_BUY_STOP_LIMIT = 6
 ORDER_TYPE_SELL_STOP_LIMIT = 7
 
+# mt5lib ENUM_TIMEFRAMES — used by `copy_rates_from_pos`.
+TIMEFRAME_M1 = 1
+TIMEFRAME_M5 = 5
+TIMEFRAME_M15 = 15
+TIMEFRAME_M30 = 30
+TIMEFRAME_H1 = 16385
+TIMEFRAME_H4 = 16388
+TIMEFRAME_D1 = 16408
+TIMEFRAME_W1 = 32769
+TIMEFRAME_MN1 = 49153
+
 
 @dataclass
 class FakeTerminalInfo:
@@ -106,6 +117,38 @@ class FakeSymbolInfo:
     currency_margin: str = "USD"
     bid: float = 1.0823
     ask: float = 1.0824
+    # Fields surfaced by SymbolInfo enrichment (real mt5lib exposes all of
+    # these on `symbol_info()`; they were previously dropped by the adapter).
+    trade_calc_mode: int = 0          # 0 = SYMBOL_CALC_MODE_FOREX
+    trade_tick_value: float = 1.0
+    trade_tick_value_profit: float = 1.0
+    trade_tick_value_loss: float = 1.0
+    trade_stops_level: int = 0
+    trade_freeze_level: int = 0
+    margin_initial: float = 0.0
+    margin_maintenance: float = 0.0
+    margin_hedged: float = 0.0
+    swap_long: float = 0.0
+    swap_short: float = 0.0
+    swap_mode: int = 0                # 0 = SYMBOL_SWAP_MODE_DISABLED
+    swap_rollover3days: int = 3       # 3 = Wednesday (FX convention)
+
+
+@dataclass
+class FakeRate:
+    """One OHLC row mimicking what `mt5.copy_rates_from_pos` returns.
+
+    The real return is a numpy structured array; this dataclass uses
+    attribute access (NamedTuple-like). The `rate_from_raw` converter
+    handles both shapes, so tests can pass either."""
+    time: int = 1_745_000_000
+    open: float = 1.0820
+    high: float = 1.0830
+    low: float = 1.0815
+    close: float = 1.0825
+    tick_volume: int = 100
+    spread: int = 1
+    real_volume: int = 0
 
 
 @dataclass
@@ -215,6 +258,15 @@ class FakeMT5:
     ORDER_TYPE_SELL_STOP: int = ORDER_TYPE_SELL_STOP
     ORDER_TYPE_BUY_STOP_LIMIT: int = ORDER_TYPE_BUY_STOP_LIMIT
     ORDER_TYPE_SELL_STOP_LIMIT: int = ORDER_TYPE_SELL_STOP_LIMIT
+    TIMEFRAME_M1: int = TIMEFRAME_M1
+    TIMEFRAME_M5: int = TIMEFRAME_M5
+    TIMEFRAME_M15: int = TIMEFRAME_M15
+    TIMEFRAME_M30: int = TIMEFRAME_M30
+    TIMEFRAME_H1: int = TIMEFRAME_H1
+    TIMEFRAME_H4: int = TIMEFRAME_H4
+    TIMEFRAME_D1: int = TIMEFRAME_D1
+    TIMEFRAME_W1: int = TIMEFRAME_W1
+    TIMEFRAME_MN1: int = TIMEFRAME_MN1
 
     # Slots for call responses; tests set these directly.
     _initialize: bool = True
@@ -228,6 +280,12 @@ class FakeMT5:
     _orders_get: tuple[FakeOrder, ...] = field(default_factory=tuple)
     _history_deals_get: tuple[FakeDeal, ...] = field(default_factory=tuple)
     _order_send: FakeOrderSendResult | None = field(default_factory=FakeOrderSendResult)
+    # Keyed by (symbol, timeframe) → tuple of FakeRate. Missing key → empty tuple.
+    _copy_rates_from_pos: dict[tuple[str, int], tuple[FakeRate, ...]] = field(default_factory=dict)
+    # Keyed by (symbol, action) where action is ORDER_TYPE_BUY (0) or
+    # ORDER_TYPE_SELL (1). Missing key → 0.0; explicitly setting None means
+    # "broker error" and the adapter raises in that case.
+    _order_calc_margin: dict[tuple[str, int], float | None] = field(default_factory=dict)
     # `order_send_calls` records the request dict passed to each order_send
     # call, in order. Tests use `len()` to count and indexing to inspect.
     order_send_calls: list[dict[str, Any]] = field(default_factory=list)
@@ -309,6 +367,26 @@ class FakeMT5:
         # Defensive copy — tests may mutate the dict afterwards.
         self.order_send_calls.append(dict(request))
         return self._order_send
+
+    def copy_rates_from_pos(
+        self, symbol: str, timeframe: int, start_pos: int, count: int
+    ) -> tuple[FakeRate, ...] | None:
+        self._bump("copy_rates_from_pos")
+        rows = self._copy_rates_from_pos.get((symbol, timeframe))
+        if rows is None:
+            return None
+        # Real mt5lib slices [start_pos : start_pos + count].
+        return rows[start_pos : start_pos + count]
+
+    def order_calc_margin(
+        self, action: int, symbol: str, volume: float, price: float
+    ) -> float | None:
+        self._bump("order_calc_margin")
+        # `action` in mt5lib: 0 = buy, 1 = sell (re-uses ORDER_TYPE_BUY/SELL).
+        key = (symbol, action)
+        if key in self._order_calc_margin:
+            return self._order_calc_margin[key]
+        return 0.0
 
     def last_error(self) -> tuple[int, str]:
         return self._last_error

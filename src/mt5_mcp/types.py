@@ -141,6 +141,9 @@ class SymbolInfo(_Base):
     category: str  # Derived from `path` — "Forex", "Indices", "Metals", "Crypto", "Stocks", or raw first path segment.
     contract_size: _DecimalStr
     tick_size: _DecimalStr
+    tick_value: _DecimalStr           # Cash value of one tick in deposit currency (default direction).
+    tick_value_profit: _DecimalStr    # Cash value of one tick when position is in profit.
+    tick_value_loss: _DecimalStr      # Cash value of one tick when position is at loss.
     volume_min: _DecimalStr
     volume_max: _DecimalStr
     volume_step: _DecimalStr
@@ -149,6 +152,60 @@ class SymbolInfo(_Base):
     filling_modes: list[Literal["fok", "ioc", "return"]]
     digits: int
     is_tradeable: bool
+    # Margin / profit calc dispatch — drives which formula applies. See
+    # docs/mt5/margin_requirements_formula.md in the cfd-claculator project.
+    calc_mode: Literal[
+        "forex", "futures", "cfd", "cfd_index", "cfd_leverage",
+        "forex_no_leverage", "exch_stocks", "exch_futures",
+        "exch_futures_forts", "exch_options", "exch_options_margin",
+        "exch_bonds", "exch_stocks_moex", "exch_bonds_moex",
+        "serv_collateral", "unknown",
+    ]
+    # Margin parameters (per-symbol; broker-defined). Used by futures/exchange
+    # calc modes; typically 0 for Forex (which uses contract_size/leverage).
+    margin_initial: _DecimalStr
+    margin_maintenance: _DecimalStr
+    margin_hedged: _DecimalStr
+    # Overnight financing.
+    swap_long: _DecimalStr
+    swap_short: _DecimalStr
+    swap_mode: Literal[
+        "disabled", "by_points", "by_base_currency", "by_margin_currency",
+        "by_deposit_currency", "by_interest_current", "by_interest_open",
+        "by_reopen_current", "by_reopen_bid", "unknown",
+    ]
+    # Weekday of the 3x swap rollover (typically Wednesday for FX, Friday
+    # for some index/equity brokers). Always a real weekday — irrelevance
+    # is encoded by `swap_mode == "disabled"`.
+    triple_swap_weekday: Literal[
+        "sunday", "monday", "tuesday", "wednesday",
+        "thursday", "friday", "saturday",
+    ]
+    # Order-distance constraints (in points; multiply by tick_size for price).
+    stops_level: int    # Min distance from market for SL/TP.
+    freeze_level: int   # Distance within which order modification is forbidden.
+
+
+class Bar(_Base):
+    """One OHLC bar returned by ``get_rates``."""
+    time: datetime
+    open: _DecimalStr
+    high: _DecimalStr
+    low: _DecimalStr
+    close: _DecimalStr
+    tick_volume: int
+    real_volume: int
+    spread: int
+
+
+class CalcMarginResult(_Base):
+    """Broker-authoritative margin computation for a hypothetical order."""
+    symbol: str
+    side: Literal["buy", "sell"]
+    volume: _DecimalStr
+    price: _DecimalStr
+    margin: _DecimalStr   # In deposit currency.
+    currency: str         # Deposit currency.
 
 
 class MarketHours(_Base):

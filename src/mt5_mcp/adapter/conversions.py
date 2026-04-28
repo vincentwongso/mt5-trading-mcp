@@ -12,6 +12,8 @@ from typing import Any
 
 from mt5_mcp.types import (
     AccountInfo,
+    Bar,
+    CalcMarginResult,
     Deal,
     Order,
     Position,
@@ -103,6 +105,50 @@ _DEAL_TYPES = {
 }
 
 _TRADE_MODE_DISABLED = 0
+
+# mt5lib: ENUM_SYMBOL_CALC_MODE — drives which margin / profit formula applies.
+_CALC_MODES = {
+    0: "forex",
+    1: "futures",
+    2: "cfd",
+    3: "cfd_index",
+    4: "cfd_leverage",
+    5: "forex_no_leverage",
+    32: "exch_stocks",
+    33: "exch_futures",
+    34: "exch_futures_forts",
+    35: "exch_options",
+    36: "exch_options_margin",
+    37: "exch_bonds",
+    38: "exch_stocks_moex",
+    39: "exch_bonds_moex",
+    64: "serv_collateral",
+}
+
+# mt5lib: ENUM_SYMBOL_SWAP_MODE — how overnight financing is denominated.
+_SWAP_MODES = {
+    0: "disabled",
+    1: "by_points",
+    2: "by_base_currency",
+    3: "by_margin_currency",
+    4: "by_deposit_currency",
+    5: "by_interest_current",
+    6: "by_interest_open",
+    7: "by_reopen_current",
+    8: "by_reopen_bid",
+}
+
+# mt5lib's `swap_rollover3days` — int 0..6 with 0 = Sunday. Default to
+# Wednesday (3) when out-of-range, since that's the dominant FX convention.
+_WEEKDAYS = {
+    0: "sunday",
+    1: "monday",
+    2: "tuesday",
+    3: "wednesday",
+    4: "thursday",
+    5: "friday",
+    6: "saturday",
+}
 
 
 # --- converters ---------------------------------------------------------
@@ -208,12 +254,22 @@ def _filling_modes_from_mask(mask: int) -> list[str]:
 
 
 def symbol_info_from_raw(raw: Any) -> SymbolInfo:
+    # `trade_tick_value_profit` / `trade_tick_value_loss` exist on real mt5lib
+    # builds but a few legacy/fake variants only expose `trade_tick_value`. Fall
+    # back to the single value so we don't blow up on minimal fakes.
+    tick_value = _d(getattr(raw, "trade_tick_value", 0))
+    tick_value_profit = _d(getattr(raw, "trade_tick_value_profit", tick_value))
+    tick_value_loss = _d(getattr(raw, "trade_tick_value_loss", tick_value))
+    rollover = int(getattr(raw, "swap_rollover3days", 3))
     return SymbolInfo(
         name=raw.name,
         description=raw.description,
         category=_category_from_path(getattr(raw, "path", "")),
         contract_size=_d(raw.trade_contract_size),
         tick_size=_d(raw.point),
+        tick_value=tick_value,
+        tick_value_profit=tick_value_profit,
+        tick_value_loss=tick_value_loss,
         volume_min=_d(raw.volume_min),
         volume_max=_d(raw.volume_max),
         volume_step=_d(raw.volume_step),
@@ -222,6 +278,66 @@ def symbol_info_from_raw(raw: Any) -> SymbolInfo:
         filling_modes=_filling_modes_from_mask(raw.filling_mode),
         digits=raw.digits,
         is_tradeable=raw.trade_mode != _TRADE_MODE_DISABLED,
+        calc_mode=_CALC_MODES.get(int(getattr(raw, "trade_calc_mode", -1)), "unknown"),
+        margin_initial=_d(getattr(raw, "margin_initial", 0)),
+        margin_maintenance=_d(getattr(raw, "margin_maintenance", 0)),
+        margin_hedged=_d(getattr(raw, "margin_hedged", 0)),
+        swap_long=_d(getattr(raw, "swap_long", 0)),
+        swap_short=_d(getattr(raw, "swap_short", 0)),
+        swap_mode=_SWAP_MODES.get(int(getattr(raw, "swap_mode", -1)), "unknown"),
+        triple_swap_weekday=_WEEKDAYS.get(rollover, "wednesday"),
+        stops_level=int(getattr(raw, "trade_stops_level", 0)),
+        freeze_level=int(getattr(raw, "trade_freeze_level", 0)),
+    )
+
+
+def rate_from_raw(raw: Any, *, broker_offset_minutes: int) -> Bar:
+    """Convert one OHLC row (from `mt5.copy_rates_from_pos`) to a Bar.
+
+    mt5lib returns a numpy structured array; each row exposes `time`, `open`,
+    `high`, `low`, `close`, `tick_volume`, `spread`, `real_volume` either as
+    attribute access (NamedTuple-like rows) or dict-style indexing.
+    """
+    def _get(key: str, default: Any = 0) -> Any:
+        try:
+            return raw[key]
+        except (KeyError, TypeError, IndexError):
+            return getattr(raw, key, default)
+
+    return Bar(
+        time=epoch_to_utc(int(_get("time")), broker_offset_minutes),
+        open=_d(_get("open")),
+        high=_d(_get("high")),
+        low=_d(_get("low")),
+        close=_d(_get("close")),
+        tick_volume=int(_get("tick_volume", 0)),
+        real_volume=int(_get("real_volume", 0)),
+        spread=int(_get("spread", 0)),
+    )
+
+
+def calc_margin_result_from_raw(
+    raw: Any,
+    *,
+    symbol: str,
+    side: str,
+    volume: Decimal,
+    price: Decimal,
+    deposit_currency: str,
+) -> CalcMarginResult:
+    """Wrap `mt5.order_calc_margin` output into the typed model.
+
+    mt5lib returns a single float (margin in deposit currency) or None on
+    failure. The `None` case is handled by the caller, which raises an
+    `MT5Error` before reaching this converter.
+    """
+    return CalcMarginResult(
+        symbol=symbol,
+        side=side,  # type: ignore[arg-type]
+        volume=volume,
+        price=price,
+        margin=_d(raw),
+        currency=deposit_currency,
     )
 
 

@@ -116,6 +116,123 @@ def test_symbol_info_tradeable_flag():
     assert symbol_info_from_raw(raw).is_tradeable is True
 
 
+def test_symbol_info_calc_mode_mapping():
+    assert symbol_info_from_raw(FakeSymbolInfo(trade_calc_mode=0)).calc_mode == "forex"
+    assert symbol_info_from_raw(FakeSymbolInfo(trade_calc_mode=2)).calc_mode == "cfd"
+    assert symbol_info_from_raw(FakeSymbolInfo(trade_calc_mode=3)).calc_mode == "cfd_index"
+    assert symbol_info_from_raw(FakeSymbolInfo(trade_calc_mode=4)).calc_mode == "cfd_leverage"
+    assert symbol_info_from_raw(FakeSymbolInfo(trade_calc_mode=32)).calc_mode == "exch_stocks"
+    assert symbol_info_from_raw(FakeSymbolInfo(trade_calc_mode=64)).calc_mode == "serv_collateral"
+    # Out-of-band → "unknown" (defensive).
+    assert symbol_info_from_raw(FakeSymbolInfo(trade_calc_mode=999)).calc_mode == "unknown"
+
+
+def test_symbol_info_swap_mode_mapping():
+    assert symbol_info_from_raw(FakeSymbolInfo(swap_mode=0)).swap_mode == "disabled"
+    assert symbol_info_from_raw(FakeSymbolInfo(swap_mode=1)).swap_mode == "by_points"
+    assert symbol_info_from_raw(FakeSymbolInfo(swap_mode=4)).swap_mode == "by_deposit_currency"
+    assert symbol_info_from_raw(FakeSymbolInfo(swap_mode=99)).swap_mode == "unknown"
+
+
+def test_symbol_info_triple_swap_weekday_mapping():
+    assert symbol_info_from_raw(FakeSymbolInfo(swap_rollover3days=3)).triple_swap_weekday == "wednesday"
+    assert symbol_info_from_raw(FakeSymbolInfo(swap_rollover3days=5)).triple_swap_weekday == "friday"
+    assert symbol_info_from_raw(FakeSymbolInfo(swap_rollover3days=0)).triple_swap_weekday == "sunday"
+    # Out-of-range falls back to wednesday (the FX convention).
+    assert symbol_info_from_raw(FakeSymbolInfo(swap_rollover3days=99)).triple_swap_weekday == "wednesday"
+
+
+def test_symbol_info_tick_value_fields():
+    raw = FakeSymbolInfo(
+        trade_tick_value=1.0,
+        trade_tick_value_profit=1.05,
+        trade_tick_value_loss=0.95,
+    )
+    info = symbol_info_from_raw(raw)
+    assert info.tick_value == Decimal("1.0")
+    assert info.tick_value_profit == Decimal("1.05")
+    assert info.tick_value_loss == Decimal("0.95")
+
+
+def test_symbol_info_swap_rates_passed_through():
+    raw = FakeSymbolInfo(swap_long=-2.5, swap_short=0.8, swap_mode=4)
+    info = symbol_info_from_raw(raw)
+    assert info.swap_long == Decimal("-2.5")
+    assert info.swap_short == Decimal("0.8")
+    assert info.swap_mode == "by_deposit_currency"
+
+
+def test_symbol_info_margin_fields_passed_through():
+    raw = FakeSymbolInfo(
+        margin_initial=1000.0,
+        margin_maintenance=500.0,
+        margin_hedged=50.0,
+    )
+    info = symbol_info_from_raw(raw)
+    assert info.margin_initial == Decimal("1000.0")
+    assert info.margin_maintenance == Decimal("500.0")
+    assert info.margin_hedged == Decimal("50.0")
+
+
+def test_symbol_info_stops_and_freeze_levels():
+    raw = FakeSymbolInfo(trade_stops_level=20, trade_freeze_level=10)
+    info = symbol_info_from_raw(raw)
+    assert info.stops_level == 20
+    assert info.freeze_level == 10
+
+
+def test_rate_from_raw_converts_attribute_access():
+    from mt5_mcp.adapter.conversions import rate_from_raw
+    from tests.fakes import FakeRate
+
+    raw = FakeRate(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp()),
+        open=1.0820, high=1.0830, low=1.0815, close=1.0825,
+        tick_volume=100, spread=1, real_volume=0,
+    )
+    bar = rate_from_raw(raw, broker_offset_minutes=180)
+    assert bar.time == datetime(2026, 4, 21, 10, 0, tzinfo=timezone.utc)
+    assert bar.open == Decimal("1.082")
+    assert bar.high == Decimal("1.083")
+    assert bar.tick_volume == 100
+    assert bar.spread == 1
+
+
+def test_rate_from_raw_handles_dict_style_indexing():
+    """numpy structured array rows are dict-indexable; converter must accept it."""
+    from mt5_mcp.adapter.conversions import rate_from_raw
+
+    class _DictRow:
+        def __init__(self, d): self._d = d
+        def __getitem__(self, k): return self._d[k]
+
+    row = _DictRow({
+        "time": int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp()),
+        "open": 100.0, "high": 101.0, "low": 99.5, "close": 100.5,
+        "tick_volume": 200, "spread": 2, "real_volume": 50,
+    })
+    bar = rate_from_raw(row, broker_offset_minutes=0)
+    assert bar.close == Decimal("100.5")
+    assert bar.real_volume == 50
+
+
+def test_calc_margin_result_from_raw():
+    from mt5_mcp.adapter.conversions import calc_margin_result_from_raw
+
+    result = calc_margin_result_from_raw(
+        100.50,
+        symbol="EURUSD",
+        side="buy",
+        volume=Decimal("0.1"),
+        price=Decimal("1.0824"),
+        deposit_currency="USD",
+    )
+    assert result.symbol == "EURUSD"
+    assert result.side == "buy"
+    assert result.margin == Decimal("100.50")
+    assert result.currency == "USD"
+
+
 def test_order_from_raw_maps_type():
     raw = FakeOrder(type=2)  # BUY_LIMIT
     o = order_from_raw(raw, broker_offset_minutes=0)

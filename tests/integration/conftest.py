@@ -189,3 +189,37 @@ def assert_clean_account(live_server: LiveServer) -> None:
             f"  Open positions: {pos_summary}\n"
             f"  Pending orders: {ord_summary}"
         )
+
+
+@pytest.fixture
+def opened_tickets(live_server: LiveServer) -> list[int]:
+    """Cleanup-safety net for mutating tests.
+
+    A test that places a position appends its ticket to this list. The
+    teardown closes any ticket still in the list (best-effort, errors
+    are warned not raised, so a failed cleanup never masks the real
+    test failure).
+
+    Tests SHOULD also wrap their place_order call in try/finally and
+    pop the ticket once it's been closed normally — this fixture is
+    the safety net for the unexpected-exception case.
+    """
+    import uuid
+    import warnings
+
+    tickets: list[int] = []
+    yield tickets
+
+    for ticket in tickets:
+        try:
+            out = call_tool(
+                live_server, "close_position",
+                ticket=ticket,
+                idempotency_key=f"phase5-cleanup-{uuid.uuid4()}",
+            )
+            if out.get("error") is not None or not out.get("success"):
+                warnings.warn(
+                    f"Phase 5 cleanup: close_position(ticket={ticket}) failed: {out}"
+                )
+        except Exception as exc:  # noqa: BLE001
+            warnings.warn(f"Phase 5 cleanup: ticket={ticket} exception {exc!r}")

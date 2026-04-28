@@ -22,6 +22,7 @@ Thumbs.db
 symbols.csv
 tmp_symbols.csv
 *.jsonl
+.env
 
 # Tooling caches / user-local
 .rtk/

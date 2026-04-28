@@ -34,6 +34,25 @@ uv sync --extra dev
 
 ## Quick start
 
+If you installed from source, activate the project virtualenv first so `python` resolves to the interpreter that has `mt5_mcp` installed:
+
+```powershell
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+```
+
+```bat
+:: Windows cmd.exe
+.\.venv\Scripts\activate.bat
+```
+
+```bash
+# Git Bash / WSL on Windows
+source .venv/Scripts/activate
+```
+
+Then:
+
 ```bash
 # 1. Verify the MT5 terminal is reachable.
 python -m mt5_mcp doctor

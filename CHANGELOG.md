@@ -4,6 +4,14 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.0.2] - 2026-04-28
+
+Quality-of-life fix surfaced by the first Claude Code agent smoke test against Vincent's Fintrix demo terminal (UTC+3).
+
+### Fixed
+
+- Broker TZ offset is now derived from a probe-symbol tick when `terminal_info().time` is absent (the field isn't part of the documented stable Python API and several real MT5 builds omit it). `MT5Client.connect()` tries `terminal_info().time` first, then iterates `BTCUSD`, `ETHUSD`, `EURUSD`, `XAUUSD`, `USDJPY`, `GBPUSD` via `symbol_info_tick()`, validates the candidate offset against tick freshness (5-min residual) and a ±14h plausibility bound, and only falls back to `0` when no source can be sampled. Previously, every connect on builds missing `.time` silently used offset = 0, so all `time` fields in tool outputs were skewed by the broker's actual offset (typically +180 min for EET brokers).
+
 ## [1.0.1] - 2026-04-28
 
 Production fixes surfaced by Phase 5 integration testing against a real MT5 demo terminal. `1.0.0` was tagged but never reached PyPI; `1.0.1` is the first build actually published.

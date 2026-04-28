@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, TypeVar
 
 from mt5_mcp.adapter.conversions import infer_broker_tz_offset
@@ -26,6 +26,26 @@ logger = logging.getLogger(__name__)
 # mt5lib's internal retcode indicating the library wasn't initialized for
 # this call. Exact number per MetaTrader5 source.
 _RES_NOT_INITIALIZED = -10004
+
+# Symbols probed during connect() to derive the broker TZ offset when
+# terminal_info().time is absent. Crypto first because BTCUSD/ETHUSD
+# stream 24/7 (covers weekend connects); FX/metals/JPY-pair as weekday
+# fallbacks. Adding a broker-specific symbol is a one-line edit.
+_BROKER_TIME_PROBE_SYMBOLS: tuple[str, ...] = (
+    "BTCUSD", "ETHUSD", "EURUSD", "XAUUSD", "USDJPY", "GBPUSD",
+)
+
+# How fresh a probe tick must be for offset inference to be trusted.
+# A stale tick records broker-time-then versus real-time-now and would
+# yield a wildly wrong delta. 5 minutes covers normal broker quote lag
+# while rejecting weekend-stale ticks.
+_FRESH_TICK_SECONDS = 5 * 60
+
+# Plausible real-world broker TZ offset range. Real brokers run on
+# server clocks between UTC-12 and UTC+14; anything outside this range
+# is a sign the probe tick is N×15-min stale (the residual check below
+# can't catch staleness that aligns to a 15-min boundary).
+_MAX_PLAUSIBLE_OFFSET_MINUTES = 14 * 60
 
 
 T = TypeVar("T")
@@ -71,21 +91,77 @@ class MT5Client:
             ti = self._mt5.terminal_info()
             if ti is None:
                 raise MT5Error(self._connection_error("terminal_info returned None"))
-            try:
-                self.broker_offset_minutes = infer_broker_tz_offset(
-                    ti.time, datetime.now(timezone.utc)
-                )
-            except AttributeError:
-                # Some MT5 builds / demo accounts omit .time from TerminalInfo.
-                # Fall back to offset=0 (UTC); the server still works.
-                logger.warning(
-                    "terminal_info().time not available; assuming broker TZ offset = 0"
-                )
-                self.broker_offset_minutes = 0
+            self.broker_offset_minutes = self._derive_broker_offset(ti)
             self._initialised = True
             logger.info(
                 "MT5 connected; broker TZ offset = %+d min", self.broker_offset_minutes
             )
+
+    def _derive_broker_offset(self, ti: Any) -> int:
+        """Derive the broker TZ offset (minutes from UTC).
+
+        Layered fallback — degrades gracefully so the server still starts
+        when the canonical source is missing:
+
+        1. ``terminal_info().time`` — cheap and accurate when the broker's
+           MT5 build exposes it. Some builds (and most demo configurations
+           we've seen) omit ``.time`` from the named tuple entirely.
+        2. The freshest tick on a common always-streaming symbol. The MT5
+           Python module's ``symbol_info_tick().time`` IS documented stable
+           API. Validated by re-applying the inferred offset and checking
+           the tick's residual age — a fresh tick on a broker at offset N
+           must land within ``_FRESH_TICK_SECONDS`` of real-utc-now once
+           the offset is removed; a weekend-stale tick blows that gap out
+           by hours and is rejected.
+        3. Zero, with a warning. Means timestamps the server emits are
+           interpreted as broker-local-time-treated-as-UTC, which is
+           wrong by the broker offset until the next reconnect during
+           market hours.
+        """
+        now_utc = datetime.now(timezone.utc)
+
+        ti_time = getattr(ti, "time", None)
+        if ti_time:
+            return infer_broker_tz_offset(int(ti_time), now_utc)
+
+        for sym in _BROKER_TIME_PROBE_SYMBOLS:
+            try:
+                tick = self._mt5.symbol_info_tick(sym)
+            except Exception:
+                continue
+            if tick is None:
+                continue
+            tick_time = getattr(tick, "time", 0) or 0
+            if not tick_time:
+                continue
+            candidate = infer_broker_tz_offset(int(tick_time), now_utc)
+            # A tick that's exactly N×15-min stale produces a candidate
+            # offset that lines up with the rounding step; the residual
+            # check below would accept it. Bound to plausible TZ range
+            # first to close that hole.
+            if abs(candidate) > _MAX_PLAUSIBLE_OFFSET_MINUTES:
+                continue
+            broker_now_in_utc = (
+                datetime.fromtimestamp(int(tick_time), tz=timezone.utc)
+                - timedelta(minutes=candidate)
+            )
+            residual_seconds = abs((broker_now_in_utc - now_utc).total_seconds())
+            if residual_seconds <= _FRESH_TICK_SECONDS:
+                logger.info(
+                    "Derived broker TZ offset = %+d min from a %s tick "
+                    "(terminal_info.time absent on this MT5 build).",
+                    candidate, sym,
+                )
+                return candidate
+
+        logger.warning(
+            "Could not derive broker TZ offset (terminal_info.time absent and "
+            "no fresh tick on any of %s); assuming offset = 0. Timestamps in "
+            "tool outputs may be off by the broker's real offset until the "
+            "market resumes streaming.",
+            list(_BROKER_TIME_PROBE_SYMBOLS),
+        )
+        return 0
 
     def disconnect(self) -> None:
         with self._lock:

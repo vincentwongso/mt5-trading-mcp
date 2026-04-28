@@ -61,7 +61,7 @@ def test_position_from_raw_converts_decimals_and_time():
     raw = FakePosition(
         ticket=99, symbol="EURUSD", type=0, volume=0.1,
         price_open=1.0820, price_current=1.0824, sl=0.0, tp=0.0,
-        profit=4.0, swap=0.0, commission=0.0,
+        profit=4.0, swap=0.0,
         time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp()),
         comment="",
     )

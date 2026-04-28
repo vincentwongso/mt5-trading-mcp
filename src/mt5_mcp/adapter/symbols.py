@@ -23,6 +23,15 @@ from mt5_mcp.types import ErrorDetail
 
 _CACHE_TTL_S = 60.0
 
+# Symbol-side filling-mode bitmask values from MQL5 ENUM_SYMBOL_FILLING_MODE.
+# The Python MetaTrader5 module does NOT expose these as attributes (only
+# the order-side ORDER_FILLING_* constants are exported), so the symbol-side
+# bits are inlined here. These are the canonical values from MQL5 docs.
+_SYMBOL_FILLING_FOK = 1  # bit 0
+_SYMBOL_FILLING_IOC = 2  # bit 1
+_SYMBOL_FILLING_BOC = 4  # bit 2 — "Book or Cancel" (RETURN in the order-side enum)
+
+
 # Indirection so tests can monkeypatch the clock.
 def _monotonic() -> float:
     return _time.monotonic()
@@ -131,15 +140,15 @@ class SymbolPrep:
         # For pending orders, RETURN is the canonical choice.
         if order_type == "market":
             preferences = (
-                (mt5.SYMBOL_FILLING_IOC, mt5.ORDER_FILLING_IOC),
-                (mt5.SYMBOL_FILLING_FOK, mt5.ORDER_FILLING_FOK),
+                (_SYMBOL_FILLING_IOC, mt5.ORDER_FILLING_IOC),
+                (_SYMBOL_FILLING_FOK, mt5.ORDER_FILLING_FOK),
             )
         else:
             # Pending orders: RETURN preferred; fall back to IOC then FOK.
             preferences = (
-                (4, mt5.ORDER_FILLING_RETURN),
-                (mt5.SYMBOL_FILLING_IOC, mt5.ORDER_FILLING_IOC),
-                (mt5.SYMBOL_FILLING_FOK, mt5.ORDER_FILLING_FOK),
+                (_SYMBOL_FILLING_BOC, mt5.ORDER_FILLING_RETURN),
+                (_SYMBOL_FILLING_IOC, mt5.ORDER_FILLING_IOC),
+                (_SYMBOL_FILLING_FOK, mt5.ORDER_FILLING_FOK),
             )
         for advertised_bit, order_filling in preferences:
             if mask & advertised_bit:

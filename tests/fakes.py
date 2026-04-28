@@ -26,9 +26,15 @@ ORDER_FILLING_FOK = 0
 ORDER_FILLING_IOC = 1
 ORDER_FILLING_RETURN = 2
 
-# Bitmask values as exposed by `SymbolInfo.filling_mode`.
-SYMBOL_FILLING_FOK = 1
-SYMBOL_FILLING_IOC = 2
+# NOTE: SYMBOL_FILLING_* constants are deliberately NOT exposed.
+# The real MetaTrader5 Python module does not expose them as module
+# attributes either — they're inlined as integer literals in
+# `src/mt5_mcp/adapter/symbols.py` (see _SYMBOL_FILLING_FOK/IOC/BOC).
+# A v1.0 bug surfaced in Phase 5 because production code was reading
+# them from the fake; FakeMT5 must mirror the real module's surface
+# exactly so regressions of that shape fail in unit tests.
+# Bitmask values, for reference (used by `FakeSymbolInfo.filling_mode`):
+#   FOK=1, IOC=2, BOC=4
 
 POSITION_TYPE_BUY = 0
 POSITION_TYPE_SELL = 1
@@ -88,7 +94,7 @@ class FakeSymbolInfo:
     path: str = "Forex\\Majors\\EURUSD"
     visible: bool = True
     trade_mode: int = 4  # 4 = full; 0 = disabled
-    filling_mode: int = SYMBOL_FILLING_IOC | SYMBOL_FILLING_FOK
+    filling_mode: int = 2 | 1  # IOC | FOK; bit values from MQL5 ENUM_SYMBOL_FILLING_MODE
     volume_min: float = 0.01
     volume_max: float = 100.0
     volume_step: float = 0.01
@@ -190,8 +196,6 @@ class FakeMT5:
     ORDER_FILLING_FOK: int = ORDER_FILLING_FOK
     ORDER_FILLING_IOC: int = ORDER_FILLING_IOC
     ORDER_FILLING_RETURN: int = ORDER_FILLING_RETURN
-    SYMBOL_FILLING_FOK: int = SYMBOL_FILLING_FOK
-    SYMBOL_FILLING_IOC: int = SYMBOL_FILLING_IOC
     POSITION_TYPE_BUY: int = POSITION_TYPE_BUY
     POSITION_TYPE_SELL: int = POSITION_TYPE_SELL
     TRADE_ACTION_DEAL: int = TRADE_ACTION_DEAL

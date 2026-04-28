@@ -4,6 +4,15 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.0.1] - 2026-04-28
+
+Two production fixes surfaced by Phase 5 integration testing against a real MT5 demo terminal. `1.0.0` was tagged but never reached PyPI; `1.0.1` is the first build actually published.
+
+### Fixed
+
+- `place_order` (and any tool that goes through `pick_filling_mode`) crashed with `AttributeError: module 'MetaTrader5' has no attribute 'SYMBOL_FILLING_IOC'` against any live broker. The Python `MetaTrader5` module exports only `ORDER_FILLING_*` constants — the `SYMBOL_FILLING_*` symbol-side bitmask values must be inlined. Fixed in `src/mt5_mcp/adapter/symbols.py`. The `FakeMT5` test helper used to expose those attributes, masking the bug; it no longer does, so any future regression of this shape fails immediately in the unit suite.
+- MT5 retcode `10027` ("AutoTrading disabled by client") was mapped to the generic `MT5_UNKNOWN_RETCODE` envelope. Now mapped to a dedicated `AUTO_TRADING_DISABLED` code with an actionable message ("Click the 'AlgoTrading' button in the MT5 toolbar so it turns green, then retry.").
+
 ## [1.0.0] - 2026-04-28
 
 First public release on PyPI. The underlying feature set is the cumulative output of phases 1–3; this release adds packaging, public-facing documentation, and CI.

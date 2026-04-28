@@ -109,3 +109,83 @@ def live_server(tmp_path_factory: pytest.TempPathFactory) -> LiveServer:
     )
 
     reset_context_for_tests()
+
+
+_FALLBACK_SYMBOLS: tuple[str, ...] = ("BTCUSD", "EURUSD")
+"""Symbols probed by `probe_symbol` in priority order. BTCUSD is 24/7;
+EURUSD is the FX fallback. Edit this constant to add more brokers' symbols."""
+
+
+@pytest.fixture(scope="session")
+def probe_symbol(live_server: LiveServer) -> str:
+    """Pick the first available symbol from _FALLBACK_SYMBOLS.
+
+    Raises if none are present on the broker — Phase 5 needs at least one
+    of BTCUSD or EURUSD (or whatever Vincent adds to the constant).
+    """
+    symbols = call_tool(live_server, "get_symbols")
+    if isinstance(symbols, dict) and "error" in symbols:
+        pytest.fail(f"Phase 5: get_symbols failed: {symbols['error']}")
+    available = {s.name for s in symbols}
+    for candidate in _FALLBACK_SYMBOLS:
+        if candidate in available:
+            return candidate
+    pytest.fail(
+        f"Phase 5: broker offers none of {_FALLBACK_SYMBOLS}; suite cannot proceed. "
+        f"Add the symbol you want to test against to "
+        f"tests/integration/conftest.py::_FALLBACK_SYMBOLS."
+    )
+
+
+@pytest.fixture
+def market_open(live_server: LiveServer, probe_symbol: str) -> None:
+    """Skip the calling test cleanly if the probe symbol's market is closed.
+
+    Heuristic: call get_quote and check the returned tick's `time` is
+    within the last 5 minutes. A stale tick means the market is closed
+    (the broker isn't streaming new ticks). This is the only signal
+    available because `get_market_hours` returns `next_open`/`next_close`
+    as None per v1 contract.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    quote = call_tool(live_server, "get_quote", symbol=probe_symbol)
+    if isinstance(quote, dict) and "error" in quote:
+        pytest.skip(f"market closed for {probe_symbol}: {quote['error']['code']}")
+    age = datetime.now(timezone.utc) - quote.time
+    if age > timedelta(minutes=5):
+        pytest.skip(
+            f"market closed for {probe_symbol}: last tick {age.total_seconds():.0f}s old"
+        )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def assert_clean_account(live_server: LiveServer) -> None:
+    """Refuse to start the suite if the demo account has open state.
+
+    Probes get_positions and get_orders once per session. Any non-empty
+    list aborts the run with a clear "manual cleanup required" message.
+    Treats the demo account as a shared resource (Vincent might be using
+    it manually too) — refuses to bulldoze unknown state.
+    """
+    positions = call_tool(live_server, "get_positions")
+    if isinstance(positions, dict) and "error" in positions:
+        pytest.fail(f"Phase 5 precondition: get_positions failed: {positions['error']}")
+    orders = call_tool(live_server, "get_orders")
+    if isinstance(orders, dict) and "error" in orders:
+        pytest.fail(f"Phase 5 precondition: get_orders failed: {orders['error']}")
+
+    if positions or orders:
+        pos_summary = ", ".join(
+            f"ticket={p.ticket} symbol={p.symbol} volume={p.volume}" for p in positions
+        ) or "none"
+        ord_summary = ", ".join(
+            f"ticket={o.ticket} symbol={o.symbol} type={o.type}" for o in orders
+        ) or "none"
+        pytest.fail(
+            f"Phase 5 precondition failed: demo account has {len(positions)} open "
+            f"positions and {len(orders)} pending orders. Manual cleanup required "
+            f"before running integration tests.\n"
+            f"  Open positions: {pos_summary}\n"
+            f"  Pending orders: {ord_summary}"
+        )

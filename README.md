@@ -265,6 +265,25 @@ python -m mt5_mcp doctor --smoke-trade
 
 CI runs the unit-test suite on Windows runners across Python 3.10 / 3.11 / 3.12 on every push to `main` and every PR.
 
+### Integration tests against a live MT5 demo
+
+The `tests/integration/` suite drives the server end-to-end against a real
+MT5 terminal. Requirements:
+
+1. MT5 terminal installed (Windows or Wine on Linux).
+2. Either: terminal already running and logged in to a demo account, OR
+   `MT5_LOGIN`, `MT5_PASSWORD`, `MT5_SERVER` env vars set so the fixture
+   can launch the terminal headlessly. See `tests/integration/.env.example`.
+3. Demo account starts with zero open positions and zero pending orders.
+   The suite refuses to start otherwise — close any orphans manually first.
+
+Run with:
+
+    pytest -m integration -v
+
+The lifecycle test places one micro-lot (0.01) order on BTCUSD (or EURUSD
+fallback) and closes it. Use a demo account, not a live one.
+
 ## Architecture
 
 The full design is in [`mt5-mcp-architecture.md`](https://github.com/vincentwongso/mt5-mcp/blob/main/mt5-mcp-architecture.md). Phase implementation plans live under [`docs/superpowers/plans/`](https://github.com/vincentwongso/mt5-mcp/tree/main/docs/superpowers/plans).

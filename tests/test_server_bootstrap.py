@@ -22,6 +22,8 @@ def test_build_server_registers_tools(tmp_path):
         "get_quote",
         "get_symbols",
         "get_market_hours",
+        "get_rates",
+        "calc_margin",
         "get_positions",
         "get_orders",
         "get_history",

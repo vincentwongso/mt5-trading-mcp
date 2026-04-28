@@ -118,6 +118,9 @@ def test_symbol_info_exposes_broker_fields():
         category="Forex",
         contract_size=Decimal("100000"),
         tick_size=Decimal("0.00001"),
+        tick_value=Decimal("1"),
+        tick_value_profit=Decimal("1"),
+        tick_value_loss=Decimal("1"),
         volume_min=Decimal("0.01"),
         volume_max=Decimal("100"),
         volume_step=Decimal("0.01"),
@@ -126,8 +129,20 @@ def test_symbol_info_exposes_broker_fields():
         filling_modes=["ioc", "fok"],
         digits=5,
         is_tradeable=True,
+        calc_mode="forex",
+        margin_initial=Decimal("0"),
+        margin_maintenance=Decimal("0"),
+        margin_hedged=Decimal("0"),
+        swap_long=Decimal("-2.5"),
+        swap_short=Decimal("0.8"),
+        swap_mode="by_deposit_currency",
+        triple_swap_weekday="wednesday",
+        stops_level=10,
+        freeze_level=0,
     )
     assert s.category == "Forex"
+    assert s.calc_mode == "forex"
+    assert s.swap_long == Decimal("-2.5")
 
 
 def test_terminal_info_fields():

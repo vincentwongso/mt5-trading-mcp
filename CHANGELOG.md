@@ -4,6 +4,28 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [Unreleased]
+
+Surface enrichment to support downstream reasoning skills (CFD trading skills consumer). Pure adapter additions — no new mt5lib calls beyond `copy_rates_from_pos` and `order_calc_margin`. Backwards-compatible: existing tools and resources unchanged; `SymbolInfo` gains 13 new fields (additive, no renames).
+
+### Added
+
+- `SymbolInfo` enriched with broker-side fields the adapter previously dropped:
+  - **Pricing & cash math:** `tick_value`, `tick_value_profit`, `tick_value_loss` — cash value of one tick in deposit currency, removing the need for downstream consumers to do their own currency conversion.
+  - **Calc-mode dispatch:** `calc_mode` (string enum: `forex`, `cfd`, `cfd_index`, `cfd_leverage`, `forex_no_leverage`, `futures`, `exch_stocks`, `exch_futures`, `exch_futures_forts`, `exch_options`, `exch_options_margin`, `exch_bonds`, `exch_stocks_moex`, `exch_bonds_moex`, `serv_collateral`, `unknown`) — drives which margin formula applies per `EnCalcMode`.
+  - **Margin parameters:** `margin_initial`, `margin_maintenance`, `margin_hedged` — per-symbol broker-set values used by futures/exchange calc modes.
+  - **Swaps:** `swap_long`, `swap_short`, `swap_mode` (string enum: `disabled`, `by_points`, `by_base_currency`, `by_margin_currency`, `by_deposit_currency`, `by_interest_current`, `by_interest_open`, `by_reopen_current`, `by_reopen_bid`, `unknown`), `triple_swap_weekday` (string enum, `sunday`..`saturday`).
+  - **Order-distance constraints:** `stops_level`, `freeze_level` (in points; multiply by `tick_size` for price).
+- New tool `get_rates(symbol, timeframe, count)` returning OHLC bars. Timeframes: `M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`, `W1`, `MN1`. `count` clamped to `[1, 5000]`. Backed by `mt5.copy_rates_from_pos(...)`. Errors: `INVALID_TIMEFRAME`, `INVALID_COUNT`, `NO_RATES_AVAILABLE`, plus the usual `SYMBOL_NOT_FOUND` / `SYMBOL_NOT_ENABLED` from `SymbolPrep`.
+- New tool `calc_margin(symbol, side, volume, price=None)` returning broker-authoritative margin in deposit currency. Wraps `mt5.order_calc_margin(...)`. When `price` is omitted, uses current ask (buy) / bid (sell) via `symbol_info_tick`. Errors: `MARGIN_CALC_FAILED` if the broker refuses (e.g. invalid volume step, market closed).
+- `Bar` and `CalcMarginResult` Pydantic types in `mt5_mcp.types`.
+- `rate_from_raw` and `calc_margin_result_from_raw` converters in `adapter/conversions.py`.
+
+### Changed
+
+- `FakeSymbolInfo` extended with the broker-side fields above (sane defaults so existing tests are unaffected). `FakeMT5` gains `_copy_rates_from_pos`, `_order_calc_margin` slots and `TIMEFRAME_*` constants. New `FakeRate` dataclass.
+- `mt5-market-data` skill SKILL.md updated to document the two new tools and the enriched `SymbolInfo`.
+
 ## [1.0.2] - 2026-04-28
 
 Quality-of-life fix surfaced by the first Claude Code agent smoke test against Vincent's Fintrix demo terminal (UTC+3).

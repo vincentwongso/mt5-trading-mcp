@@ -112,7 +112,11 @@ def test_ping_false_when_disconnected(fake_mt5: FakeMT5, frozen_utc):
 
 
 def test_connect_falls_back_when_terminal_info_lacks_time(fake_mt5: FakeMT5, frozen_utc, caplog):
-    """Some MT5 builds omit .time from TerminalInfo. Adapter falls back to offset=0."""
+    """Some MT5 builds omit .time from TerminalInfo AND the broker isn't streaming.
+
+    When neither source can be sampled, the adapter falls back to offset=0
+    rather than refusing to start; the warning explains the consequence.
+    """
     from dataclasses import dataclass
 
     @dataclass
@@ -126,6 +130,7 @@ def test_connect_falls_back_when_terminal_info_lacks_time(fake_mt5: FakeMT5, fro
         # no `time` field — this is what some real MT5 builds omit
 
     fake_mt5._terminal_info = _BrokenTerminalInfo()
+    # No `_symbol_info_tick` entries → every probe call returns None.
     client = MT5Client(mt5_module=fake_mt5)
 
     import logging
@@ -134,4 +139,95 @@ def test_connect_falls_back_when_terminal_info_lacks_time(fake_mt5: FakeMT5, fro
 
     assert client._initialised is True
     assert client.broker_offset_minutes == 0
-    assert any("terminal_info().time not available" in r.message for r in caplog.records)
+    assert any(
+        "Could not derive broker TZ offset" in r.message
+        for r in caplog.records
+    ), [r.message for r in caplog.records]
+
+
+def test_connect_derives_offset_from_tick_when_terminal_info_lacks_time(
+    fake_mt5: FakeMT5, frozen_utc, caplog,
+):
+    """When .time is absent, fall back to the freshest probe-symbol tick.
+
+    BTCUSD streams 24/7 on most retail brokers, so it's the canonical
+    probe. A fresh BTCUSD tick at broker-local 13:00 paired with real
+    UTC 10:00 (the frozen clock) implies broker offset = +180 min.
+    """
+    from dataclasses import dataclass
+
+    from tests.fakes import FakeTick
+
+    @dataclass
+    class _BrokenTerminalInfo:
+        connected: bool = True
+        trade_allowed: bool = True
+        build: int = 4150
+        name: str = "MetaTrader 5"
+        company: str = "Broker Ltd"
+        path: str = ""
+
+    fake_mt5._terminal_info = _BrokenTerminalInfo()
+    # Broker says 13:00 (broker-local-treated-as-UTC) when real UTC
+    # is 10:00 → +180 min. The frozen_utc fixture pins real now
+    # to 2026-04-21T10:00:00Z.
+    fake_mt5._symbol_info_tick["BTCUSD"] = FakeTick(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
+    )
+    client = MT5Client(mt5_module=fake_mt5)
+
+    import logging
+    with caplog.at_level(logging.INFO, logger="mt5_mcp.adapter.mt5_client"):
+        client.connect()
+
+    assert client._initialised is True
+    assert client.broker_offset_minutes == 180
+    assert any(
+        "Derived broker TZ offset" in r.message and "BTCUSD" in r.message
+        for r in caplog.records
+    ), [r.message for r in caplog.records]
+
+
+def test_connect_rejects_stale_tick_for_offset_inference(
+    fake_mt5: FakeMT5, frozen_utc, caplog,
+):
+    """A weekend-stale tick must not pollute the offset.
+
+    Tick time records broker-time-then; comparing to real-utc-now would
+    add the staleness to the apparent offset. The adapter validates the
+    candidate offset by re-applying it and checking the tick's residual
+    age; a >5-minute residual is rejected and the next probe is tried.
+    """
+    from dataclasses import dataclass
+
+    from tests.fakes import FakeTick
+
+    @dataclass
+    class _BrokenTerminalInfo:
+        connected: bool = True
+        trade_allowed: bool = True
+        build: int = 4150
+        name: str = "MetaTrader 5"
+        company: str = "Broker Ltd"
+        path: str = ""
+
+    fake_mt5._terminal_info = _BrokenTerminalInfo()
+    # Tick from 2 days ago at broker-local 13:00. The naive offset
+    # inference would yield -2820 min (≈ -47h). The validation step
+    # rejects this, and with no other probe tick set, we fall through
+    # to offset=0 with a warning.
+    fake_mt5._symbol_info_tick["BTCUSD"] = FakeTick(
+        time=int(datetime(2026, 4, 19, 13, 0, tzinfo=timezone.utc).timestamp())
+    )
+    client = MT5Client(mt5_module=fake_mt5)
+
+    import logging
+    with caplog.at_level(logging.WARNING, logger="mt5_mcp.adapter.mt5_client"):
+        client.connect()
+
+    assert client._initialised is True
+    assert client.broker_offset_minutes == 0
+    assert any(
+        "Could not derive broker TZ offset" in r.message
+        for r in caplog.records
+    ), [r.message for r in caplog.records]

@@ -61,9 +61,15 @@ This makes the architecture's "transparent reinit on mid-session NOT_INITIALIZED
 
 When a test needs an epoch, write `int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())` — never naive `.timestamp()`. Naive `.timestamp()` is interpreted as local time and breaks tests on non-UTC dev machines.
 
-### 4. `infer_broker_tz_offset` AttributeError fallback
+### 4. Broker TZ offset has a layered fallback
 
-Some real-world MT5 builds omit `terminal_info().time`. `MT5Client.connect()` catches `AttributeError` and falls back to `broker_offset_minutes=0` with a warning. Regression test: `tests/test_adapter_mt5_client.py::test_connect_falls_back_when_terminal_info_lacks_time`. If Phase 2 changes connect-time behaviour, preserve this fallback.
+`terminal_info().time` is **not** documented stable API and several real MT5 builds omit it. `MT5Client.connect()` derives the offset in three layers, in order:
+
+1. `terminal_info().time` if exposed (cheapest source).
+2. The freshest tick on `_BROKER_TIME_PROBE_SYMBOLS` (`BTCUSD`, `ETHUSD`, `EURUSD`, `XAUUSD`, `USDJPY`, `GBPUSD`) — validated against `_FRESH_TICK_SECONDS` (5 min) and `_MAX_PLAUSIBLE_OFFSET_MINUTES` (±14 h, since N×15-min stale ticks slip through the residual check).
+3. `0` with a warning, only if neither source can be sampled.
+
+Regression tests: `tests/test_adapter_mt5_client.py::test_connect_{falls_back_when_terminal_info_lacks_time, derives_offset_from_tick_when_terminal_info_lacks_time, rejects_stale_tick_for_offset_inference}`. If a future change touches connect-time behaviour, preserve all three layers — production users on EET brokers (UTC+3) get all timestamps wrong if the inference silently degrades to 0.
 
 ### 5. Timestamps: aware UTC ONLY, enforced at the type system
 

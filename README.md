@@ -93,6 +93,7 @@ Drop-in config snippets are in [`examples/clients/`](https://github.com/vincentw
 - **Claude Desktop, stdio:** `examples/clients/claude-desktop-stdio.json`. Paste the inner `mcpServers` entry into `%APPDATA%\Claude\claude_desktop_config.json`.
 - **Claude Desktop, HTTP:** `examples/clients/claude-desktop-http.json`. For when `mt5-mcp serve --transport http` is already running.
 - **Cursor:** `examples/clients/cursor.json`. Paste into `~/.cursor/mcp.json`.
+- **Claude Code:** clone this repo, then run `claude` from the repo root. Claude Code auto-discovers the `.mcp.json` at the project root and loads the project-scoped skills under `.claude/skills/` (`mt5-market-data` for read tools, `mt5-trading` for the consent flow). Read tools are pre-allowlisted in `.claude/settings.json`; mutating tools deliberately fire a permission prompt on every call. See [`Using with Claude Code`](#using-with-claude-code) below.
 
 If `python` isn't on PATH (or you want to pin a specific venv), substitute the absolute path:
 
@@ -106,6 +107,28 @@ If `python` isn't on PATH (or you want to pin a specific venv), substitute the a
   }
 }
 ```
+
+## Using with Claude Code
+
+The repo ships with a project-scoped Claude Code setup so cloning is the entire install:
+
+```
+.mcp.json              # registers mt5-mcp on stdio
+.claude/settings.json  # allowlists the nine read tools (mutating tools stay un-allowlisted)
+.claude/skills/
+├── mt5-market-data/SKILL.md   # what each read tool does + output conventions
+└── mt5-trading/SKILL.md       # consent flow, idempotency, error taxonomy, demo framing
+```
+
+**To use:**
+
+1. Clone the repo and install the package into the Python that Claude Code will spawn (`uv sync --extra dev` from the repo root, or `pip install mt5-mcp` system-wide).
+2. Launch the MT5 terminal and log into your broker.
+3. From the repo root, run `claude`. Confirm `mt5-mcp` shows up under `/mcp`.
+4. Ask the agent something like *"what's my account balance"* or *"show me the price of EURUSD"* — the read tools fire without a permission prompt; the `mt5-market-data` skill teaches the agent how to interpret the output.
+5. Asking the agent to **place, modify, or close** a trade hits an interactive permission prompt (defence in depth above the policy engine's own consent flow). The `mt5-trading` skill walks the agent through preview → approval → execute.
+
+If the spawned Python doesn't have `mt5_mcp` installed, edit `.mcp.json` to point at the right interpreter (e.g. `.venv\Scripts\python.exe`) — same shape as the snippet above.
 
 ## Configuration
 

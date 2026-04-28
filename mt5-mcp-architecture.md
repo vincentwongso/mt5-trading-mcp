@@ -627,13 +627,17 @@ Suggested implementation order for Claude Code. Each phase ships independently a
 - Shared Poller + Dispatcher streaming subsystem; see §17
 - Plugin loader for third-party tools moved to Phase 4
 
-**Phase 4 — Polish (3 days)**
-- `docs/` site auto-generated from docstrings
-- Example client configs (Claude Desktop, OpenClaw, Cursor)
-- `SECURITY.md` + threat model
-- Plugin loader for third-party tools (moved from Phase 3)
-- v1.0 release on PyPI
-- GitHub repo public + announcement
+**Phase 4 — Polish (3 days)** ✅ complete
+- Public README, SECURITY.md, CHANGELOG.md, example client configs (Claude Desktop, Cursor)
+- GitHub Actions test CI on Windows runners (Python 3.10/3.11/3.12)
+- v1.0.0 packaged and tagged (publish to PyPI gated on Phase 5)
+- Plugin loader and auto-generated docs site deferred to v1.1+
+
+**Phase 5 — Integration testing against demo terminal (1-2 days)**
+- `tests/integration/` suite covering 9 read tools + one place_order/close_position lifecycle against a real broker
+- Local pytest only; no CI integration
+- Gates the deferred v1.0.0 push to GitHub and PyPI publish
+- See `docs/superpowers/specs/2026-04-28-phase-5-integration-testing-design.md`
 
 **Total: ~3 weeks.** Realistic for one engineer working on this full-time.
 

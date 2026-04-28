@@ -1,6 +1,6 @@
 # mt5-mcp — Agent Handover Notes
 
-**Status (last updated April 2026):** Phase 4 complete — `mt5-mcp` v1.0.0 shipped to PyPI. Tag `phase-3-complete` marks the previous milestone. Phase 4 added the public README, `SECURITY.md`, `CHANGELOG.md`, example MCP client configs (Claude Desktop stdio + HTTP, Cursor), GitHub Actions test CI, and the `1.0.0` PyPI release. 243 passing unit tests (unchanged from Phase 3). Phase 5 (automated integration tests against a real MT5 demo) is queued.
+**Status (last updated April 2026):** Phase 5 complete — `tests/integration/` suite ships with 9 read-tool live tests + 1 place_order/close_position lifecycle test against a real MT5 demo terminal. Phase 4 v1.0.0 packaging is unchanged; Phase 5 added zero production code (purely test scaffolding + docs). 243 passing unit tests + 11 integration tests (10 live-broker + 1 transport HTTP). PyPI publish of v1.0.0 unblocked: `git push` + `uv publish` next.
 
 ## Where to start
 
@@ -178,6 +178,61 @@ This is the only mechanism that removes subscriptions from dead HTTP sessions. T
 
 This is the canonical way to drive a resource handler through FastMCP from a test. Do not duplicate the helper per test file. See `tests/test_resources_*.py` for usage patterns.
 
+## Phase 5 patterns all future integration tests MUST follow
+
+These were discovered during Phase 5 implementation and apply to any future
+test that touches a real MT5 terminal.
+
+### 19. Sandbox idempotency DB and audit JSONL under tmp_path
+
+Same rule as unit tests (#8 above). An integration test that writes to the
+user's real `~/.local/share/mt5-mcp/audit.jsonl` is a defect — the audit log
+is the operator's record of intentional trading, not a test scratchpad.
+The `live_server` fixture in `tests/integration/conftest.py` is the canonical
+example: it writes a per-session config under `tmp_path_factory.mktemp(...)`
+with `[idempotency] path` and `[audit] path` redirected.
+
+### 20. Refuse to bulldoze unknown account state
+
+The `assert_clean_account` autouse fixture probes `get_positions` and
+`get_orders` once per session and refuses to start if either is non-empty.
+Future integration tests MUST NOT bypass this fixture. If a test legitimately
+needs an open position to start (e.g., testing modify_order), it should open
+the position itself in the test body and clean up via `opened_tickets`.
+
+### 21. BTCUSD primary, EURUSD fallback, market_open as a backstop
+
+The `probe_symbol` fixture picks BTCUSD when available so tests don't depend
+on the day of the week. EURUSD is the fallback for brokers without crypto.
+The `market_open` fixture skips market-state-dependent tests when the
+selected symbol's last tick is >5 min stale. Tests that don't need a fresh
+quote (`account_info`, `terminal_info`, `get_symbols`, etc.) MUST NOT request
+this fixture — it adds an unnecessary call and skip path.
+
+### 22. Crank auto_approve_notional in test config; never test approval gate live
+
+The consent gate is pure local logic. Re-validating it against a real broker
+costs trades and adds zero information beyond what Phase 2 unit tests cover.
+Set `[policy] auto_approve_notional = "1000000"` in the test config and let
+0.01-lot trades route through the unguarded path.
+
+### 23. No production code changes from integration tests
+
+Headless launch of the MT5 terminal is achieved by the fixture calling
+`mt5.initialize(login=..., password=..., server=...)` BEFORE `build_server()`.
+The subsequent `MT5Client.connect()` calls `mt5.initialize()` (no args) which
+mt5lib treats as a no-op-and-true on an already-initialised session. Do not
+add `login/password/server` to production config or `MT5Client` to support
+test fixtures — the production contract is "the operator launches and
+authenticates the terminal."
+
+## Phase 5 carryover
+
+- **Tier 3 expansion** (`modify_order`, `cancel_order`, error-path tests) deferred to a future phase if customer reports surface broker-specific bugs.
+- **Approval-flow live integration** deferred — consent gate is pure local logic and Phase 2 unit tests are exhaustive.
+- **GitHub Actions integration** deferred — self-hosted Windows runner with creds in GH secrets is heavy infrastructure for a solo project.
+- **Production-side headless terminal launch** deferred — Phase 5 fixtures pre-init the terminal directly. If a future user asks for systemd / NSSM service deployments, add `[mt5] login/password/server` config fields and wire them through `MT5Client.connect()`.
+
 ## Phase 3 carryover
 
 - **Plugin loader for third-party tools** — was in Phase 3 spec; moved to Phase 4, then deferred again to v1.1+ during Phase 4 scoping. No stub or scaffolding exists yet.
@@ -192,6 +247,7 @@ All items below were explicitly out of scope for v1.0; revisit as customer repor
 - **Auto-generated docs site** (was on the original Phase 4 list; deferred to v1.1+).
 - **Plugin loader for third-party tools** — no stub or scaffolding yet; deferred to v1.1+.
 - **Trusted Publishing GitHub Actions workflow** — manual `uv publish` worked for `1.0.0`; wire OIDC publishing if releases get frequent.
+- **Headless terminal launch in production config** — Phase 5 fixtures achieve this via direct `mt5.initialize(login=...)` before `build_server`. If a future user asks for production-side headless launch (e.g., for systemd / NSSM service deployments), add `[mt5] login/password/server` config fields and wire them through `MT5Client.connect()`. Out of scope for v1.0.
 - **All Phase 2/3 carryovers** still deferred (idempotency TTL sweeper, audit prune CLI, `pick_filling_mode` improvements, non-loopback HTTP bind, per-subscriber backpressure, dead-subscriber TTL sweeper, test migration off `_tool_manager.get_tool().fn`).
 - **`LICENCE` → `LICENSE` rename** — non-blocking; can roll into a future doc-only commit.
 - **`CONTRIBUTING.md`** — non-blocking; add when the first external contribution lands.

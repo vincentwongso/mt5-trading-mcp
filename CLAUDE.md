@@ -1,12 +1,12 @@
 # mt5-mcp — Agent Handover Notes
 
-**Status (last updated April 2026):** Phase 5 complete — `tests/integration/` suite ships with 9 read-tool live tests + 1 place_order/close_position lifecycle test against a real MT5 demo terminal. Phase 4 v1.0.0 packaging is unchanged; Phase 5 added zero production code (purely test scaffolding + docs). 243 passing unit tests + 11 integration tests (10 live-broker + 1 transport HTTP). PyPI publish of v1.0.0 unblocked: `git push` + `uv publish` next.
+**Status (last updated April 2026):** Phase 5 complete — `tests/integration/` suite ships with 9 read-tool live tests + 1 place_order/close_position lifecycle test against a real MT5 demo terminal. Phase 5 surfaced two real v1.0.0 production bugs (`pick_filling_mode` referencing nonexistent `mt5.SYMBOL_FILLING_*` attributes; missing retcode mapping for `10027` AutoTrading-disabled). Both fixed; version bumped to v1.0.1. 243 passing unit tests + 11 integration tests (10 live-broker + 1 transport HTTP). v1.0.1 PyPI publish unblocked once the lifecycle test goes green on Vincent's demo terminal (requires AutoTrading enabled in the MT5 toolbar).
 
 ## Where to start
 
 1. **Architecture spec:** `mt5-mcp-architecture.md` (single source of truth for design).
 2. **Phase 1 plan:** `docs/superpowers/plans/2026-04-24-phase-1-skeleton-and-read-tools.md` (TDD-style, every step has the actual code).
-3. **What's next:** Run `pytest -m integration -v` against a clean demo terminal to gate the deferred v1.0.0 release ops (`git push origin main && git push origin v1.0.0 && uv publish`). Then v1.1+ scoping (plugin loader, Tier 3 integration coverage, OIDC publishing). The Phase 5 spec lives at `docs/superpowers/specs/2026-04-28-phase-5-integration-testing-design.md`.
+3. **What's next:** Enable AutoTrading in MT5 (toolbar "AlgoTrading" button green) and re-run `pytest -m integration -v` against a clean demo terminal. Once green, tag `v1.0.1`, `git push origin main && git push origin v1.0.1`, then `uv build && uv publish`. Then v1.1+ scoping (plugin loader, Tier 3 integration coverage, OIDC publishing). The Phase 5 spec lives at `docs/superpowers/specs/2026-04-28-phase-5-integration-testing-design.md`; the v1.0.1 fix details are in `CHANGELOG.md`.
 
 ## What Phase 1 shipped
 

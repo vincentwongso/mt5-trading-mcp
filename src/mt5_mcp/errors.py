@@ -17,6 +17,12 @@ _RETCODE_MAP: dict[int, tuple[str, str, bool, bool]] = {
     10015: ("INVALID_PRICE", "Price invalid for this order type.", True, False),
     10018: ("MARKET_CLOSED", "Symbol's session is closed.", False, False),
     10019: ("INSUFFICIENT_MARGIN", "Not enough free margin for this trade.", False, True),
+    10027: (
+        "AUTO_TRADING_DISABLED",
+        "MT5 terminal has AutoTrading disabled. Click the 'AlgoTrading' "
+        "button in the MT5 toolbar so it turns green, then retry.",
+        True, True,
+    ),
 }
 
 

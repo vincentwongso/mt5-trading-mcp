@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from mt5_mcp.cli.doctor import run_doctor
+from mt5_mcp.cli.doctor import _resolve_probe_symbol, run_doctor
 from tests.fakes import FakeMT5, FakeSymbolInfo, FakeTerminalInfo, FakeTick
 
 
@@ -112,3 +112,110 @@ def test_doctor_smoke_trade_off_by_default(capsys, tmp_path, frozen_utc):
     rc = run_doctor(mt5_module=fake, probe_symbol="EURUSD", config_path=cfg)
     assert rc == 0
     assert len(fake.order_send_calls) == 0  # smoke trade NOT executed
+
+
+# --- _resolve_probe_symbol ---------------------------------------------------
+
+def test_resolve_picks_first_default_candidate_present():
+    # Broker has BTCUSD, EURUSD, USDJPY — picker prefers BTCUSD (top of list).
+    assert _resolve_probe_symbol("auto", ["EURUSD", "BTCUSD", "USDJPY"]) == "BTCUSD"
+
+
+def test_resolve_walks_candidate_list_in_order():
+    # No BTCUSD/ETHUSD; XAUUSD comes before USDJPY in the candidate list.
+    assert _resolve_probe_symbol("auto", ["USDJPY", "XAUUSD"]) == "XAUUSD"
+
+
+def test_resolve_falls_back_to_first_symbol_when_no_candidate_matches():
+    # Suffixed broker — none of the bare candidate names match.
+    assert _resolve_probe_symbol("auto", ["EURUSD.r", "GBPUSD.r"]) == "EURUSD.r"
+
+
+def test_resolve_returns_none_when_broker_has_no_symbols():
+    assert _resolve_probe_symbol("auto", []) is None
+
+
+def test_resolve_passes_explicit_symbol_through_unchanged():
+    # Explicit overrides win even when the symbol is missing on the broker
+    # (the user gets a SYMBOL_NOT_FOUND from the probe, by design).
+    assert _resolve_probe_symbol("EURUSD.r", ["BTCUSD"]) == "EURUSD.r"
+    assert _resolve_probe_symbol("EURUSD.r", []) == "EURUSD.r"
+
+
+# --- run_doctor end-to-end with auto symbol selection -----------------------
+
+def test_doctor_auto_picks_btcusd_when_available(capsys, tmp_path):
+    """Default probe_symbol='auto' picks BTCUSD over EURUSD when both exist."""
+    fake = FakeMT5()
+    fake._terminal_info = FakeTerminalInfo(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
+    )
+    btc_tick = FakeTick(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp()),
+        bid=60000.0, ask=60001.0,
+    )
+    fake._symbol_info["BTCUSD"] = FakeSymbolInfo(name="BTCUSD")
+    fake._symbol_info["EURUSD"] = FakeSymbolInfo(name="EURUSD")
+    fake._symbol_info_tick["BTCUSD"] = btc_tick
+    fake._symbol_info_tick["EURUSD"] = FakeTick(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
+    )
+    fake._symbols_get = (FakeSymbolInfo(name="BTCUSD"), FakeSymbolInfo(name="EURUSD"))
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+
+    rc = run_doctor(mt5_module=fake, config_path=cfg, check_streaming=False)
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "[INFO] Auto-selected probe symbol: BTCUSD" in captured.out
+    assert "[PASS] get_quote(BTCUSD)" in captured.out
+    assert "get_quote(EURUSD)" not in captured.out
+
+
+def test_doctor_auto_falls_back_to_suffixed_symbol(capsys, tmp_path):
+    """Broker that suffixes names (EURUSD.r) — auto picks the broker's first symbol."""
+    fake = FakeMT5()
+    fake._terminal_info = FakeTerminalInfo(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
+    )
+    fake._symbol_info["EURUSD.r"] = FakeSymbolInfo(name="EURUSD.r")
+    fake._symbol_info_tick["EURUSD.r"] = FakeTick(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
+    )
+    fake._symbols_get = (FakeSymbolInfo(name="EURUSD.r"),)
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+
+    rc = run_doctor(mt5_module=fake, config_path=cfg, check_streaming=False)
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "[INFO] Auto-selected probe symbol: EURUSD.r" in captured.out
+    assert "[PASS] get_quote(EURUSD.r)" in captured.out
+
+
+def test_doctor_skips_symbol_probes_when_broker_has_no_symbols(capsys, tmp_path):
+    """Empty broker catalogue — skip the symbol-dependent checks gracefully."""
+    fake = FakeMT5()
+    fake._terminal_info = FakeTerminalInfo(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
+    )
+    fake._symbols_get = ()
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+
+    rc = run_doctor(mt5_module=fake, config_path=cfg, check_streaming=False)
+    captured = capsys.readouterr()
+    # No symbols means no symbol-dependent FAILs; rc still 0 because the
+    # other checks pass and we explicitly skip rather than fail.
+    assert rc == 0
+    assert "[SKIP] symbol-dependent probes" in captured.out
+    assert "get_quote(" not in captured.out

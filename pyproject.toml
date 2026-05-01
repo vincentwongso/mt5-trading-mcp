@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mt5-mcp"
-version = "1.0.2"
+name = "mt5-trading-mcp"
+version = "1.0.3"
 description = "Model Context Protocol server wrapping the MetaTrader 5 Python library."
 readme = "README.md"
 license = { file = "LICENCE" }

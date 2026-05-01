@@ -4,9 +4,9 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
-## [Unreleased]
+## [1.0.3] - 2026-05-01
 
-Surface enrichment to support downstream reasoning skills (CFD trading skills consumer). Pure adapter additions — no new mt5lib calls beyond `copy_rates_from_pos` and `order_calc_margin`. Backwards-compatible: existing tools and resources unchanged; `SymbolInfo` gains 13 new fields (additive, no renames).
+Surface enrichment to support downstream reasoning skills (CFD trading skills consumer) plus a PyPI distribution rename. Pure adapter additions — no new mt5lib calls beyond `copy_rates_from_pos` and `order_calc_margin`. Backwards-compatible: existing tools and resources unchanged; `SymbolInfo` gains 13 new fields (additive, no renames).
 
 ### Added
 
@@ -23,6 +23,7 @@ Surface enrichment to support downstream reasoning skills (CFD trading skills co
 
 ### Changed
 
+- **PyPI distribution renamed `mt5-mcp` → `mt5-trading-mcp`.** The short name `mt5-mcp` was already taken on PyPI by an unrelated project (versions 0.4.0–0.5.2), which had quietly blocked every prior publish attempt. `1.0.3` is the first version actually published to PyPI; the `1.0.0`–`1.0.2` tags exist only as Git tags. Install command is now `pip install mt5-trading-mcp`. The CLI command (`mt5-mcp`), Python module (`mt5_mcp`), brand, repo URL, and storage paths are all unchanged — only the name on PyPI moves.
 - `FakeSymbolInfo` extended with the broker-side fields above (sane defaults so existing tests are unaffected). `FakeMT5` gains `_copy_rates_from_pos`, `_order_calc_margin` slots and `TIMEFRAME_*` constants. New `FakeRate` dataclass.
 - `mt5-market-data` skill SKILL.md updated to document the two new tools and the enriched `SymbolInfo`.
 

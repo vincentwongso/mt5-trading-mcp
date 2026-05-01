@@ -593,7 +593,7 @@ Connects to the terminal, runs through every tool's read path, prints a green/re
 
 ## 14. Distribution & versioning
 
-- **PyPI:** `pip install mt5-mcp`. Wheel includes everything; no native deps beyond `MetaTrader5` itself.
+- **PyPI:** `pip install mt5-trading-mcp`. Wheel includes everything; no native deps beyond `MetaTrader5` itself. The PyPI distribution name is `mt5-trading-mcp` (the short `mt5-mcp` was already taken on PyPI by an unrelated project); the CLI command, Python module (`mt5_mcp`), and project brand remain `mt5-mcp`.
 - **Source:** GitHub, MIT licensed.
 - **Releases:** SemVer. Breaking changes only on major bumps. Tool surface is stable from v1.0.
 - **Python support:** 3.10+ (matches `MetaTrader5` library's minimum).

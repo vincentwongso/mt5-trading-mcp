@@ -15,14 +15,16 @@ Model Context Protocol server wrapping the MetaTrader 5 Python library — expos
 From PyPI:
 
 ```bash
-pip install mt5-mcp
+pip install mt5-trading-mcp
 ```
 
 Or with [`uv`](https://docs.astral.sh/uv/):
 
 ```bash
-uv pip install mt5-mcp
+uv pip install mt5-trading-mcp
 ```
+
+> The PyPI distribution is `mt5-trading-mcp`, but the CLI command, Python module (`mt5_mcp`), and project brand are still `mt5-mcp`. The short name was already taken on PyPI by an unrelated project.
 
 ### From source (for contributors)
 
@@ -141,7 +143,7 @@ The repo ships with a project-scoped Claude Code setup so cloning is the entire 
 
 **To use:**
 
-1. Clone the repo and install the package into the Python that Claude Code will spawn (`uv sync --extra dev` from the repo root, or `pip install mt5-mcp` system-wide).
+1. Clone the repo and install the package into the Python that Claude Code will spawn (`uv sync --extra dev` from the repo root, or `pip install mt5-trading-mcp` system-wide).
 2. Launch the MT5 terminal and log into your broker.
 3. From the repo root, run `claude`. Confirm `mt5-mcp` shows up under `/mcp`.
 4. Ask the agent something like *"what's my account balance"* or *"show me the price of EURUSD"* — the read tools fire without a permission prompt; the `mt5-market-data` skill teaches the agent how to interpret the output.
@@ -228,7 +230,7 @@ Common case: you want your MT5 terminal running 24/7 on a server, but laptops sl
 Simplest setup. RDP into the VPS, install Python and the MetaTrader 5 terminal, then:
 
 ```powershell
-pip install mt5-mcp
+pip install mt5-trading-mcp
 python -m mt5_mcp doctor   # verify the terminal is reachable
 ```
 

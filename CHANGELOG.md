@@ -4,6 +4,24 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.0.4] - 2026-05-01
+
+Bugfix release. `mt5-mcp doctor` against a broker that doesn't expose a
+literal `EURUSD` symbol (suffixed names like `EURUSD.r`, crypto-only brokers,
+broker-specific naming) failed three checks (`get_quote`, `get_market_hours`,
+`streaming`) instead of finding a workable symbol on its own.
+
+### Fixed
+
+- `--probe-symbol` now defaults to `auto`. The picker walks `BTCUSD, ETHUSD,
+  EURUSD, XAUUSD, USDJPY, GBPUSD` in order, returns the first one the broker
+  actually exposes, and falls back to the broker's first listed symbol if
+  none of the candidates match. Brokers that expose no symbols at all get a
+  `[SKIP]` message rather than three FAILs. Explicit `--probe-symbol <X>`
+  still passes the symbol through unchanged (the user may want to see the
+  SYMBOL_NOT_FOUND error). The selected symbol is logged on a `[INFO]` line
+  so users can tell what was probed.
+
 ## [1.0.3] - 2026-05-01
 
 Surface enrichment to support downstream reasoning skills (CFD trading skills consumer) plus a PyPI distribution rename. Pure adapter additions — no new mt5lib calls beyond `copy_rates_from_pos` and `order_calc_margin`. Backwards-compatible: existing tools and resources unchanged; `SymbolInfo` gains 13 new fields (additive, no renames).

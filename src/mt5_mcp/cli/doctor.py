@@ -8,6 +8,16 @@ from typing import Any, Callable
 from mt5_mcp.server import build_server, reset_context_for_tests
 
 
+# When the user doesn't pass --probe-symbol, doctor tries these names against
+# the broker's catalogue in order and uses the first match. Crypto first so
+# weekend smoke-tests still find a streaming market; FX/metals/JPY-pair as
+# weekday fallbacks. Brokers that suffix names (EURUSD.r, BTCUSD#, etc.) miss
+# all candidates and trigger the "first available symbol" fallback.
+_DEFAULT_PROBE_CANDIDATES: tuple[str, ...] = (
+    "BTCUSD", "ETHUSD", "EURUSD", "XAUUSD", "USDJPY", "GBPUSD",
+)
+
+
 def _check(label: str, fn: Callable[[], Any]) -> bool:
     try:
         result = fn()
@@ -19,6 +29,25 @@ def _check(label: str, fn: Callable[[], Any]) -> bool:
     except Exception as exc:
         print(f"[FAIL] {label}: {type(exc).__name__}: {exc}")
         return False
+
+
+def _resolve_probe_symbol(requested: str, available: list[str]) -> str | None:
+    """Pick a probe symbol the broker actually exposes.
+
+    `requested != "auto"` is treated as an explicit user override and returned
+    unchanged — even if it's missing on the broker, so the user sees the
+    SYMBOL_NOT_FOUND failure they asked for.
+
+    For `"auto"`, try `_DEFAULT_PROBE_CANDIDATES` in order, then fall back to
+    the broker's first symbol. Returns `None` only if the broker has none.
+    """
+    if requested != "auto":
+        return requested
+    available_set = set(available)
+    for candidate in _DEFAULT_PROBE_CANDIDATES:
+        if candidate in available_set:
+            return candidate
+    return available[0] if available else None
 
 
 def _streaming_check(symbol: str) -> bool:
@@ -53,7 +82,7 @@ def _streaming_check(symbol: str) -> bool:
 def run_doctor(
     *,
     mt5_module: Any | None = None,
-    probe_symbol: str = "EURUSD",
+    probe_symbol: str = "auto",
     config_path: Any | None = None,
     smoke_trade: bool = False,
     check_streaming: bool = True,
@@ -69,45 +98,72 @@ def run_doctor(
     results.append(_check("ping", lambda: call("ping")))
     results.append(_check("get_terminal_info", lambda: call("get_terminal_info")))
     results.append(_check("get_account_info", lambda: call("get_account_info")))
-    results.append(_check("get_symbols", lambda: call("get_symbols")))
-    results.append(_check(f"get_quote({probe_symbol})", lambda: call("get_quote", symbol=probe_symbol)))
-    results.append(_check(f"get_market_hours({probe_symbol})", lambda: call("get_market_hours", symbol=probe_symbol)))
+
+    # get_symbols: capture the result so we can auto-pick a probe symbol from
+    # the broker's actual catalogue. Inlined instead of going through _check
+    # to avoid calling the tool twice.
+    symbols_result = call("get_symbols")
+    if isinstance(symbols_result, dict) and "error" in symbols_result:
+        print(
+            f"[FAIL] get_symbols: {symbols_result['error']['code']} — "
+            f"{symbols_result['error']['message']}"
+        )
+        results.append(False)
+        available_names: list[str] = []
+    else:
+        print("[PASS] get_symbols")
+        results.append(True)
+        available_names = [s.name for s in symbols_result]
+
+    probe = _resolve_probe_symbol(probe_symbol, available_names)
+    if probe_symbol == "auto" and probe is not None:
+        print(f"[INFO] Auto-selected probe symbol: {probe}")
+
+    if probe is None:
+        print("[SKIP] symbol-dependent probes — broker exposes no symbols")
+    else:
+        results.append(_check(f"get_quote({probe})", lambda: call("get_quote", symbol=probe)))
+        results.append(_check(f"get_market_hours({probe})", lambda: call("get_market_hours", symbol=probe)))
+
     results.append(_check("get_positions", lambda: call("get_positions")))
     results.append(_check("get_orders", lambda: call("get_orders")))
 
-    if check_streaming:
-        results.append(_streaming_check(probe_symbol))
+    if check_streaming and probe is not None:
+        results.append(_streaming_check(probe))
 
     if smoke_trade:
-        place = tm.get_tool("place_order").fn(
-            symbol=probe_symbol, side="buy", type="market", volume="0.01",
-            idempotency_key=f"doctor-{int(time.time())}",
-        )
-        if place.get("error") is not None:
-            print(f"[FAIL] place_order: {place['error']['code']}")
-            results.append(False)
-        elif "request_id" in place:
-            print(
-                f"[SKIP] place_order returned approval preview "
-                f"(auto_approve_notional too low for smoke?)"
-            )
-            # Treat skip as neither pass nor fail; don't flip the rc.
+        if probe is None:
+            print("[SKIP] smoke-trade — broker exposes no symbols")
         else:
-            ticket = place["ticket"]
-            print(f"[PASS] place_order ticket={ticket}")
-
-            close = tm.get_tool("close_position").fn(
-                ticket=ticket,
-                idempotency_key=f"doctor-close-{int(time.time())}",
+            place = tm.get_tool("place_order").fn(
+                symbol=probe, side="buy", type="market", volume="0.01",
+                idempotency_key=f"doctor-{int(time.time())}",
             )
-            if close.get("error") is not None or not close.get("success"):
-                print(
-                    f"[FAIL] close_position: "
-                    f"{close.get('error', {}).get('code', '?')}"
-                )
+            if place.get("error") is not None:
+                print(f"[FAIL] place_order: {place['error']['code']}")
                 results.append(False)
+            elif "request_id" in place:
+                print(
+                    f"[SKIP] place_order returned approval preview "
+                    f"(auto_approve_notional too low for smoke?)"
+                )
+                # Treat skip as neither pass nor fail; don't flip the rc.
             else:
-                print(f"[PASS] close_position ticket={ticket}")
+                ticket = place["ticket"]
+                print(f"[PASS] place_order ticket={ticket}")
+
+                close = tm.get_tool("close_position").fn(
+                    ticket=ticket,
+                    idempotency_key=f"doctor-close-{int(time.time())}",
+                )
+                if close.get("error") is not None or not close.get("success"):
+                    print(
+                        f"[FAIL] close_position: "
+                        f"{close.get('error', {}).get('code', '?')}"
+                    )
+                    results.append(False)
+                else:
+                    print(f"[PASS] close_position ticket={ticket}")
 
     return 0 if all(results) else 1
 
@@ -122,8 +178,11 @@ def main(argv: list[str] | None = None) -> int:
              "terminal. WARNING: places a real (micro-lot) order on the broker.",
     )
     parser.add_argument(
-        "--probe-symbol", default="EURUSD",
-        help="Symbol used for read-tool probes (default: EURUSD).",
+        "--probe-symbol", default="auto",
+        help="Symbol used for read-tool probes. Default 'auto' picks the first "
+             "of BTCUSD, ETHUSD, EURUSD, XAUUSD, USDJPY, GBPUSD that the broker "
+             "exposes; if none match, the broker's first symbol is used. Pass an "
+             "explicit symbol (e.g. 'EURUSD.r') to override.",
     )
     parser.add_argument(
         "--no-streaming-check", action="store_true",

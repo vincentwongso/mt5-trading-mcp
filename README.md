@@ -29,8 +29,8 @@ uv pip install mt5-trading-mcp
 ### From source (for contributors)
 
 ```bash
-git clone https://github.com/vincentwongso/mt5-mcp.git
-cd mt5-mcp
+git clone https://github.com/vincentwongso/mt5-trading-mcp.git
+cd mt5-trading-mcp
 uv sync --extra dev
 ```
 
@@ -66,7 +66,7 @@ python -m mt5_mcp export-symbols --output symbols.csv
 python -m mt5_mcp serve
 ```
 
-To register the server with an MCP client, see the [example configs](https://github.com/vincentwongso/mt5-mcp/tree/main/examples/clients) — drop-in JSON snippets for Claude Desktop and Cursor.
+To register the server with an MCP client, see the [example configs](https://github.com/vincentwongso/mt5-trading-mcp/tree/main/examples/clients) — drop-in JSON snippets for Claude Desktop and Cursor.
 
 ## What it does
 
@@ -109,7 +109,7 @@ A subscribed client receives a `notifications/resources/updated` message when th
 
 ## MCP client setup
 
-Drop-in config snippets are in [`examples/clients/`](https://github.com/vincentwongso/mt5-mcp/tree/main/examples/clients):
+Drop-in config snippets are in [`examples/clients/`](https://github.com/vincentwongso/mt5-trading-mcp/tree/main/examples/clients):
 
 - **Claude Desktop, stdio:** `examples/clients/claude-desktop-stdio.json`. Paste the inner `mcpServers` entry into `%APPDATA%\Claude\claude_desktop_config.json`.
 - **Claude Desktop, HTTP:** `examples/clients/claude-desktop-http.json`. For when `mt5-mcp serve --transport http` is already running.
@@ -158,7 +158,7 @@ Optional. Default config path:
 - Windows: `%APPDATA%\mt5-mcp\config.toml`
 - Linux/WSL: `$XDG_CONFIG_HOME/mt5-mcp/config.toml` (falls back to `~/.config/mt5-mcp/config.toml`)
 
-The server starts with built-in defaults if the file is absent. Full schema documented in the [architecture spec, §7](https://github.com/vincentwongso/mt5-mcp/blob/main/mt5-mcp-architecture.md).
+The server starts with built-in defaults if the file is absent. Full schema documented in the [architecture spec, §7](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/mt5-mcp-architecture.md).
 
 Minimal example:
 
@@ -257,7 +257,7 @@ On your local machine, open an SSH tunnel that forwards the loopback port:
 ssh -L 8765:localhost:8765 user@vps-host
 ```
 
-Now `http://localhost:8765/mcp` on your laptop reaches the MCP on the VPS — without ever exposing the HTTP port to the public internet. Use the [`claude-desktop-http.json`](https://github.com/vincentwongso/mt5-mcp/tree/main/examples/clients/claude-desktop-http.json) example to register it with Claude Desktop.
+Now `http://localhost:8765/mcp` on your laptop reaches the MCP on the VPS — without ever exposing the HTTP port to the public internet. Use the [`claude-desktop-http.json`](https://github.com/vincentwongso/mt5-trading-mcp/tree/main/examples/clients/claude-desktop-http.json) example to register it with Claude Desktop.
 
 This is the secure default for remote MT5 terminals. Direct non-loopback HTTP binding is intentionally **not** supported in v1.0 — it would require a TLS termination story and tighter auth than a single bearer token. If you need it for a real deployment, please open an issue describing the use case.
 
@@ -276,15 +276,15 @@ For Pattern A's HTTP transport or Pattern B's VPS-side server, you'll want the p
 
 Mutating actions above the configured `auto_approve_notional` (or that widen stops) require explicit human approval via the `ApprovalPreview` flow. Every mutating call is recorded in an append-only audit JSONL log.
 
-For vulnerability disclosure, see [`SECURITY.md`](https://github.com/vincentwongso/mt5-mcp/blob/main/SECURITY.md).
+For vulnerability disclosure, see [`SECURITY.md`](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/SECURITY.md).
 
 ## Development
 
 Clone and sync:
 
 ```bash
-git clone https://github.com/vincentwongso/mt5-mcp.git
-cd mt5-mcp
+git clone https://github.com/vincentwongso/mt5-trading-mcp.git
+cd mt5-trading-mcp
 uv sync --extra dev
 ```
 
@@ -330,8 +330,8 @@ fallback) and closes it. Use a demo account, not a live one.
 
 ## Architecture
 
-The full design is in [`mt5-mcp-architecture.md`](https://github.com/vincentwongso/mt5-mcp/blob/main/mt5-mcp-architecture.md). Phase implementation plans live under [`docs/superpowers/plans/`](https://github.com/vincentwongso/mt5-mcp/tree/main/docs/superpowers/plans).
+The full design is in [`mt5-mcp-architecture.md`](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/mt5-mcp-architecture.md). Phase implementation plans live under [`docs/superpowers/plans/`](https://github.com/vincentwongso/mt5-trading-mcp/tree/main/docs/superpowers/plans).
 
 ## Licence
 
-MIT — see [`LICENCE`](https://github.com/vincentwongso/mt5-mcp/blob/main/LICENCE).
+MIT — see [`LICENCE`](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/LICENCE).

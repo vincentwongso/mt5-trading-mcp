@@ -40,9 +40,9 @@ dev = [
 mt5-mcp = "mt5_mcp.__main__:main"
 
 [project.urls]
-Repository = "https://github.com/vincentwongso/mt5-mcp"
-Issues = "https://github.com/vincentwongso/mt5-mcp/issues"
-Changelog = "https://github.com/vincentwongso/mt5-mcp/blob/main/CHANGELOG.md"
+Repository = "https://github.com/vincentwongso/mt5-trading-mcp"
+Issues = "https://github.com/vincentwongso/mt5-trading-mcp/issues"
+Changelog = "https://github.com/vincentwongso/mt5-trading-mcp/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mt5_mcp"]

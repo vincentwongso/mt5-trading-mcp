@@ -133,22 +133,22 @@ def test_run_http_appends_trusted_hosts_to_default_allowlist():
     """Non-empty trusted_hosts is appended (not replaced) so localhost still works."""
     mcp = _StubFastMCP()
     run(mcp, transport="http", config=_cfg(
-        trusted_hosts=["fxvps-790527.mulley-castor.ts.net", "another.host"],
+        trusted_hosts=["example.host.com", "another.host"],
     ))
     assert mcp.settings.transport_security.allowed_hosts == [
         "127.0.0.1:*", "localhost:*", "[::1]:*",
-        "fxvps-790527.mulley-castor.ts.net", "another.host",
+        "example.host.com", "another.host",
     ]
 
 
 def test_run_http_appends_trusted_origins_to_default_allowlist():
     mcp = _StubFastMCP()
     run(mcp, transport="http", config=_cfg(
-        trusted_origins=["https://fxvps-790527.mulley-castor.ts.net"],
+        trusted_origins=["https://example.host.com"],
     ))
     assert mcp.settings.transport_security.allowed_origins == [
         "http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*",
-        "https://fxvps-790527.mulley-castor.ts.net",
+        "https://example.host.com",
     ]
 
 

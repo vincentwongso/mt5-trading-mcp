@@ -4,6 +4,33 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.0.5] - 2026-05-02
+
+Bugfix release. Surfaced when the HTTP transport sat behind a Tailscale serve
+reverse proxy on a Windows VPS — the proxy forwarded the original
+`Host: <machine>.<tailnet>.ts.net` header, which FastMCP's DNS-rebinding-
+protection middleware rejected with `421 Misdirected Request` and an
+`Invalid Host header` warning. Same shape would hit anyone fronting the MCP
+with Cloudflare Tunnel, ngrok, nginx with `proxy_set_header Host $host`,
+etc.
+
+### Added
+
+- `[transport.http] trusted_hosts` and `[transport.http] trusted_origins`
+  config keys (both `list[str]`, default `[]`). Values are *appended* to
+  FastMCP's existing localhost defaults (`127.0.0.1:*`, `localhost:*`,
+  `[::1]:*`) — local-only setups need no config change. Operators behind a
+  reverse proxy add their public-facing hostname:
+
+  ```toml
+  [transport.http]
+  trusted_hosts = ["REDACTED_HOST"]
+  trusted_origins = ["https://REDACTED_HOST"]
+  ```
+
+  DNS-rebinding protection itself stays on (FastMCP default); only the
+  allow list is extended.
+
 ## [1.0.4] - 2026-05-01
 
 Bugfix release. `mt5-mcp doctor` against a broker that doesn't expose a

@@ -66,6 +66,13 @@ class TransportHTTPSection(_Sub):
     host: str = "127.0.0.1"
     port: int = Field(8765, ge=1, le=65535)
     auth_token: str = ""
+    # Hostnames to add to FastMCP's DNS-rebinding-protection allow list.
+    # FastMCP defaults already include 127.0.0.1, localhost, [::1] (with
+    # wildcard ports). Add entries here when the MCP sits behind a reverse
+    # proxy that forwards a non-loopback Host header — e.g. Tailscale serve
+    # at https://<machine>.<tailnet>.ts.net.
+    trusted_hosts: list[str] = Field(default_factory=list)
+    trusted_origins: list[str] = Field(default_factory=list)
 
 
 class TransportSection(_Sub):

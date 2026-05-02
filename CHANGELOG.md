@@ -4,6 +4,22 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.0.7] - 2026-05-02
+
+Bugfix release. `load_config` now tolerates a UTF-8 BOM at the start of
+`config.toml`. Surfaced when a Windows VPS user edited the file in Notepad
+and got `tomllib.TOMLDecodeError: Invalid statement (at line 1, column 1)`
+on next start — the BOM bytes (`EF BB BF`) parse as garbage before the first
+`[`. Same trap fires for anyone using PS 5.1's `Set-Content -Encoding UTF8`,
+which also writes a BOM by default.
+
+### Fixed
+
+- `load_config` reads `config.toml` with the `utf-8-sig` codec instead of
+  bare `utf-8`. `utf-8-sig` strips the BOM if present and behaves
+  identically to `utf-8` otherwise — no behavior change for files written
+  without a BOM.
+
 ## [1.0.6] - 2026-05-02
 
 Docs-only cleanup release. No functional changes versus `1.0.5`; the bundled

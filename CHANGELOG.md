@@ -24,8 +24,8 @@ etc.
 
   ```toml
   [transport.http]
-  trusted_hosts = ["REDACTED_HOST"]
-  trusted_origins = ["https://REDACTED_HOST"]
+  trusted_hosts = ["example.host.com"]
+  trusted_origins = ["https://example.host.com"]
   ```
 
   DNS-rebinding protection itself stays on (FastMCP default); only the

@@ -75,6 +75,16 @@ def run(mcp: Any, *, transport: str, config: Config) -> None:
         # Mutate settings here so the correct address is used by uvicorn.
         mcp.settings.host = host
         mcp.settings.port = port
+        # Extend FastMCP's DNS-rebinding-protection allow list with operator-
+        # configured hosts. FastMCP defaults already cover localhost variants;
+        # appending lets reverse proxies (Tailscale serve, Cloudflare Tunnel,
+        # etc.) forward Host headers like `<machine>.<tailnet>.ts.net` without
+        # tripping the 421 "Invalid Host header" guard.
+        sec = mcp.settings.transport_security
+        if config.transport.http.trusted_hosts:
+            sec.allowed_hosts = list(sec.allowed_hosts) + list(config.transport.http.trusted_hosts)
+        if config.transport.http.trusted_origins:
+            sec.allowed_origins = list(sec.allowed_origins) + list(config.transport.http.trusted_origins)
         token = config.transport.http.auth_token
         if token:
             mcp.add_middleware(_make_bearer_middleware_factory(token))

@@ -4,6 +4,12 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.0.6] - 2026-05-02
+
+Docs-only cleanup release. No functional changes versus `1.0.5`; the bundled
+`CHANGELOG.md` and `tests/test_transport.py` no longer reference a specific
+deployment hostname (replaced with `example.host.com`).
+
 ## [1.0.5] - 2026-05-02
 
 Bugfix release. Surfaced when the HTTP transport sat behind a Tailscale serve

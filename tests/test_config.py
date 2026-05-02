@@ -58,6 +58,20 @@ def test_load_rejects_invalid(tmp_path: Path):
         load_config(p)
 
 
+def test_load_strips_utf8_bom(tmp_path: Path):
+    """Config files written by Notepad / `Set-Content -Encoding UTF8` on
+    Windows PS 5.1 carry a UTF-8 BOM. `tomllib` rejects BOMs as syntax
+    errors, so `load_config` must read with `utf-8-sig` to strip them."""
+    p = tmp_path / "config.toml"
+    # Write the BOM bytes (EF BB BF) followed by a valid minimal TOML body.
+    p.write_bytes(b"\xef\xbb\xbf" + MINIMAL_TOML.encode("utf-8"))
+    cfg = load_config(p)
+    assert isinstance(cfg, Config)
+    # Same field as the no-BOM happy-path test, proving the BOM was stripped
+    # before parsing rather than just suppressed.
+    assert cfg.policy.auto_approve_notional == Decimal("1000.00")
+
+
 def test_load_missing_file_raises(tmp_path: Path):
     with pytest.raises(FileNotFoundError):
         load_config(tmp_path / "nope.toml")

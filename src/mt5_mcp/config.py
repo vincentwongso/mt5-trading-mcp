@@ -130,7 +130,13 @@ def load_config(path: Path | None = None) -> Config:
             return Config()
     if not path.exists():
         raise FileNotFoundError(path)
-    raw = tomllib.loads(path.read_text(encoding="utf-8"))
+    # `utf-8-sig` strips a leading UTF-8 BOM (EF BB BF) if present; otherwise
+    # behaves identically to `utf-8`. Notepad and Windows PowerShell 5.1's
+    # `Set-Content -Encoding UTF8` both write BOMs by default — without this
+    # the user gets a confusing `tomllib.TOMLDecodeError: Invalid statement
+    # (at line 1, column 1)` because the BOM bytes parse as garbage before
+    # the first `[`.
+    raw = tomllib.loads(path.read_text(encoding="utf-8-sig"))
     try:
         return Config(**raw)
     except (ValidationError, TypeError) as exc:

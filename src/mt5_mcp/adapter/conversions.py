@@ -424,8 +424,35 @@ def order_result_from_mt5_response(
 ) -> "OrderResult":
     """Convert mt5.order_send()'s return into a typed OrderResult."""
     from mt5_mcp.errors import error_for_retcode
-    from mt5_mcp.types import OrderResult
+    from mt5_mcp.types import ErrorDetail, OrderResult
 
+    if raw is None:
+        # mt5lib's order_send returns None when it rejects the request before
+        # forwarding to the broker (e.g. invalid stops, terminal disconnected,
+        # AutoTrading off). Convert to a typed envelope rather than letting an
+        # AttributeError on .retcode escape as INTERNAL_ERROR.
+        return OrderResult(
+            success=False,
+            ticket=None,
+            action=action,
+            symbol=symbol,
+            volume=request_volume,
+            price_filled=None,
+            request_echo=request_echo,
+            replayed=False,
+            error=ErrorDetail(
+                code="MT5_NULL_RESPONSE",
+                message=(
+                    "mt5lib order_send returned None — request rejected before "
+                    "reaching the broker (check terminal connection, AutoTrading "
+                    "toggle, stops_level/freeze_level, and symbol tradeability)."
+                ),
+                retryable=False,
+                requires_human=True,
+                details={"action": action, "symbol": symbol},
+            ),
+            server_response_code=0,  # 0 is not a real MT5 retcode; sentinel for null response
+        )
     retcode = int(raw.retcode)
     # 10009 = DONE (full fill); 10010 = DONE_PARTIAL (partial fill, also a success).
     success = retcode in (10009, 10010)

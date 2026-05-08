@@ -4,6 +4,31 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.0.8] - 2026-05-08
+
+Bugfix release. Surfaced when a downstream agent (`trader_cli` driving Stage 3
+position management against a live MT5 demo) attempted to trail an XAGUSD.z
+stop-loss to breakeven and the mutating tool returned `INTERNAL_ERROR:
+NoneType object has no attribute retcode` instead of a typed broker envelope.
+Same trap fires for any caller of `place_order`, `modify_order`,
+`cancel_order`, or `close_position` whenever `mt5lib`'s `order_send` rejects
+the request locally (invalid stops, terminal disconnected, AutoTrading
+toggled off mid-session, symbol freeze-level breach, etc.) — `mt5lib` returns
+`None` rather than a result struct, and the conversion layer's
+`int(raw.retcode)` raised `AttributeError` before the `@error_envelope`
+decorator could map a retcode.
+
+### Fixed
+
+- `order_result_from_mt5_response` now detects `raw is None` and returns a
+  typed `OrderResult{success=False, error.code="MT5_NULL_RESPONSE", ...}`.
+  All four mutating tools benefit; agents see a deterministic envelope instead
+  of an opaque `INTERNAL_ERROR`. The sentinel `server_response_code=0` is
+  used (not a real `mt5lib` retcode) since the field is required `int` and
+  there is no broker response to forward.
+- New unit test `test_order_result_from_mt5_response_none_raw` pins the
+  envelope shape so regressions surface immediately.
+
 ## [1.0.7] - 2026-05-02
 
 Bugfix release. `load_config` now tolerates a UTF-8 BOM at the start of

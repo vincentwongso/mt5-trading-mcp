@@ -341,6 +341,35 @@ def test_order_result_from_mt5_response_rejected():
     assert result.server_response_code == TRADE_RETCODE_REJECT
 
 
+def test_order_result_from_mt5_response_none_raw():
+    """mt5lib returns None when it rejects the request before sending it.
+
+    Older versions of this code did int(raw.retcode) without checking, so a
+    None response surfaced as INTERNAL_ERROR: "NoneType has no attribute
+    retcode" via the @error_envelope decorator. We now produce a typed
+    MT5_NULL_RESPONSE envelope so callers can distinguish broker failures
+    from library/terminal failures.
+    """
+    from decimal import Decimal
+    from mt5_mcp.adapter.conversions import order_result_from_mt5_response
+
+    result = order_result_from_mt5_response(
+        None, action="modify_order", symbol="XAGUSD",
+        request_volume=Decimal("0.49"),
+        request_echo={"ticket": 88384786, "sl": "78.674"},
+    )
+    assert result.success is False
+    assert result.ticket is None
+    assert result.action == "modify_order"
+    assert result.symbol == "XAGUSD"
+    assert result.volume == Decimal("0.49")
+    assert result.price_filled is None
+    assert result.server_response_code == 0
+    assert result.error is not None
+    assert result.error.code == "MT5_NULL_RESPONSE"
+    assert "None" in result.error.message
+
+
 def test_order_result_from_mt5_response_partial_fill():
     from decimal import Decimal
     from mt5_mcp.adapter.conversions import order_result_from_mt5_response

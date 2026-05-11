@@ -179,31 +179,35 @@ class MT5Client:
 
         Some MT5 builds return ``None`` from ``terminal_info()`` even when
         the terminal is fully connected and quotes/account_info both work.
-        Reporting that as ``ok=false`` misleads cron/monitoring. Mirrors
-        the layered fallback ``connect()`` uses for broker-offset
-        derivation:
+        Reporting that as ``ok=false`` misleads cron/monitoring.
 
-        1. ``terminal_info()`` non-None
-        2. ``account_info()`` with populated ``login``
+        Each layer routes through ``self.call()`` so a transient
+        NOT_INITIALIZED state triggers a reinit attempt before the layer
+        gives up — same recovery behavior as every other read tool. The
+        earlier rule "ping bypasses retry to detect raw IPC state" gave
+        agents a probe that lied about usability whenever the IPC needed
+        a transparent reconnect; the layered fallback already provides
+        per-source diagnostics via the ``via`` field, which is more
+        useful in practice.
+
+        1. ``terminal_info()`` non-None → ``via="terminal_info"``
+        2. ``account_info()`` with populated ``login`` → ``via="account_info"``
         3. Fresh tick (<``_FRESH_TICK_SECONDS``) on any
-           ``_BROKER_TIME_PROBE_SYMBOLS`` symbol — converts ``tick.time``
-           through the cached broker offset before comparing to real UTC,
-           same as ``_derive_broker_offset``.
+           ``_BROKER_TIME_PROBE_SYMBOLS`` symbol → ``via="tick_probe"``
 
-        Returns ``(ok, latency_ms, via)`` where ``via`` names the layer
-        that answered or is ``None`` on failure.
+        Returns ``(ok, latency_ms, via)``; ``via`` is ``None`` on failure.
         """
         t0 = time.perf_counter()
 
         try:
-            ti = self._mt5.terminal_info()
+            ti = self.call(lambda m: m.terminal_info())
             if ti is not None:
                 return True, int((time.perf_counter() - t0) * 1000), "terminal_info"
         except Exception:
             pass
 
         try:
-            acct = self._mt5.account_info()
+            acct = self.call(lambda m: m.account_info())
             if acct is not None and getattr(acct, "login", 0):
                 return True, int((time.perf_counter() - t0) * 1000), "account_info"
         except Exception:
@@ -212,7 +216,7 @@ class MT5Client:
         now_utc = datetime.now(timezone.utc)
         for sym in _BROKER_TIME_PROBE_SYMBOLS:
             try:
-                tick = self._mt5.symbol_info_tick(sym)
+                tick = self.call(lambda m: m.symbol_info_tick(sym))
             except Exception:
                 continue
             if tick is None:

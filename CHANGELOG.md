@@ -4,6 +4,39 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.0.11] - 2026-05-11
+
+Bugfix release. v1.0.10's layered ping fallback fixed the
+`terminal_info()`-only false negative, but each layer still called
+mt5lib directly (bypassing the reinit-aware `self.call()` wrapper) on
+the assumption that "ping should report raw IPC state." In practice,
+when the IPC was in a NOT_INITIALIZED state that other read tools
+transparently recover from, all three ping layers raised/returned None
+in lockstep — so `ping.ok=false` while `get_account_info`,
+`get_terminal_info`, and quotes all worked. Confirmed on the Fintrix
+demo / FXVPS deployment immediately after upgrading to 1.0.10.
+
+### Fixed
+
+- `MT5Client.ping()` now routes each layer through `self.call(...)`,
+  picking up the same transparent NOT_INITIALIZED → reinit → retry
+  behavior every other read tool has. The earlier "ping bypasses
+  retry" rule is dropped — the layered `via` field already supplies
+  the per-source diagnostic that probe-vs-recovered consumers would
+  have wanted from a raw probe.
+- New regression test
+  `test_ping_recovers_from_not_initialized_via_call_wrapper` pins the
+  recovery path: a terminal_info() call that returns None+NOT_INITIALIZED
+  on the first attempt triggers an in-wrapper reinit and the retry
+  succeeds, surfacing `ok=true`, `via="terminal_info"`.
+
+### Changed (docs)
+
+- `CLAUDE.md` items #1 (`error_envelope` is tools-only) and #2b
+  (`ctx.client.call()` as canonical access pattern) updated to remove
+  the obsolete "ping bypasses retry" carve-out and reference the
+  v1.0.11 routing change.
+
 ## [1.0.10] - 2026-05-11
 
 Bugfix release. Surfaced when an MM cron monitor treated

@@ -36,13 +36,31 @@ def test_ping_returns_ok_and_latency(server_and_mt5):
     out = _call(server, "ping")
     assert out["ok"] is True
     assert out["latency_ms"] >= 0
+    assert out["via"] == "terminal_info"
 
 
-def test_ping_returns_false_when_terminal_gone(server_and_mt5):
+def test_ping_via_account_info_when_terminal_info_returns_none(server_and_mt5):
+    """Regression for the v1.0.8 false-negative: with a flaky MT5 build
+    that returns None from terminal_info() but a working account_info(),
+    ping must surface ok=true and via=account_info instead of the old
+    misleading ok=false."""
     server, fake = server_and_mt5
     fake._terminal_info = None
     out = _call(server, "ping")
+    assert out["ok"] is True
+    assert out["via"] == "account_info"
+
+
+def test_ping_returns_false_when_all_layers_fail(server_and_mt5):
+    """Only when every layer (terminal_info, account_info, tick probe)
+    is unavailable should ping report unhealthy."""
+    server, fake = server_and_mt5
+    fake._terminal_info = None
+    fake._account_info = None
+    fake._symbol_info_tick = {}
+    out = _call(server, "ping")
     assert out["ok"] is False
+    assert "via" not in out
 
 
 def test_get_terminal_info_populates_fields(server_and_mt5):

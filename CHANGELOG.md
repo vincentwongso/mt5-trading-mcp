@@ -4,6 +4,34 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.0.10] - 2026-05-11
+
+Bugfix release. Surfaced when an MM cron monitor treated
+`mt5-mcp__ping` `{"ok": false}` as terminal-down even though
+`get_account_info`, quotes, and mutating tools all worked. Root cause:
+the `ping` tool's only signal was `mt5.terminal_info()`, which some MT5
+builds (notably v5.0.3815+ on the Fintrix demo / FXVPS deployment)
+return as `None` despite a healthy session. The connect-time
+broker-offset derivation already has a layered fallback for the same
+quirk; `ping` was the lone single-source health check.
+
+### Fixed
+
+- `MT5Client.ping()` now uses a layered fallback mirroring
+  `_derive_broker_offset`: (1) `terminal_info()` non-None, (2)
+  `account_info()` with populated `login`, (3) a fresh tick
+  (`<_FRESH_TICK_SECONDS`) on any `_BROKER_TIME_PROBE_SYMBOLS` symbol.
+  Only when every layer is unavailable does `ping` report `ok=false`.
+- Return shape extended from `(ok, latency_ms)` to `(ok, latency_ms,
+  via)` where `via` names the layer that answered (`terminal_info`,
+  `account_info`, `tick_probe`) or is `None` on failure. The MCP tool
+  surfaces `via` in its response when present so monitors can
+  distinguish "happy on the primary signal" from "primary flaked,
+  recovered via fallback".
+- Four new unit tests cover each layer plus the stale-tick rejection
+  case; the existing "false when disconnected" test was reworded as
+  "false when all layers fail" to match the new contract.
+
 ## [1.0.9] - 2026-05-11
 
 Bugfix release. Surfaced when a downstream Stage 2 agent (`trader_cli`

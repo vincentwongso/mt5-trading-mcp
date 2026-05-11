@@ -99,16 +99,74 @@ def test_call_reinit_fails_hard_when_reinit_broken(client: MT5Client, fake_mt5: 
 
 def test_ping_reports_latency(client: MT5Client, fake_mt5: FakeMT5, frozen_utc):
     client.connect()
-    ok, ms = client.ping()
+    ok, ms, via = client.ping()
     assert ok is True
     assert ms >= 0
+    assert via == "terminal_info"
 
 
-def test_ping_false_when_disconnected(fake_mt5: FakeMT5, frozen_utc):
+def test_ping_falls_back_to_account_info_when_terminal_info_none(
+    client: MT5Client, fake_mt5: FakeMT5, frozen_utc,
+):
+    """Regression for the v1.0.8 false-negative: some MT5 builds return
+    None from terminal_info() even when the terminal is fully connected.
+    ping must consult account_info before reporting unhealthy."""
+    client.connect()
+    fake_mt5._terminal_info = None
+    ok, _, via = client.ping()
+    assert ok is True
+    assert via == "account_info"
+
+
+def test_ping_falls_back_to_tick_probe_when_terminal_and_account_unavailable(
+    fake_mt5: FakeMT5, frozen_utc,
+):
+    """When both terminal_info() and account_info() return None but the
+    broker is still streaming quotes, ping should treat that as healthy.
+
+    Uses a fresh MT5Client without calling connect() so broker_offset_minutes
+    stays at 0 (default); the tick freshness check then compares broker-epoch
+    directly against frozen real-UTC."""
+    from datetime import datetime, timezone
+    from tests.fakes import FakeTick
     c = MT5Client(mt5_module=fake_mt5)
     fake_mt5._terminal_info = None
-    ok, _ = c.ping()
+    fake_mt5._account_info = None
+    fresh_epoch = int(datetime(2026, 4, 21, 10, 0, tzinfo=timezone.utc).timestamp())
+    fake_mt5._symbol_info_tick = {
+        "BTCUSD": FakeTick(time=fresh_epoch, bid=50000.0, ask=50001.0),
+    }
+    ok, _, via = c.ping()
+    assert ok is True
+    assert via == "tick_probe"
+
+
+def test_ping_rejects_stale_tick(fake_mt5: FakeMT5, frozen_utc):
+    """A tick older than _FRESH_TICK_SECONDS (5min) is not a healthy signal —
+    the terminal could be connected to a frozen quote stream."""
+    from datetime import datetime, timezone
+    from tests.fakes import FakeTick
+    c = MT5Client(mt5_module=fake_mt5)
+    fake_mt5._terminal_info = None
+    fake_mt5._account_info = None
+    stale_epoch = int(datetime(2026, 4, 21, 9, 0, tzinfo=timezone.utc).timestamp())  # 1h before frozen now
+    fake_mt5._symbol_info_tick = {
+        "BTCUSD": FakeTick(time=stale_epoch, bid=50000.0, ask=50001.0),
+    }
+    ok, _, via = c.ping()
     assert ok is False
+    assert via is None
+
+
+def test_ping_false_when_all_layers_fail(fake_mt5: FakeMT5, frozen_utc):
+    """Genuinely disconnected terminal: no layer can answer."""
+    c = MT5Client(mt5_module=fake_mt5)
+    fake_mt5._terminal_info = None
+    fake_mt5._account_info = None
+    fake_mt5._symbol_info_tick = {}
+    ok, _, via = c.ping()
+    assert ok is False
+    assert via is None
 
 
 def test_connect_falls_back_when_terminal_info_lacks_time(fake_mt5: FakeMT5, frozen_utc, caplog):

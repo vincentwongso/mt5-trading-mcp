@@ -18,12 +18,18 @@ def register(mcp: FastMCP) -> None:
     def ping() -> dict[str, Any]:
         """Health check — verifies the MT5 terminal is reachable.
 
-        Returns {"ok": bool, "latency_ms": int}. Cheap; agents should call
-        this after idle periods or errors that smell like disconnection.
+        Returns ``{"ok": bool, "latency_ms": int, "via": str | None}``.
+        ``via`` names the layer that answered (``terminal_info``,
+        ``account_info``, or ``tick_probe``) and is omitted when ``ok``
+        is false. Cheap; agents should call this after idle periods or
+        errors that smell like disconnection.
         """
         ctx = get_context()
-        ok, ms = ctx.client.ping()
-        return {"ok": ok, "latency_ms": ms}
+        ok, ms, via = ctx.client.ping()
+        out: dict[str, Any] = {"ok": ok, "latency_ms": ms}
+        if via is not None:
+            out["via"] = via
+        return out
 
     @mcp.tool()
     @error_envelope
@@ -34,7 +40,7 @@ def register(mcp: FastMCP) -> None:
         if raw is None:
             raise MT5Error(terminal_not_connected_error())
         acct = ctx.client.call(lambda m: m.account_info())
-        _, latency = ctx.client.ping()
+        _, latency, _ = ctx.client.ping()
         return terminal_info_from_raw(
             raw,
             login=(acct.login if acct else 0),

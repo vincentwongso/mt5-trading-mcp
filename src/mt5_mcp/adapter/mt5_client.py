@@ -174,14 +174,60 @@ class MT5Client:
 
     # --- health ----------------------------------------------------------
 
-    def ping(self) -> tuple[bool, int]:
+    def ping(self) -> tuple[bool, int, str | None]:
+        """Layered health check; reports which layer answered.
+
+        Some MT5 builds return ``None`` from ``terminal_info()`` even when
+        the terminal is fully connected and quotes/account_info both work.
+        Reporting that as ``ok=false`` misleads cron/monitoring. Mirrors
+        the layered fallback ``connect()`` uses for broker-offset
+        derivation:
+
+        1. ``terminal_info()`` non-None
+        2. ``account_info()`` with populated ``login``
+        3. Fresh tick (<``_FRESH_TICK_SECONDS``) on any
+           ``_BROKER_TIME_PROBE_SYMBOLS`` symbol — converts ``tick.time``
+           through the cached broker offset before comparing to real UTC,
+           same as ``_derive_broker_offset``.
+
+        Returns ``(ok, latency_ms, via)`` where ``via`` names the layer
+        that answered or is ``None`` on failure.
+        """
         t0 = time.perf_counter()
+
         try:
             ti = self._mt5.terminal_info()
+            if ti is not None:
+                return True, int((time.perf_counter() - t0) * 1000), "terminal_info"
         except Exception:
-            return False, 0
-        ms = int((time.perf_counter() - t0) * 1000)
-        return (ti is not None), ms
+            pass
+
+        try:
+            acct = self._mt5.account_info()
+            if acct is not None and getattr(acct, "login", 0):
+                return True, int((time.perf_counter() - t0) * 1000), "account_info"
+        except Exception:
+            pass
+
+        now_utc = datetime.now(timezone.utc)
+        for sym in _BROKER_TIME_PROBE_SYMBOLS:
+            try:
+                tick = self._mt5.symbol_info_tick(sym)
+            except Exception:
+                continue
+            if tick is None:
+                continue
+            tick_time = getattr(tick, "time", 0) or 0
+            if not tick_time:
+                continue
+            broker_now_in_utc = (
+                datetime.fromtimestamp(int(tick_time), tz=timezone.utc)
+                - timedelta(minutes=self.broker_offset_minutes)
+            )
+            if abs((broker_now_in_utc - now_utc).total_seconds()) <= _FRESH_TICK_SECONDS:
+                return True, int((time.perf_counter() - t0) * 1000), "tick_probe"
+
+        return False, int((time.perf_counter() - t0) * 1000), None
 
     # --- call routing ---------------------------------------------------
 

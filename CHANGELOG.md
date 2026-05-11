@@ -4,6 +4,37 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.0.9] - 2026-05-11
+
+Bugfix release. Surfaced when a downstream Stage 2 agent (`trader_cli`
+placing a USOIL long on a live demo, ticket 88406038) called
+`modify_order` with a malformed SL string. The bare `Decimal(sl)` inside
+the tool body raised `decimal.InvalidOperation: ConversionSyntax`, which
+`@error_envelope` swallowed as a generic `INTERNAL_ERROR` with no
+field-or-value detail. The caller, unable to distinguish a caller-side
+parse bug from an actual broker fault, treated it as a broker fault and
+ran its "SL-modify failed → close position" branch, unwinding the
+position for ~$94 of slippage. Same class of trap exists in `place_order`
+for any of `volume`, `price`, `stop_limit_price`, `sl`, `tp`.
+
+### Fixed
+
+- `place_order` and `modify_order` now route every string-shaped Decimal
+  argument through a new `_to_decimal(value, field=...)` helper that
+  catches `InvalidOperation` / `ValueError` / `TypeError` and re-raises
+  as `MT5Error(invalid_request_error(field=..., value=..., reason=...))`.
+  Callers see a typed `INVALID_REQUEST` envelope with `details.field` and
+  `details.value` instead of `INTERNAL_ERROR`. The order is never sent
+  to the broker on a parse failure, so no naked-position window exists.
+- New `invalid_request_error` factory in `errors.py` (mirrors the shape
+  of the other `*_error` factories) for any future caller-side
+  validation failure that needs the same envelope.
+- New regression tests pin both surfaces:
+  `test_modify_unparseable_sl_returns_invalid_request` and
+  `test_unparseable_sl_returns_invalid_request` /
+  `test_unparseable_volume_returns_invalid_request` (covers required vs
+  optional Decimal fields).
+
 ## [1.0.8] - 2026-05-08
 
 Bugfix release. Surfaced when a downstream agent (`trader_cli` driving Stage 3

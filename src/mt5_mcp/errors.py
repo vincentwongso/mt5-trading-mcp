@@ -145,6 +145,26 @@ def idempotency_diverged_error(*, key: str, action: str) -> ErrorDetail:
     )
 
 
+def invalid_request_error(
+    *,
+    field: str,
+    value: Any,
+    reason: str,
+) -> ErrorDetail:
+    """Request argument failed local parsing (e.g. unparseable Decimal).
+
+    Caller bug — surfaces the field name and offending value so the agent
+    can correct the next call instead of seeing a generic INTERNAL_ERROR.
+    """
+    return ErrorDetail(
+        code="INVALID_REQUEST",
+        message=f"Invalid value for {field!r}: {reason}",
+        retryable=False,
+        requires_human=False,
+        details={"field": field, "value": str(value), "reason": reason},
+    )
+
+
 def invalid_ticket_error(*, ticket: int, kind: Literal["order", "position"]) -> ErrorDetail:
     """Ticket lookup failed — order/position doesn't exist."""
     return ErrorDetail(

@@ -160,6 +160,21 @@ def test_widen_tp_on_sell_position_round_trips_through_mt5_dict(server_and_mt5):
     assert sent["sl"] == 1.0900
 
 
+def test_modify_unparseable_sl_returns_invalid_request(server_and_mt5):
+    """Regression: a malformed SL string used to escape as INTERNAL_ERROR
+    via `decimal.InvalidOperation`, losing which field broke. Stage 2's
+    'SL-modify failed → close the position' branch then unwound a clean
+    fill (ticket 88406038, 2026-05-11). Now surfaces as INVALID_REQUEST
+    with the offending field+value so callers can correct the next call."""
+    server, fake = server_and_mt5
+    out = _call(server, "modify_order", ticket=42, sl="not-a-number")
+    assert out["error"]["code"] == "INVALID_REQUEST"
+    assert out["error"]["details"]["field"] == "sl"
+    assert out["error"]["details"]["value"] == "not-a-number"
+    # Must NOT have reached the broker.
+    assert len(fake.order_send_calls) == 0
+
+
 def test_modify_pending_order_without_expiration_uses_gtc(server_and_mt5):
     """When expiration is omitted, type_time defaults to ORDER_TIME_GTC (=0
     in the real mt5lib)."""

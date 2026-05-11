@@ -139,3 +139,28 @@ def test_invalid_symbol_returns_symbol_not_found(server_and_mt5):
                 symbol="UNKNOWN", side="buy", type="market", volume="0.10")
     assert "error" in out
     assert out["error"]["code"] == "SYMBOL_NOT_FOUND"
+
+
+def test_unparseable_sl_returns_invalid_request(server_and_mt5):
+    """Companion to modify_order's regression test: a malformed SL string
+    must surface as INVALID_REQUEST with the offending field, not be
+    swallowed into INTERNAL_ERROR via decimal.InvalidOperation."""
+    server, fake = server_and_mt5
+    out = _call(server, "place_order",
+                symbol="EURUSD", side="buy", type="market", volume="0.10",
+                sl="not-a-number")
+    assert out["error"]["code"] == "INVALID_REQUEST"
+    assert out["error"]["details"]["field"] == "sl"
+    assert out["error"]["details"]["value"] == "not-a-number"
+    assert len(fake.order_send_calls) == 0
+
+
+def test_unparseable_volume_returns_invalid_request(server_and_mt5):
+    """Required-field variant: bad volume string also surfaces as
+    INVALID_REQUEST, not INTERNAL_ERROR."""
+    server, fake = server_and_mt5
+    out = _call(server, "place_order",
+                symbol="EURUSD", side="buy", type="market", volume="0,10")
+    assert out["error"]["code"] == "INVALID_REQUEST"
+    assert out["error"]["details"]["field"] == "volume"
+    assert len(fake.order_send_calls) == 0

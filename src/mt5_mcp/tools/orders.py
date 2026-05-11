@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from mcp.server.fastmcp import FastMCP
 
@@ -11,7 +11,22 @@ from mt5_mcp.adapter.conversions import (
     epoch_to_utc, order_request_to_mt5_dict, order_result_from_mt5_response,
     order_from_raw,
 )
-from mt5_mcp.errors import MT5Error
+from mt5_mcp.errors import MT5Error, invalid_request_error
+
+
+def _to_decimal(value: str, *, field: str) -> Decimal:
+    """Parse a Decimal-shaped tool argument, surfacing parse failures as
+    INVALID_REQUEST instead of an envelope-swallowed INTERNAL_ERROR.
+
+    Callers handle None/falsy themselves so optional vs required semantics
+    stay at the call site.
+    """
+    try:
+        return Decimal(value)
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise MT5Error(invalid_request_error(
+            field=field, value=value, reason=f"not a valid decimal ({exc})",
+        )) from exc
 from mt5_mcp.policy.consent import new_request_id
 from mt5_mcp.policy.preflight import PreflightInputs
 from mt5_mcp.server import get_context
@@ -63,11 +78,12 @@ def register(mcp: FastMCP) -> None:
         """
         ctx = get_context()
         req = OrderRequest(
-            symbol=symbol, side=side, type=type, volume=Decimal(volume),
-            price=Decimal(price) if price else None,
-            stop_limit_price=Decimal(stop_limit_price) if stop_limit_price else None,
-            sl=Decimal(sl) if sl else None,
-            tp=Decimal(tp) if tp else None,
+            symbol=symbol, side=side, type=type,
+            volume=_to_decimal(volume, field="volume"),
+            price=_to_decimal(price, field="price") if price else None,
+            stop_limit_price=_to_decimal(stop_limit_price, field="stop_limit_price") if stop_limit_price else None,
+            sl=_to_decimal(sl, field="sl") if sl else None,
+            tp=_to_decimal(tp, field="tp") if tp else None,
             deviation=deviation, comment=comment,
             idempotency_key=idempotency_key,
             approval_confirmed=approval_confirmed,
@@ -178,9 +194,9 @@ def register(mcp: FastMCP) -> None:
         ctx = get_context()
         req = ModifyOrderRequest(
             ticket=ticket,
-            sl=Decimal(sl) if sl is not None else None,
-            tp=Decimal(tp) if tp is not None else None,
-            price=Decimal(price) if price is not None else None,
+            sl=_to_decimal(sl, field="sl") if sl is not None else None,
+            tp=_to_decimal(tp, field="tp") if tp is not None else None,
+            price=_to_decimal(price, field="price") if price is not None else None,
             expiration=_dt.fromisoformat(expiration.replace("Z", "+00:00"))
                        if expiration else None,
             idempotency_key=idempotency_key,

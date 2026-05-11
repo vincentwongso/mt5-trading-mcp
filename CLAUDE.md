@@ -41,7 +41,7 @@ def my_tool(arg: str) -> SomeType:
     # ... use ctx.client, ctx.symbols, ctx.config
 ```
 
-The decorator (in `src/mt5_mcp/tools/_common.py`) catches both `MT5Error` (using its carried `ErrorDetail`) and any other `Exception` (wrapping as `INTERNAL_ERROR` via `errors.internal_error`); the full traceback is logged server-side so a Python stack never escapes to the MCP client. Read tools are wrapped; `ping` is deliberately NOT wrapped (it must work pre-connect).
+The decorator (in `src/mt5_mcp/tools/_common.py`) catches both `MT5Error` (using its carried `ErrorDetail`) and any other `Exception` (wrapping as `INTERNAL_ERROR` via `errors.internal_error`); the full traceback is logged server-side so a Python stack never escapes to the MCP client. Read tools are wrapped; `ping` is deliberately NOT wrapped — its tool body returns the structured `{"ok": ..., "latency_ms": ..., "via": ...}` dict directly so callers can distinguish layered fallbacks even on failure.
 
 ### 2. `terminal_not_connected_error()` factory — use it, don't inline `ErrorDetail(code="TERMINAL_NOT_CONNECTED", ...)`
 
@@ -55,7 +55,7 @@ The reinit-aware wrapper is the canonical access pattern:
 raws = ctx.client.call(lambda m: m.positions_get(symbol=symbol))
 ```
 
-This makes the architecture's "transparent reinit on mid-session NOT_INITIALIZED" guarantee real. Direct `ctx.client.mt5.<method>(...)` access is only acceptable for **constants** (`m.ORDER_FILLING_IOC`, `m.SYMBOL_FILLING_FOK`, etc.) and `ping` (which intentionally bypasses retry to detect connection state).
+This makes the architecture's "transparent reinit on mid-session NOT_INITIALIZED" guarantee real. Direct `ctx.client.mt5.<method>(...)` access is only acceptable for **constants** (`m.ORDER_FILLING_IOC`, `m.SYMBOL_FILLING_FOK`, etc.). As of v1.0.11, `ping` also routes its layered probes through `self.call()` — the earlier rule "ping bypasses retry to detect raw IPC state" left `ping.ok=false` lying about usability whenever the IPC just needed a transparent reconnect; the layered fallback already provides per-source diagnostics via the `via` field, which is more useful than a raw probe in practice.
 
 ### 3. UTC-portable test timestamps
 
@@ -126,7 +126,7 @@ Identical-fields validation in `policy/consent.py::validate_retry` covers `symbo
 
 All five Phase 1 final-review items closed before Phase 2 started:
 
-- ✅ **`MT5Client.call(fn)`** is the public reinit-aware wrapper; every read tool and `SymbolPrep` route mt5lib data calls through it. Constants and `ping` skip it.
+- ✅ **`MT5Client.call(fn)`** is the public reinit-aware wrapper; every read tool and `SymbolPrep` route mt5lib data calls through it. Constants skip it. (Through v1.0.10, `ping` also bypassed `call()`; v1.0.11 routed it back through so health checks see the same transparently-recovered state as everything else.)
 - ✅ **Decimals serialise via `Annotated[Decimal, PlainSerializer(...)]`** (`_DecimalStr` alias in `types.py`). `model_config.json_encoders` is gone; deprecation warnings dropped from 29 → 0.
 - ✅ **`error_envelope` catches `Exception`** (not just `MT5Error`) and emits the new `INTERNAL_ERROR` envelope (`errors.internal_error`). The full traceback logs server-side; only the exception class name reaches the client.
 - ✅ **`get_market_hours` docstring** explicitly states `next_open`/`next_close` are always `None` in v1 — `sessions_quotes` parsing is deferred to a future release.

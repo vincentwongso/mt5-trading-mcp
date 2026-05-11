@@ -141,6 +141,38 @@ def test_ping_falls_back_to_tick_probe_when_terminal_and_account_unavailable(
     assert via == "tick_probe"
 
 
+def test_ping_recovers_from_not_initialized_via_call_wrapper(
+    client: MT5Client, fake_mt5: FakeMT5, frozen_utc,
+):
+    """Regression for the v1.0.10 false-negative left over from routing
+    layers through direct mt5lib calls: when the IPC is in NOT_INITIALIZED
+    state, direct calls return None and ping would report ok=false even
+    though every other read tool transparently reinits and succeeds.
+    Routing each ping layer through self.call() lets ping see the same
+    healed state."""
+    client.connect()
+    initial_inits = fake_mt5.calls["initialize"]
+    # Arm the first terminal_info() call to look like a NOT_INITIALIZED
+    # session, then recover on retry (mt5lib re-initializes inside call()).
+    real_terminal_info = fake_mt5.terminal_info
+    state = {"first": True}
+
+    def flaky_terminal_info():
+        if state["first"]:
+            state["first"] = False
+            fake_mt5._last_error = (-10004, "not initialized")
+            return None
+        fake_mt5._last_error = (0, "")
+        return real_terminal_info()
+
+    fake_mt5.terminal_info = flaky_terminal_info  # type: ignore[method-assign]
+    ok, _, via = client.ping()
+    assert ok is True
+    assert via == "terminal_info"
+    # The reinit wrapper called initialize() a second time during the retry.
+    assert fake_mt5.calls["initialize"] == initial_inits + 1
+
+
 def test_ping_rejects_stale_tick(fake_mt5: FakeMT5, frozen_utc):
     """A tick older than _FRESH_TICK_SECONDS (5min) is not a healthy signal —
     the terminal could be connected to a frozen quote stream."""

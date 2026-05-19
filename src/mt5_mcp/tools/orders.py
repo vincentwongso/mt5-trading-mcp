@@ -168,6 +168,7 @@ def register(mcp: FastMCP) -> None:
                 request_echo=req.model_dump(mode="json", exclude={"idempotency_key"}),
                 action="place_order", symbol=symbol,
                 request_volume=req.volume,
+                mt5_module=ctx.client.mt5,
             )
 
     @mcp.tool()
@@ -304,6 +305,7 @@ def register(mcp: FastMCP) -> None:
                 request_echo=req.model_dump(mode="json", exclude={"idempotency_key"}),
                 action="modify_order", symbol=symbol,
                 request_volume=volume,
+                mt5_module=ctx.client.mt5,
             )
 
     @mcp.tool()
@@ -342,4 +344,5 @@ def register(mcp: FastMCP) -> None:
                 request_echo=req.model_dump(mode="json", exclude={"idempotency_key"}),
                 action="cancel_order", symbol=symbol,
                 request_volume=Decimal(str(getattr(target, "volume_current", 0))),
+                mt5_module=ctx.client.mt5,
             )

@@ -421,8 +421,16 @@ def order_result_from_mt5_response(
     symbol: str,
     request_volume: Decimal,
     request_echo: dict[str, Any],
+    mt5_module: Any = None,
 ) -> "OrderResult":
-    """Convert mt5.order_send()'s return into a typed OrderResult."""
+    """Convert mt5.order_send()'s return into a typed OrderResult.
+
+    `mt5_module` is the live mt5lib module (typically `ctx.client.mt5`). When
+    provided, the NULL-response branch calls `mt5.last_error()` and surfaces
+    the (code, message) tuple in the error envelope — that's the only way to
+    distinguish e.g. "terminal disconnected" from "broker rejected pre-flight."
+    Tests may omit it; details just won't include last_error.
+    """
     from mt5_mcp.errors import error_for_retcode
     from mt5_mcp.types import ErrorDetail, OrderResult
 
@@ -431,6 +439,16 @@ def order_result_from_mt5_response(
         # forwarding to the broker (e.g. invalid stops, terminal disconnected,
         # AutoTrading off). Convert to a typed envelope rather than letting an
         # AttributeError on .retcode escape as INTERNAL_ERROR.
+        details: dict[str, Any] = {"action": action, "symbol": symbol}
+        if mt5_module is not None:
+            try:
+                last_err = mt5_module.last_error()
+                if last_err is not None:
+                    # mt5.last_error() returns (int_code, str_message); cast to
+                    # list for JSON serialisability.
+                    details["last_error"] = list(last_err)
+            except Exception as e:  # last_error itself failed; rare but possible
+                details["last_error_capture_failed"] = type(e).__name__
         return OrderResult(
             success=False,
             ticket=None,
@@ -449,7 +467,7 @@ def order_result_from_mt5_response(
                 ),
                 retryable=False,
                 requires_human=True,
-                details={"action": action, "symbol": symbol},
+                details=details,
             ),
             server_response_code=0,  # 0 is not a real MT5 retcode; sentinel for null response
         )

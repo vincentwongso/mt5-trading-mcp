@@ -4,6 +4,29 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.0.13] - 2026-05-19
+
+Observability release. When `mt5lib.order_send()` returns `None` (the
+"request rejected before broker" path that surfaces as `MT5_NULL_RESPONSE`),
+the resulting envelope previously lacked the only diagnostic that
+distinguishes the underlying cause: `mt5.last_error()`. Operators had no
+way to tell e.g. "terminal disconnected" from "invalid filling mode" from
+"AutoTrading disabled" from "symbol not in Market Watch" — every NULL
+response looked identical in the audit log and tool response.
+
+### Fixed
+
+- `order_result_from_mt5_response(...)` accepts an optional `mt5_module`
+  kwarg. When the raw response is `None`, the function calls
+  `mt5_module.last_error()` and surfaces the `(code, message)` tuple in
+  `error.details["last_error"]`. Failures of `last_error()` itself are
+  caught and recorded as `details["last_error_capture_failed"]`.
+- All four mutating tool call sites (`place_order`, `modify_order`,
+  `cancel_order`, `close_position`) now thread `ctx.client.mt5` into the
+  envelope so live deployments capture the real rejection reason.
+- Two new regression tests pin the capture behavior (live module + a
+  fake module that raises).
+
 ## [1.0.12] - 2026-05-19
 
 Bugfix release. Pending limit/stop/stop-limit orders against brokers

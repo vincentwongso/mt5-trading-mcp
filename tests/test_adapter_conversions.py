@@ -368,6 +368,52 @@ def test_order_result_from_mt5_response_none_raw():
     assert result.error is not None
     assert result.error.code == "MT5_NULL_RESPONSE"
     assert "None" in result.error.message
+    # When no mt5_module is passed, last_error is not captured.
+    assert "last_error" not in result.error.details
+
+
+def test_order_result_from_mt5_response_none_raw_captures_last_error():
+    """v1.0.13: when mt5_module is supplied, the NULL-response branch must
+    call mt5.last_error() and surface the (code, message) tuple in details.
+
+    Without this, every "request rejected before broker" looked identical and
+    we couldn't tell terminal-disconnected from invalid-request from
+    AutoTrading-off."""
+    from decimal import Decimal
+    from mt5_mcp.adapter.conversions import order_result_from_mt5_response
+
+    class FakeMt5:
+        def last_error(self):
+            return (-10004, "Symbol not selected in MarketWatch")
+
+    result = order_result_from_mt5_response(
+        None, action="place_order", symbol="USOIL",
+        request_volume=Decimal("1.0"),
+        request_echo={"symbol": "USOIL", "volume": "1.0"},
+        mt5_module=FakeMt5(),
+    )
+    assert result.error.code == "MT5_NULL_RESPONSE"
+    assert result.error.details["last_error"] == [-10004, "Symbol not selected in MarketWatch"]
+
+
+def test_order_result_from_mt5_response_none_raw_last_error_capture_fails_safely():
+    """If mt5.last_error() itself raises (rare), record the failure rather than
+    propagate. The primary diagnostic is still surfaced as MT5_NULL_RESPONSE."""
+    from decimal import Decimal
+    from mt5_mcp.adapter.conversions import order_result_from_mt5_response
+
+    class BrokenMt5:
+        def last_error(self):
+            raise RuntimeError("mt5lib already shutdown")
+
+    result = order_result_from_mt5_response(
+        None, action="place_order", symbol="USOIL",
+        request_volume=Decimal("1.0"),
+        request_echo={"symbol": "USOIL"},
+        mt5_module=BrokenMt5(),
+    )
+    assert result.error.code == "MT5_NULL_RESPONSE"
+    assert result.error.details["last_error_capture_failed"] == "RuntimeError"
 
 
 def test_order_result_from_mt5_response_partial_fill():

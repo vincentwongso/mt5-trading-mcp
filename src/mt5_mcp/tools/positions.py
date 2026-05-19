@@ -164,4 +164,5 @@ def register(mcp: FastMCP) -> None:
                 request_echo=req.model_dump(mode="json", exclude={"idempotency_key"}),
                 action="close_position", symbol=symbol,
                 request_volume=close_volume,
+                mt5_module=ctx.client.mt5,
             )

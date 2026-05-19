@@ -115,6 +115,17 @@ def test_pick_filling_mode_pending_prefers_return(prep: SymbolPrep, fake_mt5: Fa
     assert prep.pick_filling_mode("EURUSD", order_type="limit") == fake_mt5.ORDER_FILLING_RETURN
 
 
+def test_pick_filling_mode_pending_returns_RETURN_even_without_BOC_bit(prep: SymbolPrep, fake_mt5: FakeMT5):
+    # Regression: USOIL/UKOIL on Broker advertise only IOC bit but pending
+    # orders MUST send ORDER_FILLING_RETURN — MT5 rejects pending+IOC with
+    # NULL response. The symbol mask is for market orders, not pending.
+    fake_mt5._symbol_info["USOIL"] = FakeSymbolInfo(
+        name="USOIL", filling_mode=2  # IOC only
+    )
+    for ot in ("limit", "stop", "stop_limit"):
+        assert prep.pick_filling_mode("USOIL", order_type=ot) == fake_mt5.ORDER_FILLING_RETURN
+
+
 def test_pick_filling_mode_none_matches(prep: SymbolPrep, fake_mt5: FakeMT5):
     fake_mt5._symbol_info["EURUSD"] = FakeSymbolInfo(
         name="EURUSD", filling_mode=0  # broker advertises nothing

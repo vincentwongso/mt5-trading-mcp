@@ -4,6 +4,31 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.0.12] - 2026-05-19
+
+Bugfix release. Pending limit/stop/stop-limit orders against brokers
+that advertise only `IOC` on a symbol's `filling_mode` mask (e.g.
+Broker on `USOIL` / `UKOIL`) were rejected before reaching the
+broker: mt5lib's `order_send` returned `None`, surfacing as the
+`MT5_NULL_RESPONSE` envelope. The symbol's `filling_mode` mask
+describes what's accepted for **market** orders only; pending orders
+require `ORDER_FILLING_RETURN` (any other choice is semantically
+incoherent — IOC/FOK imply immediate execution, which contradicts
+"rest in the book"). The previous `pick_filling_mode` implementation
+gated pending orders on the BOC bit and fell back to IOC/FOK when it
+was absent, producing the rejection.
+
+### Fixed
+
+- `SymbolPrep.pick_filling_mode(...)` now returns
+  `ORDER_FILLING_RETURN` unconditionally for `order_type` in
+  `{limit, stop, stop_limit}`, regardless of the symbol's advertised
+  filling mask. Market orders still consult the mask
+  (IOC → FOK fallback).
+- New regression test
+  `test_pick_filling_mode_pending_returns_RETURN_even_without_BOC_bit`
+  pins the new behavior against the Broker-style mask=2 case.
+
 ## [1.0.11] - 2026-05-11
 
 Bugfix release. v1.0.10's layered ping fallback fixed the

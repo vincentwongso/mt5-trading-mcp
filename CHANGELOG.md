@@ -4,6 +4,32 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.0.14] - 2026-05-19
+
+Preflight release. The `comment` field on `place_order` is a frequent silent
+killer: MT5 brokers reject `order_send` with no retcode when the comment
+exceeds 31 chars, contains non-ASCII (em-dash, smart quotes), or holds control
+characters (tab, newline). The rejection looks identical to terminal-
+disconnected, AutoTrading-off, and invalid-filling-mode — and pre-v1.0.13
+there was no last_error context to disambiguate. We discovered this on
+2026-05-19 when 1-lot USOIL/UKOIL pending buy-limits failed repeatedly with
+`MT5_NULL_RESPONSE` even after the v1.0.12 filling-mode fix; the trades placed
+cleanly only after the comment was dropped entirely.
+
+### Added
+
+- `mt5_mcp.adapter.comment.sanitize_comment(comment)` trims whitespace and
+  raises `MT5Error(code=INVALID_COMMENT, retryable=False)` for length / non-
+  ASCII / control-char violations. Wired into
+  `order_request_to_mt5_dict(...)` so every `place_order` /
+  `modify_order` path benefits.
+- The `INVALID_COMMENT` envelope's `details` carries `reason`
+  (`too_long` / `non_ascii` / `control_char`), the offending `value`, its
+  `length`, and the `max_length` (31) — enough for an agent to fix and retry
+  without operator intervention.
+- 15 regression tests in `tests/test_adapter_comment.py` pinning the
+  boundary, character-class, and integration behavior.
+
 ## [1.0.13] - 2026-05-19
 
 Observability release. When `mt5lib.order_send()` returns `None` (the

@@ -409,8 +409,10 @@ def order_request_to_mt5_dict(
         out["sl"] = float(req.sl)
     if req.tp is not None:
         out["tp"] = float(req.tp)
-    if req.comment:
-        out["comment"] = req.comment
+    from mt5_mcp.adapter.comment import sanitize_comment
+    safe_comment = sanitize_comment(req.comment)
+    if safe_comment:
+        out["comment"] = safe_comment
     return out
 
 

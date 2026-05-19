@@ -136,20 +136,20 @@ class SymbolPrep:
         info = self.get(symbol)
         mask = int(info.filling_mode)
         mt5 = self._client.mt5
-        # For market orders prefer IOC, fall back to FOK. RETURN is invalid for market.
-        # For pending orders, RETURN is the canonical choice.
-        if order_type == "market":
-            preferences = (
-                (_SYMBOL_FILLING_IOC, mt5.ORDER_FILLING_IOC),
-                (_SYMBOL_FILLING_FOK, mt5.ORDER_FILLING_FOK),
-            )
-        else:
-            # Pending orders: RETURN preferred; fall back to IOC then FOK.
-            preferences = (
-                (_SYMBOL_FILLING_BOC, mt5.ORDER_FILLING_RETURN),
-                (_SYMBOL_FILLING_IOC, mt5.ORDER_FILLING_IOC),
-                (_SYMBOL_FILLING_FOK, mt5.ORDER_FILLING_FOK),
-            )
+        # Pending orders: ORDER_FILLING_RETURN is the only semantically valid
+        # choice — IOC/FOK imply immediate execution, which contradicts
+        # "rest in the book until price reaches the limit." MT5 itself returns
+        # NULL from order_send when a pending order carries IOC/FOK, even if
+        # the symbol's filling mask doesn't advertise the BOC bit (many CFD
+        # brokers — e.g. Fintrix on USOIL/UKOIL — advertise only IOC; that mask
+        # is for market orders, not pending). Don't gate on the mask here.
+        if order_type != "market":
+            return mt5.ORDER_FILLING_RETURN
+        # Market orders prefer IOC, fall back to FOK. RETURN is invalid for market.
+        preferences = (
+            (_SYMBOL_FILLING_IOC, mt5.ORDER_FILLING_IOC),
+            (_SYMBOL_FILLING_FOK, mt5.ORDER_FILLING_FOK),
+        )
         for advertised_bit, order_filling in preferences:
             if mask & advertised_bit:
                 return order_filling

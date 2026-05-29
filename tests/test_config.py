@@ -199,3 +199,41 @@ def test_config_loads_streaming_and_transport_from_toml(tmp_path):
     assert cfg.transport.http.port == 9000
     assert cfg.transport.http.auth_token == "secret"
     assert cfg.streaming.quote_poll_interval_ms == 100
+
+
+def test_mt5_bridge_absent_defaults_to_none(tmp_path):
+    from mt5_mcp.config import load_config
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text("[mt5]\nterminal_path = \"\"\n", encoding="utf-8")
+    cfg = load_config(cfg_file)
+    assert cfg.mt5.bridge is None
+
+
+def test_mt5_bridge_parses_host_and_port(tmp_path):
+    from mt5_mcp.config import load_config
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text(
+        "[mt5.bridge]\nhost = \"10.0.0.5\"\nport = 8001\n", encoding="utf-8"
+    )
+    cfg = load_config(cfg_file)
+    assert cfg.mt5.bridge is not None
+    assert cfg.mt5.bridge.host == "10.0.0.5"
+    assert cfg.mt5.bridge.port == 8001
+
+
+def test_mt5_bridge_defaults(tmp_path):
+    from mt5_mcp.config import load_config
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text("[mt5.bridge]\n", encoding="utf-8")
+    cfg = load_config(cfg_file)
+    assert cfg.mt5.bridge.host == "127.0.0.1"
+    assert cfg.mt5.bridge.port == 8001
+
+
+def test_mt5_bridge_rejects_bad_port(tmp_path):
+    from mt5_mcp.config import load_config
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text("[mt5.bridge]\nport = 0\n", encoding="utf-8")
+    import pytest
+    with pytest.raises(ValueError):
+        load_config(cfg_file)

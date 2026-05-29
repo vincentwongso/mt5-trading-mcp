@@ -1,0 +1,22 @@
+{
+  "//": "Register mt5-trading-mcp with Hermes (Nous Research). NOTE: Hermes uses a snake_case 'mcp_servers' block and an 'include' tool-allowlist — both are Hermes-specific. Other MCP clients (Claude Desktop, Cursor; see the other *.json beside this file) use 'mcpServers' and may not honor 'include', which would expose ALL tools. The 'include' list below is scoped to the READ-ONLY tools so the agent cannot place trades by default; drop it (or add place_order / modify_order / cancel_order / close_position) to allow trading.",
+  "mcp_servers": {
+    "mt5-mcp": {
+      "command": "python",
+      "args": ["-m", "mt5_mcp", "serve"],
+      "include": [
+        "ping",
+        "get_terminal_info",
+        "get_account_info",
+        "get_quote",
+        "get_symbols",
+        "get_market_hours",
+        "get_rates",
+        "calc_margin",
+        "get_positions",
+        "get_orders",
+        "get_history"
+      ]
+    }
+  }
+}

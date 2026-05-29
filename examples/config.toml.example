@@ -1,0 +1,29 @@
+# Copy to your OS config path and edit. Path:
+#   Windows: %APPDATA%\mt5-mcp\config.toml
+#   Linux:   ~/.config/mt5-mcp/config.toml
+# The server runs with built-in defaults if this file is absent.
+
+# --- Linux only: connect to the MT5 terminal running in Docker over RPyC. ---
+# Omit this whole block on Windows (native in-process MetaTrader5 is used).
+[mt5.bridge]
+host = "127.0.0.1"
+port = 8001
+
+# --- Consent / pre-flight guardrails (apply on every platform). ---
+[policy]
+# Orders at or below this notional auto-execute; above it, a human must confirm.
+# Keep this low when an agent drives the mutating tools.
+auto_approve_notional = "0"
+max_notional_per_trade = "0"   # 0 = no local cap (the broker still enforces its own)
+# max_daily_loss = "0"                 # 0 = no daily realised-loss cap; set e.g. "200" to halt after $200/day
+# max_realised_loss_per_close = "0"    # 0 = no per-close cap
+
+# --- Restrict which instruments the agent may trade (empty = no restriction). ---
+# [symbols]
+# allowlist = ["EURUSD", "XAUUSD"]   # if non-empty, ONLY these symbols are allowed
+# denylist = []                       # symbols to always block
+
+# --- Optional loopback HTTP transport (default is stdio). ---
+[transport.http]
+port = 8765
+auth_token = ""   # set a token to require Authorization: Bearer <token>

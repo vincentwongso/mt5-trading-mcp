@@ -321,3 +321,95 @@ def test_connect_rejects_stale_tick_for_offset_inference(
         "Could not derive broker TZ offset" in r.message
         for r in caplog.records
     ), [r.message for r in caplog.records]
+
+
+# ---------------------------------------------------------------------------
+# Task 2: lazy backend resolution + resolve_mt5_module
+# ---------------------------------------------------------------------------
+
+def test_native_backend_import_is_lazy_not_at_construction():
+    """Constructing MT5Client must NOT resolve the backend; only first use does.
+    This is what lets `serve`/`doctor` start on a box without MetaTrader5."""
+    from mt5_mcp.adapter.mt5_client import MT5Client
+    calls = []
+
+    def factory():
+        calls.append(True)
+        raise RuntimeError("resolved too early")
+
+    client = MT5Client(mt5_factory=factory)
+    assert calls == []                      # not resolved at construction
+    import pytest
+    with pytest.raises(RuntimeError):
+        _ = client.mt5                      # first access resolves it
+    assert calls == [True]
+
+
+def test_injected_module_never_calls_factory(fake_mt5):
+    from mt5_mcp.adapter.mt5_client import MT5Client
+
+    def factory():
+        raise AssertionError("factory must not run when a module is injected")
+
+    client = MT5Client(mt5_module=fake_mt5, mt5_factory=factory)
+    assert client.mt5 is fake_mt5
+
+
+def test_resolve_native_when_no_bridge(monkeypatch):
+    from mt5_mcp.adapter import mt5_client as mod
+    from mt5_mcp.config import Config
+    sentinel = object()
+    monkeypatch.setattr(mod, "_import_mt5", lambda: sentinel)
+    assert mod.resolve_mt5_module(Config()) is sentinel
+
+
+def test_resolve_bridge_constructs_client_with_host_port(monkeypatch):
+    import sys, types
+    from mt5_mcp.adapter import mt5_client as mod
+    from mt5_mcp.config import Config
+
+    captured = {}
+
+    class FakeRPyC:
+        def __init__(self, host, port):
+            captured["host"] = host
+            captured["port"] = port
+
+    fake_mod = types.ModuleType("mt5linux")
+    fake_mod.MetaTrader5 = FakeRPyC
+    monkeypatch.setitem(sys.modules, "mt5linux", fake_mod)
+
+    cfg = Config(mt5={"bridge": {"host": "10.0.0.5", "port": 9001}})
+    proxy = mod.resolve_mt5_module(cfg)
+    assert isinstance(proxy, FakeRPyC)
+    assert captured == {"host": "10.0.0.5", "port": 9001}
+
+
+def test_resolve_bridge_missing_client_lib_raises_terminal_not_connected(monkeypatch):
+    import sys
+    from mt5_mcp.adapter import mt5_client as mod
+    from mt5_mcp.config import Config
+    from mt5_mcp.errors import MT5Error
+
+    # Ensure the import fails.
+    monkeypatch.setitem(sys.modules, "mt5linux", None)  # forces ImportError
+    cfg = Config(mt5={"bridge": {"host": "127.0.0.1", "port": 8001}})
+    import pytest
+    with pytest.raises(MT5Error) as ei:
+        mod.resolve_mt5_module(cfg)
+    assert ei.value.detail.code == "TERMINAL_NOT_CONNECTED"
+
+
+def test_resolve_native_missing_lib_raises_terminal_not_connected(monkeypatch):
+    from mt5_mcp.adapter import mt5_client as mod
+    from mt5_mcp.config import Config
+    from mt5_mcp.errors import MT5Error
+
+    def boom():
+        raise ImportError("No module named 'MetaTrader5'")
+
+    monkeypatch.setattr(mod, "_import_mt5", boom)
+    import pytest
+    with pytest.raises(MT5Error) as ei:
+        mod.resolve_mt5_module(Config())
+    assert ei.value.detail.code == "TERMINAL_NOT_CONNECTED"

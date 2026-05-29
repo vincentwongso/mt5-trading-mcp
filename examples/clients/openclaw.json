@@ -1,0 +1,11 @@
+{
+  "//": "Register mt5-trading-mcp with OpenClaw. Merge this 'mcp.servers' entry into ~/.openclaw/openclaw.json (JSON5). NOTE the key is 'mcp.servers' (top-level 'mcp', nested 'servers') — NOT 'mcpServers' as some other clients use. stdio is implied by 'command' (there is no stdio 'transport' field; for HTTP, drop command/args and add \"url\": \"http://localhost:8765/mcp\" + \"transport\": \"streamable-http\" after starting `python -m mt5_mcp serve --transport http`). CLI equivalent: openclaw mcp set mt5-mcp '{\"command\":\"python\",\"args\":[\"-m\",\"mt5_mcp\",\"serve\"]}'. TOOL SCOPING: OpenClaw has no per-server read-only tool filter (unlike the Hermes 'include' list or Codex 'enabled_tools'), so the 4 mutating tools (place_order / modify_order / cancel_order / close_position) stay gated by mt5-mcp's OWN in-process consent engine. For a harness-level block, add their prefixed names (mt5-mcp__place_order, mt5-mcp__modify_order, mt5-mcp__cancel_order, mt5-mcp__close_position) to gateway.tools.deny — but per the docs that only covers the HTTP /tools/invoke path, so the cleanest hard read-only is a second mt5-mcp instance exposing read tools only. Confirm field names against https://docs.openclaw.ai/cli/mcp.",
+  "mcp": {
+    "servers": {
+      "mt5-mcp": {
+        "command": "python",
+        "args": ["-m", "mt5_mcp", "serve"]
+      }
+    }
+  }
+}

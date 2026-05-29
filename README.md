@@ -91,9 +91,9 @@ The MT5 terminal runs in a Wine container; the server connects over RPyC.
 
 Register the server with your agent harness. [`examples/clients/hermes.json`](examples/clients/hermes.json)
 shows a Hermes `mcp_servers` block scoped to the **read-only** tools via `include`
-(so the agent can't trade until you widen it). Other MCP clients (Claude Desktop,
-Cursor) have configs under [`examples/clients/`](examples/clients/); see also
-[MCP client setup](#mcp-client-setup) below.
+(so the agent can't trade until you widen it). Claude Code, Codex, OpenClaw,
+Claude Desktop, and Cursor have configs under [`examples/clients/`](examples/clients/);
+see also [MCP client setup](#mcp-client-setup) below.
 
 ## What it does
 
@@ -141,10 +141,12 @@ A subscribed client receives a `notifications/resources/updated` message when th
 Drop-in config snippets are in [`examples/clients/`](https://github.com/vincentwongso/mt5-trading-mcp/tree/main/examples/clients):
 
 - **Hermes (Nous Research):** `examples/clients/hermes.json` — a direct `mcp_servers` block with the read-only tools `include`-scoped (the launch/demo agent). See [Setup → Wire it to an agent](#setup).
+- **Claude Code:** `examples/clients/claude-code.json` — register in your own project via `.mcp.json` or `claude mcp add --scope project mt5-mcp -- python -m mt5_mcp serve`, then read-only-scope it by allowlisting the eleven read tools in `.claude/settings.json` (`mcp__mt5-mcp__<tool>`). Cloning this repo wires all of that up for you, plus the project-scoped skills under `.claude/skills/` — see [Using with Claude Code](#using-with-claude-code).
+- **Codex (OpenAI Codex CLI):** `examples/clients/codex.toml` — a `[mcp_servers.mt5-mcp]` table for `~/.codex/config.toml`. Add it with `codex mcp add mt5-mcp -- python -m mt5_mcp serve`; the file shows the `enabled_tools` allowlist that scopes the agent to the read-only tools (or `default_tools_approval_mode = "prompt"` to human-confirm the mutating ones).
+- **OpenClaw:** `examples/clients/openclaw.json` — an `mcp.servers` entry for `~/.openclaw/openclaw.json` (note: `mcp.servers`, **not** `mcpServers`). OpenClaw has no per-server read-only filter, so the mutating tools stay gated by mt5-mcp's own consent engine; the file header notes the `gateway.tools.deny` and separate-read-only-instance options.
 - **Claude Desktop, stdio:** `examples/clients/claude-desktop-stdio.json`. Paste the inner `mcpServers` entry into `%APPDATA%\Claude\claude_desktop_config.json`.
 - **Claude Desktop, HTTP:** `examples/clients/claude-desktop-http.json`. For when `mt5-mcp serve --transport http` is already running.
 - **Cursor:** `examples/clients/cursor.json`. Paste into `~/.cursor/mcp.json`.
-- **Claude Code:** clone this repo, then run `claude` from the repo root. Claude Code auto-discovers the `.mcp.json` at the project root and loads the project-scoped skills under `.claude/skills/` (`mt5-market-data` for read tools, `mt5-trading` for the consent flow). Read tools are pre-allowlisted in `.claude/settings.json`; mutating tools deliberately fire a permission prompt on every call. See [`Using with Claude Code`](#using-with-claude-code) below.
 
 If `python` isn't on PATH (or you want to pin a specific venv), substitute the absolute path:
 

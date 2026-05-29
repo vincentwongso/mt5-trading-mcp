@@ -141,7 +141,7 @@ class SymbolPrep:
         # "rest in the book until price reaches the limit." MT5 itself returns
         # NULL from order_send when a pending order carries IOC/FOK, even if
         # the symbol's filling mask doesn't advertise the BOC bit (many CFD
-        # brokers — e.g. Fintrix on USOIL/UKOIL — advertise only IOC; that mask
+        # brokers — e.g. on USOIL/UKOIL — advertise only IOC; that mask
         # is for market orders, not pending). Don't gate on the mask here.
         if order_type != "market":
             return mt5.ORDER_FILLING_RETURN

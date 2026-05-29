@@ -150,9 +150,9 @@ def test_terminal_info_fields():
         connected=True,
         build=4150,
         name="MetaTrader 5",
-        company="FintrixMarkets Ltd",
+        company="Example Broker Ltd",
         login=123456,
-        server="FintrixMarkets-Demo",
+        server="Example-Demo",
         broker_tz_offset_minutes=180,
         latency_ms=12,
     )

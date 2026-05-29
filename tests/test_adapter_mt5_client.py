@@ -215,7 +215,7 @@ def test_connect_falls_back_when_terminal_info_lacks_time(fake_mt5: FakeMT5, fro
         trade_allowed: bool = True
         build: int = 4150
         name: str = "MetaTrader 5"
-        company: str = "FintrixMarkets Ltd"
+        company: str = "Example Broker Ltd"
         path: str = ""
         # no `time` field — this is what some real MT5 builds omit
 
@@ -254,7 +254,7 @@ def test_connect_derives_offset_from_tick_when_terminal_info_lacks_time(
         trade_allowed: bool = True
         build: int = 4150
         name: str = "MetaTrader 5"
-        company: str = "FintrixMarkets Ltd"
+        company: str = "Example Broker Ltd"
         path: str = ""
 
     fake_mt5._terminal_info = _BrokenTerminalInfo()
@@ -298,7 +298,7 @@ def test_connect_rejects_stale_tick_for_offset_inference(
         trade_allowed: bool = True
         build: int = 4150
         name: str = "MetaTrader 5"
-        company: str = "FintrixMarkets Ltd"
+        company: str = "Example Broker Ltd"
         path: str = ""
 
     fake_mt5._terminal_info = _BrokenTerminalInfo()

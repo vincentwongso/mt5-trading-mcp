@@ -22,7 +22,7 @@ Three MCP resources (`account://current`, `positions://current`, `quotes://{symb
 
 ## What Phase 4 added
 
-No production code changes — this was a packaging and docs phase. Bumped `pyproject.toml` to `1.0.0`, re-authored to "Vincent" with a personal security contact, added `[project.urls]`. Rewrote `README.md` for first-time PyPI users (with a Windows VPS deployment section covering both agent-on-VPS stdio and agent-local-via-SSH-tunnel HTTP patterns). Added `SECURITY.md`, `CHANGELOG.md`, three example client configs (`examples/clients/`), and a single GitHub Actions test workflow on Windows runners across Python 3.10/3.11/3.12. Tagged `v1.0.0` and published to PyPI. Repo moved from `Fintrix-Markets/mt5-trading-mcp` to `vincentwongso/mt5-mcp`.
+No production code changes — this was a packaging and docs phase. Bumped `pyproject.toml` to `1.0.0`, re-authored to "Vincent" with a personal security contact, added `[project.urls]`. Rewrote `README.md` for first-time PyPI users (with a Windows VPS deployment section covering both agent-on-VPS stdio and agent-local-via-SSH-tunnel HTTP patterns). Added `SECURITY.md`, `CHANGELOG.md`, three example client configs (`examples/clients/`), and a single GitHub Actions test workflow on Windows runners across Python 3.10/3.11/3.12. Tagged `v1.0.0` and published to PyPI. Repo moved to `vincentwongso/mt5-trading-mcp`.
 
 ## Critical patterns all future phases MUST follow
 
@@ -290,7 +290,7 @@ User memories for this project live at `~/.claude/projects/C--projects-mt5-tradi
 
 ## Don't surprise the user
 
-- This project is **broker-agnostic**. No hardcoded broker URLs / server names / symbol conventions. Fintrix is the launch reference user, not an embedded constraint.
+- This project is **broker-agnostic**. No hardcoded broker URLs / server names / symbol conventions. The launch reference broker is not an embedded constraint.
 - This project is **local-first**. No cloud component, no telemetry by default, no auto-update. The MCP runs on the customer's machine in the same process tree as their agent runtime.
 - The MCP is **not the security boundary** — the broker's MT5 server enforces hard limits. Pre-flight checks in the policy engine (Phase 2) are UX guardrails, not security controls.
 

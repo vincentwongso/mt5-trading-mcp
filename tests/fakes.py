@@ -75,7 +75,7 @@ class FakeTerminalInfo:
     trade_allowed: bool = True
     build: int = 4150
     name: str = "MetaTrader 5"
-    company: str = "FintrixMarkets Ltd"
+    company: str = "Example Broker Ltd"
     path: str = "C:/Program Files/MetaTrader 5"
     # Broker-server time as a UNIX epoch treated as naive. See conversions.py.
     time: int = 1_745_000_000
@@ -85,7 +85,7 @@ class FakeTerminalInfo:
 class FakeAccountInfo:
     login: int = 123456
     name: str = "Demo User"
-    server: str = "FintrixMarkets-Demo"
+    server: str = "Example-Demo"
     currency: str = "USD"
     balance: float = 10_000.0
     credit: float = 0.0

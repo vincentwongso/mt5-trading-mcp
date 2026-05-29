@@ -160,7 +160,7 @@ Optional. Default config path:
 - Windows: `%APPDATA%\mt5-mcp\config.toml`
 - Linux/WSL: `$XDG_CONFIG_HOME/mt5-mcp/config.toml` (falls back to `~/.config/mt5-mcp/config.toml`)
 
-The server starts with built-in defaults if the file is absent. Full schema documented in the [architecture spec, §7](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/mt5-mcp-architecture.md).
+The server starts with built-in defaults if the file is absent. The full config schema is defined by the Pydantic models in [`src/mt5_mcp/config.py`](src/mt5_mcp/config.py).
 
 Minimal example:
 
@@ -332,8 +332,8 @@ fallback) and closes it. Use a demo account, not a live one.
 
 ## Architecture
 
-The full design is in [`mt5-mcp-architecture.md`](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/mt5-mcp-architecture.md). Phase implementation plans live under [`docs/superpowers/plans/`](https://github.com/vincentwongso/mt5-trading-mcp/tree/main/docs/superpowers/plans).
+`mt5-trading-mcp` wraps the MetaTrader 5 Python library behind a FastMCP server. A single `MT5Client` (`src/mt5_mcp/adapter/`) owns the terminal connection, broker-timezone inference, and type conversions. On top of it: the MCP tools (`src/mt5_mcp/tools/`), subscribable resources (`src/mt5_mcp/resources/`), the consent / idempotency / audit layer (`src/mt5_mcp/policy/`), and the change-detection streaming subsystem (`src/mt5_mcp/streaming/`). The Pydantic models in `src/mt5_mcp/types.py` and `src/mt5_mcp/config.py` are the source of truth for the data and config schemas.
 
-## Licence
+## License
 
-MIT — see [`LICENCE`](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/LICENCE).
+MIT — see [`LICENSE`](LICENSE).

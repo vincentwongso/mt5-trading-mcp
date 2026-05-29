@@ -4,13 +4,16 @@ Model Context Protocol server wrapping the MetaTrader 5 Python library — expos
 
 > ⚠️ **This software places _real_ trades through your MetaTrader 5 terminal — real orders, real money, irreversible fills.** Read [DISCLAIMER.md](DISCLAIMER.md) and [SECURITY.md](SECURITY.md) before connecting it to a live account.
 
-**Status:** v1.0 — first public release. Windows + Python 3.10+ required.
+**Status:** v1.0 — first public release. Windows (native) or Linux (via Docker); Python 3.10+.
 
 ## Requirements
 
-- Windows (the `MetaTrader5` Python library is Windows-only).
+- **Windows** (native) — the `MetaTrader5` library runs in-process; or
+- **Linux** — the MT5 terminal runs in Docker (Wine) and `mt5-trading-mcp`
+  connects to it over RPyC (see Setup → Linux).
 - Python 3.10 or newer.
-- A running MetaTrader 5 terminal already logged into a broker.
+- A running MetaTrader 5 terminal logged into a broker (native on Windows, or
+  in the container on Linux).
 
 ## Install
 
@@ -36,39 +39,61 @@ cd mt5-trading-mcp
 uv sync --extra dev
 ```
 
-## Quick start
+## Setup
 
-If you installed from source, activate the project virtualenv first so `python` resolves to the interpreter that has `mt5_mcp` installed:
+`mt5-trading-mcp` needs a MetaTrader 5 terminal it can reach. Pick your OS.
 
-```powershell
-# Windows PowerShell
-.\.venv\Scripts\Activate.ps1
-```
+### Windows (native)
 
-```bat
-:: Windows cmd.exe
-.\.venv\Scripts\activate.bat
-```
+1. Install MetaTrader 5 and log into your broker. Enable **AlgoTrading** (toolbar button green).
+2. Install the server:
+   ```
+   pip install mt5-trading-mcp
+   ```
+3. No extra config needed (native backend is the default).
+4. Verify:
+   ```
+   python -m mt5_mcp doctor
+   ```
+   Expect `[INFO] backend: native` and `[PASS]` lines. Then run `python -m mt5_mcp serve`.
 
-```bash
-# Git Bash / WSL on Windows
-source .venv/Scripts/activate
-```
+### Linux (MT5 in Docker, bridge backend)
 
-Then:
+The MT5 terminal runs in a Wine container; the server connects over RPyC.
 
-```bash
-# 1. Verify the MT5 terminal is reachable.
-python -m mt5_mcp doctor
+1. Start the terminal container (compose file in [`examples/docker-compose.yml`](examples/docker-compose.yml)):
+   ```
+   docker compose -f examples/docker-compose.yml up -d
+   ```
+   Open `http://localhost:3000` (KasmVNC) and finish the MT5 install + broker login.
+   First boot can take a few minutes; if MT5 fails to install with
+   `socket: Function not implemented`, restart the container.
+2. Install the server with the bridge client:
+   ```
+   pip install 'mt5-trading-mcp[bridge]'
+   ```
+3. Configure the bridge — copy [`examples/config.toml.example`](examples/config.toml.example)
+   to `~/.config/mt5-mcp/config.toml` and keep the `[mt5.bridge]` block
+   (`host = "127.0.0.1"`, `port = 8001`).
+4. Verify:
+   ```
+   python -m mt5_mcp doctor
+   ```
+   Expect `[INFO] backend: bridge → 127.0.0.1:8001` and `[PASS]` lines.
 
-# 2. (Optional) Dump every tradeable symbol so you have a reference handy.
-python -m mt5_mcp export-symbols --output symbols.csv
+   **Bridge version note:** the host's `mt5linux`/`rpyc` must be
+   protocol-compatible with the container's RPyC server. The stock image ships
+   `mt5linux 1.0.3` (which pins `rpyc==5.2.3`); if the server fails to start with
+   `Unknown switch -w`, pin a matching `rpyc` or use the maintained
+   `MT5LinuxEnhanced` client.
 
-# 3. Run the server on stdio (default — what an MCP client invokes as a subprocess).
-python -m mt5_mcp serve
-```
+### Wire it to an agent
 
-To register the server with an MCP client, see the [example configs](https://github.com/vincentwongso/mt5-trading-mcp/tree/main/examples/clients) — drop-in JSON snippets for Claude Desktop and Cursor.
+Register the server with your agent harness. [`examples/clients/hermes.json`](examples/clients/hermes.json)
+shows a Hermes `mcp_servers` block scoped to the **read-only** tools via `include`
+(so the agent can't trade until you widen it). Other MCP clients (Claude Desktop,
+Cursor) have configs under [`examples/clients/`](examples/clients/); see also
+[MCP client setup](#mcp-client-setup) below.
 
 ## What it does
 
@@ -85,6 +110,8 @@ To register the server with an MCP client, see the [example configs](https://git
 | `get_positions(symbol?)` | Open positions. |
 | `get_orders(symbol?)` | Pending orders. |
 | `get_history(from_ts, to_ts, symbol?)` | Closed deals in a UTC range. |
+| `get_rates(symbol, timeframe, count)` | OHLC bars (M1…MN1), most recent first. |
+| `calc_margin(symbol, side, volume, price?)` | Broker-authoritative margin estimate for a hypothetical order. |
 
 ### Mutating tools (preflight + consent + idempotency + audit)
 
@@ -113,6 +140,7 @@ A subscribed client receives a `notifications/resources/updated` message when th
 
 Drop-in config snippets are in [`examples/clients/`](https://github.com/vincentwongso/mt5-trading-mcp/tree/main/examples/clients):
 
+- **Hermes (Nous Research):** `examples/clients/hermes.json` — a direct `mcp_servers` block with the read-only tools `include`-scoped (the launch/demo agent). See [Setup → Wire it to an agent](#setup).
 - **Claude Desktop, stdio:** `examples/clients/claude-desktop-stdio.json`. Paste the inner `mcpServers` entry into `%APPDATA%\Claude\claude_desktop_config.json`.
 - **Claude Desktop, HTTP:** `examples/clients/claude-desktop-http.json`. For when `mt5-mcp serve --transport http` is already running.
 - **Cursor:** `examples/clients/cursor.json`. Paste into `~/.cursor/mcp.json`.
@@ -137,7 +165,7 @@ The repo ships with a project-scoped Claude Code setup so cloning is the entire 
 
 ```
 .mcp.json              # registers mt5-mcp on stdio
-.claude/settings.json  # allowlists the nine read tools (mutating tools stay un-allowlisted)
+.claude/settings.json  # allowlists the eleven read tools (mutating tools stay un-allowlisted)
 .claude/skills/
 ├── mt5-market-data/SKILL.md   # what each read tool does + output conventions
 └── mt5-trading/SKILL.md       # consent flow, idempotency, error taxonomy, demo framing

@@ -2,6 +2,8 @@
 
 Model Context Protocol server wrapping the MetaTrader 5 Python library — exposes a logged-in MT5 terminal as a set of MCP tools an AI agent can call.
 
+> ⚠️ **This software places _real_ trades through your MetaTrader 5 terminal — real orders, real money, irreversible fills.** Read [DISCLAIMER.md](DISCLAIMER.md) and [SECURITY.md](SECURITY.md) before connecting it to a live account.
+
 **Status:** v1.0 — first public release. Windows + Python 3.10+ required.
 
 ## Requirements

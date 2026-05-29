@@ -207,6 +207,29 @@ def test_doctor_prints_backend_label(fake_mt5, capsys, tmp_path):
     assert "[INFO] backend: native" in out
 
 
+def test_doctor_reports_fail_when_ping_returns_ok_false(capsys, tmp_path):
+    """ping returning ok=false must produce [FAIL] ping and a non-zero exit code."""
+    fake = FakeMT5()
+    # Make all three ping layers fail:
+    # Layer 1: terminal_info() returns None
+    fake._terminal_info = None
+    # Layer 2: account_info() returns None (no login available)
+    fake._account_info = None
+    # Layer 3: _symbol_info_tick is empty by default — no fresh ticks
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+
+    rc = run_doctor(mt5_module=fake, config_path=tmp_path / "nope.toml",
+                    check_streaming=False)
+    captured = capsys.readouterr()
+    assert "[FAIL] ping" in captured.out
+    assert "[PASS] ping" not in captured.out
+    assert rc != 0
+
+
 def test_doctor_skips_symbol_probes_when_broker_has_no_symbols(capsys, tmp_path):
     """Empty broker catalogue — skip the symbol-dependent checks gracefully."""
     fake = FakeMT5()

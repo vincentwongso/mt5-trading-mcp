@@ -97,7 +97,18 @@ def run_doctor(
         return tm.get_tool(name).fn(**kwargs)
 
     results = []
-    results.append(_check("ping", lambda: call("ping")))
+    # ping returns a plain dict {"ok": bool, "latency_ms": int, "via": str|None}
+    # NOT an error envelope, so _check would always treat it as [PASS].
+    # Inspect `ok` directly instead.
+    ping_result = call("ping")
+    if ping_result.get("ok"):
+        via = ping_result.get("via")
+        ms = ping_result.get("latency_ms", 0)
+        print(f"[PASS] ping ({via}, {ms}ms)")
+        results.append(True)
+    else:
+        print(f"[FAIL] ping: terminal unreachable (ok=false)")
+        results.append(False)
     results.append(_check("get_terminal_info", lambda: call("get_terminal_info")))
     results.append(_check("get_account_info", lambda: call("get_account_info")))
 

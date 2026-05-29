@@ -173,7 +173,7 @@ The repo ships with a project-scoped Claude Code setup so cloning is the entire 
 
 **To use:**
 
-1. Clone the repo and install the package into the Python that Claude Code will spawn (`uv sync --extra dev` from the repo root, or `pip install mt5-trading-mcp` system-wide).
+1. Clone the repo and install the package into the Python that Claude Code will spawn (`uv sync --extra dev` from the repo root, or `pip install mt5-trading-mcp` system-wide). **Linux:** install the bridge client instead — `pip install 'mt5-trading-mcp[bridge]'` — and configure `[mt5.bridge]` (see [Setup → Linux](#linux-mt5-in-docker-bridge-backend)).
 2. Launch the MT5 terminal and log into your broker.
 3. From the repo root, run `claude`. Confirm `mt5-mcp` shows up under `/mcp`.
 4. Ask the agent something like *"what's my account balance"* or *"show me the price of EURUSD"* — the read tools fire without a permission prompt; the `mt5-market-data` skill teaches the agent how to interpret the output.

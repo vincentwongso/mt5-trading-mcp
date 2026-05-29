@@ -90,6 +90,8 @@ def run_doctor(
     reset_context_for_tests()
     server = build_server(mt5_module=mt5_module, config_path=config_path)
     tm = server._tool_manager
+    from mt5_mcp.server import get_context
+    print(f"[INFO] backend: {get_context().client.backend_label}")
 
     def call(name: str, **kwargs):
         return tm.get_tool(name).fn(**kwargs)

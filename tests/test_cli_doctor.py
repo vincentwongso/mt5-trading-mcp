@@ -199,6 +199,14 @@ def test_doctor_auto_falls_back_to_suffixed_symbol(capsys, tmp_path):
     assert "[PASS] get_quote(EURUSD.r)" in captured.out
 
 
+def test_doctor_prints_backend_label(fake_mt5, capsys, tmp_path):
+    from mt5_mcp.cli.doctor import run_doctor
+    run_doctor(mt5_module=fake_mt5, check_streaming=False,
+               config_path=tmp_path / "nope.toml")
+    out = capsys.readouterr().out
+    assert "[INFO] backend: native" in out
+
+
 def test_doctor_skips_symbol_probes_when_broker_has_no_symbols(capsys, tmp_path):
     """Empty broker catalogue — skip the symbol-dependent checks gracefully."""
     fake = FakeMT5()

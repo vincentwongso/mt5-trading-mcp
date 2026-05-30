@@ -6,6 +6,10 @@ on:
       - "v*"
   workflow_dispatch:
 
+# Least privilege by default; the publish job opts into id-token explicitly.
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build sdist + wheel
@@ -33,11 +37,17 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Only ever publish from a release tag — a manual run on a branch is refused.
+    if: github.ref_type == 'tag'
+    # Deploys into the protected 'pypi' environment. Add a required reviewer in
+    # repo Settings -> Environments -> pypi to gate every publish behind manual
+    # approval, and restrict its deployment tags to "v*".
     environment:
       name: pypi
       url: https://pypi.org/p/mt5-trading-mcp
     permissions:
-      id-token: write
+      id-token: write   # OIDC token for PyPI Trusted Publishing (no API token)
+      contents: read
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -45,7 +55,9 @@ jobs:
           name: dist
           path: dist/
 
+      # Authentication is via OIDC Trusted Publishing — no username/password/token.
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
+          attestations: true   # PEP 740 provenance
           skip-existing: true

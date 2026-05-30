@@ -1,0 +1,29 @@
+# MetaTrader 5 under Wine, reachable over RPyC — the supported way to run the
+# MT5 terminal on Linux. After `docker compose up -d`, open http://localhost:3000
+# in a browser (KasmVNC) to finish the MT5 install + log into your broker.
+# Then point mt5-trading-mcp at the RPyC port via [mt5.bridge] (see config.toml.example).
+#
+# Notes:
+#  - First boot installs MT5 under Wine and can take a few minutes; if the
+#    install fails with "socket: Function not implemented", restart the container.
+#  - The RPyC client you install on the host (pip install 'mt5-trading-mcp[bridge]')
+#    must be rpyc-protocol-compatible with the server in this image. If the bridge
+#    fails to start with "Unknown switch -w", the container's mt5linux/rpyc versions
+#    are mismatched (the stock image ships mt5linux 1.0.3, which expects rpyc 5.2.3,
+#    but may run rpyc 6.x) — pin a matching rpyc or use the MT5LinuxEnhanced client.
+services:
+  mt5:
+    image: gmag11/metatrader5_vnc
+    container_name: mt5
+    ports:
+      - "127.0.0.1:3000:3000"   # KasmVNC web UI (setup / broker login)
+      - "127.0.0.1:8001:8001"   # RPyC — mt5-trading-mcp connects here
+    environment:
+      - CUSTOM_USER=mt5
+      - PASSWORD=change-me        # VNC password; change before use
+    volumes:
+      - mt5-config:/config
+    restart: unless-stopped
+
+volumes:
+  mt5-config:

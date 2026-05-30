@@ -57,7 +57,7 @@ response looked identical in the audit log and tool response.
 
 Bugfix release. Pending limit/stop/stop-limit orders against brokers
 that advertise only `IOC` on a symbol's `filling_mode` mask (e.g.
-Broker on `USOIL` / `UKOIL`) were rejected before reaching the
+some brokers on `USOIL` / `UKOIL`) were rejected before reaching the
 broker: mt5lib's `order_send` returned `None`, surfacing as the
 `MT5_NULL_RESPONSE` envelope. The symbol's `filling_mode` mask
 describes what's accepted for **market** orders only; pending orders
@@ -76,7 +76,7 @@ was absent, producing the rejection.
   (IOC → FOK fallback).
 - New regression test
   `test_pick_filling_mode_pending_returns_RETURN_even_without_BOC_bit`
-  pins the new behavior against the Broker-style mask=2 case.
+  pins the new behavior against the IOC-only mask=2 case.
 
 ## [1.0.11] - 2026-05-11
 
@@ -87,8 +87,8 @@ the assumption that "ping should report raw IPC state." In practice,
 when the IPC was in a NOT_INITIALIZED state that other read tools
 transparently recover from, all three ping layers raised/returned None
 in lockstep — so `ping.ok=false` while `get_account_info`,
-`get_terminal_info`, and quotes all worked. Confirmed on the Broker
-demo / FXVPS deployment immediately after upgrading to 1.0.10.
+`get_terminal_info`, and quotes all worked. Confirmed on a live demo
+terminal immediately after upgrading to 1.0.10.
 
 ### Fixed
 
@@ -113,11 +113,11 @@ demo / FXVPS deployment immediately after upgrading to 1.0.10.
 
 ## [1.0.10] - 2026-05-11
 
-Bugfix release. Surfaced when an MM cron monitor treated
+Bugfix release. Surfaced when an external health monitor treated
 `mt5-mcp__ping` `{"ok": false}` as terminal-down even though
 `get_account_info`, quotes, and mutating tools all worked. Root cause:
 the `ping` tool's only signal was `mt5.terminal_info()`, which some MT5
-builds (notably v5.0.3815+ on the Broker demo / FXVPS deployment)
+builds (notably v5.0.3815+ on a live demo terminal)
 return as `None` despite a healthy session. The connect-time
 broker-offset derivation already has a layered fallback for the same
 quirk; `ping` was the lone single-source health check.
@@ -141,16 +141,15 @@ quirk; `ping` was the lone single-source health check.
 
 ## [1.0.9] - 2026-05-11
 
-Bugfix release. Surfaced when a downstream Stage 2 agent (`trader_cli`
-placing a USOIL long on a live demo, ticket 88406038) called
-`modify_order` with a malformed SL string. The bare `Decimal(sl)` inside
+Bugfix release. Surfaced when a downstream agent called `modify_order`
+with a malformed SL string on a live demo. The bare `Decimal(sl)` inside
 the tool body raised `decimal.InvalidOperation: ConversionSyntax`, which
 `@error_envelope` swallowed as a generic `INTERNAL_ERROR` with no
-field-or-value detail. The caller, unable to distinguish a caller-side
-parse bug from an actual broker fault, treated it as a broker fault and
-ran its "SL-modify failed → close position" branch, unwinding the
-position for ~$94 of slippage. Same class of trap exists in `place_order`
-for any of `volume`, `price`, `stop_limit_price`, `sl`, `tp`.
+field-or-value detail. A caller unable to distinguish a caller-side parse
+bug from an actual broker fault could treat it as a broker fault and run a
+"SL-modify failed → close position" branch, unwinding a clean position.
+Same class of trap exists in `place_order` for any of `volume`, `price`,
+`stop_limit_price`, `sl`, `tp`.
 
 ### Fixed
 
@@ -172,8 +171,8 @@ for any of `volume`, `price`, `stop_limit_price`, `sl`, `tp`.
 
 ## [1.0.8] - 2026-05-08
 
-Bugfix release. Surfaced when a downstream agent (`trader_cli` driving Stage 3
-position management against a live MT5 demo) attempted to trail an XAGUSD.z
+Bugfix release. Surfaced when a downstream agent doing position
+management against a live MT5 demo attempted to trail an XAGUSD.z
 stop-loss to breakeven and the mutating tool returned `INTERNAL_ERROR:
 NoneType object has no attribute retcode` instead of a typed broker envelope.
 Same trap fires for any caller of `place_order`, `modify_order`,
@@ -287,7 +286,7 @@ Surface enrichment to support downstream reasoning skills (CFD trading skills co
 
 ## [1.0.2] - 2026-04-28
 
-Quality-of-life fix surfaced by the first Claude Code agent smoke test against Vincent's Broker demo terminal (UTC+3).
+Quality-of-life fix surfaced by the first agent smoke test against a live demo terminal (UTC+3).
 
 ### Fixed
 
@@ -309,7 +308,7 @@ First public release on PyPI. The underlying feature set is the cumulative outpu
 
 ### Added
 
-- Public PyPI distribution: `pip install mt5-mcp`.
+- Public PyPI distribution: `pip install mt5-trading-mcp`.
 - `SECURITY.md` with vulnerability disclosure policy and explicit scope statement (`mt5-mcp` is not the security boundary; the broker is).
 - `CHANGELOG.md` (this file), retroactively documenting phases 1–3.
 - `examples/clients/` directory with drop-in MCP-client configs:
@@ -323,8 +322,8 @@ First public release on PyPI. The underlying feature set is the cumulative outpu
 ### Changed
 
 - Bumped version `0.1.0` → `1.0.0`.
-- README rewritten for first-time PyPI users; install instructions now lead with `pip install mt5-mcp`. Repo URL updated from `Broker/mt5-trading-mcp` to `vincentwongso/mt5-mcp`.
-- `pyproject.toml` author updated from "Broker" to "Vincent". Security contact moved to a personal email.
+- README rewritten for first-time PyPI users; install instructions now lead with `pip install mt5-trading-mcp`. Repo URL updated to `vincentwongso/mt5-trading-mcp`.
+- `pyproject.toml` author and security contact updated to a personal identity.
 
 ### Removed
 

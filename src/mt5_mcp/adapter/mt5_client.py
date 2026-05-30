@@ -61,18 +61,79 @@ def _import_mt5():
     return MetaTrader5
 
 
+def resolve_mt5_module(config) -> Any:
+    """Resolve the MetaTrader5 backend per config.
+
+    - No `[mt5.bridge]` block  -> native in-process import (Windows / Wine Python).
+    - `[mt5.bridge]` present    -> an `mt5linux` RPyC proxy to a remote terminal
+      (e.g. the gmag11/metatrader5_vnc container on Linux). The proxy exposes the
+      same MetaTrader5 API, including constants (verified: RPyC passes ints by
+      value), so it drops straight in as the injected module.
+
+    This is the ONLY place, besides `_import_mt5`, that imports a backend.
+    """
+    bridge = config.mt5.bridge
+    if bridge is None:
+        try:
+            return _import_mt5()
+        except ImportError as exc:
+            raise MT5Error(
+                terminal_not_connected_error(
+                    why="the MetaTrader5 package is not installed. On Windows: "
+                        "pip install mt5-trading-mcp. On Linux: run MT5 in Docker "
+                        "and configure [mt5.bridge] (see the README Linux setup).",
+                )
+            ) from exc
+    try:
+        from mt5linux import MetaTrader5 as _RPyCClient  # type: ignore[import]
+    except ImportError as exc:
+        raise MT5Error(
+            terminal_not_connected_error(
+                why="[mt5.bridge] is configured but no mt5linux client is "
+                    "installed. Install it with: pip install "
+                    "'mt5-trading-mcp[bridge]'",
+            )
+        ) from exc
+    try:
+        return _RPyCClient(host=bridge.host, port=bridge.port)
+    except Exception as exc:
+        raise MT5Error(
+            terminal_not_connected_error(
+                why=f"could not reach the MT5 bridge at "
+                    f"{bridge.host}:{bridge.port}: {exc}",
+            )
+        ) from exc
+
+
 class MT5Client:
     def __init__(
         self,
         *,
         terminal_path: str | None = None,
         mt5_module: Any | None = None,
+        mt5_factory: Callable[[], Any] | None = None,
+        backend_label: str = "native",
     ) -> None:
-        self._mt5 = mt5_module if mt5_module is not None else _import_mt5()
+        # `mt5_module` (a pre-resolved module/proxy) is used directly — tests
+        # inject FakeMT5 here. Otherwise the backend is resolved LAZILY on first
+        # use via `mt5_factory` (defaulting to the native import), so the server
+        # can be constructed on a host without MetaTrader5 installed.
+        self._mt5_resolved = mt5_module
+        self._mt5_factory = mt5_factory or _import_mt5
         self._terminal_path = terminal_path or None
         self._lock = threading.RLock()
         self._initialised = False
         self.broker_offset_minutes = 0
+        self.backend_label = backend_label
+
+    @property
+    def _mt5(self) -> Any:
+        """The backend module/proxy, resolved lazily on first access."""
+        if self._mt5_resolved is None:
+            with self._lock:
+                if self._mt5_resolved is None:
+                    self._mt5_resolved = self._mt5_factory()
+        return self._mt5_resolved
 
     # --- lifecycle -------------------------------------------------------
 

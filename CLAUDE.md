@@ -1,12 +1,12 @@
 # mt5-mcp — Agent Handover Notes
 
-**Status (last updated April 2026):** Phase 5 complete — `tests/integration/` suite ships with 9 read-tool live tests + 1 place_order/close_position lifecycle test against a real MT5 demo terminal. Phase 5 surfaced two real v1.0.0 production bugs (`pick_filling_mode` referencing nonexistent `mt5.SYMBOL_FILLING_*` attributes; missing retcode mapping for `10027` AutoTrading-disabled). Both fixed; version bumped to v1.0.1. 243 passing unit tests + 11 integration tests (10 live-broker + 1 transport HTTP). v1.0.1 PyPI publish unblocked once the lifecycle test goes green on Vincent's demo terminal (requires AutoTrading enabled in the MT5 toolbar). Project-scoped Claude Code agent setup landed alongside (`.mcp.json`, `mt5-market-data` and `mt5-trading` skills under `.claude/skills/`); read tools allowlisted, mutating tools prompt-per-call. Spec at `docs/superpowers/specs/2026-04-28-claude-code-agent-setup-design.md`.
+**Status (last updated April 2026):** Phase 5 complete — `tests/integration/` suite ships with 9 read-tool live tests + 1 place_order/close_position lifecycle test against a real MT5 demo terminal. Phase 5 surfaced two real v1.0.0 production bugs (`pick_filling_mode` referencing nonexistent `mt5.SYMBOL_FILLING_*` attributes; missing retcode mapping for `10027` AutoTrading-disabled). Both fixed; version bumped to v1.0.1. 243 passing unit tests + 11 integration tests (10 live-broker + 1 transport HTTP). v1.0.1 PyPI publish unblocked once the lifecycle test goes green on Vincent's demo terminal (requires AutoTrading enabled in the MT5 toolbar). Project-scoped Claude Code agent setup landed alongside (`.mcp.json`, `mt5-market-data` and `mt5-trading` skills under `.claude/skills/`); read tools allowlisted, mutating tools prompt-per-call.
 
 ## Where to start
 
-1. **Architecture spec:** `mt5-mcp-architecture.md` (single source of truth for design).
-2. **Phase 1 plan:** `docs/superpowers/plans/2026-04-24-phase-1-skeleton-and-read-tools.md` (TDD-style, every step has the actual code).
-3. **What's next:** Enable AutoTrading in MT5 (toolbar "AlgoTrading" button green) and re-run `pytest -m integration -v` against a clean demo terminal. Once green, tag `v1.0.1`, `git push origin main && git push origin v1.0.1`, then `uv build && uv publish`. Then v1.1+ scoping (plugin loader, Tier 3 integration coverage, OIDC publishing). The Phase 5 spec lives at `docs/superpowers/specs/2026-04-28-phase-5-integration-testing-design.md`; the v1.0.1 fix details are in `CHANGELOG.md`.
+1. **README.md** — what the project is, the tool catalogue, install, and config.
+2. **The code** — `src/mt5_mcp/` is organised by concern: `adapter/` (the `MetaTrader5` wrapper + type conversions), `tools/` (the MCP tools), `resources/` (subscribable resources), `policy/` (consent / idempotency / audit), `streaming/` (change-detection), and `types.py` / `config.py` (the Pydantic schemas).
+3. **CHANGELOG.md** — bug history, known limitations, and the per-release rationale.
 
 ## What Phase 1 shipped
 
@@ -22,7 +22,7 @@ Three MCP resources (`account://current`, `positions://current`, `quotes://{symb
 
 ## What Phase 4 added
 
-No production code changes — this was a packaging and docs phase. Bumped `pyproject.toml` to `1.0.0`, re-authored to "Vincent" with a personal security contact, added `[project.urls]`. Rewrote `README.md` for first-time PyPI users (with a Windows VPS deployment section covering both agent-on-VPS stdio and agent-local-via-SSH-tunnel HTTP patterns). Added `SECURITY.md`, `CHANGELOG.md`, three example client configs (`examples/clients/`), and a single GitHub Actions test workflow on Windows runners across Python 3.10/3.11/3.12. Tagged `v1.0.0` and published to PyPI. Repo moved from `Broker/mt5-trading-mcp` to `vincentwongso/mt5-mcp`.
+No production code changes — this was a packaging and docs phase. Bumped `pyproject.toml` to `1.0.0`, re-authored to "Vincent" with a personal security contact, added `[project.urls]`. Rewrote `README.md` for first-time PyPI users (with a Windows VPS deployment section covering both agent-on-VPS stdio and agent-local-via-SSH-tunnel HTTP patterns). Added `SECURITY.md`, `CHANGELOG.md`, three example client configs (`examples/clients/`), and a single GitHub Actions test workflow on Windows runners across Python 3.10/3.11/3.12. Tagged `v1.0.0` and published to PyPI. Repo moved to `vincentwongso/mt5-trading-mcp`.
 
 ## Critical patterns all future phases MUST follow
 
@@ -290,7 +290,7 @@ User memories for this project live at `~/.claude/projects/C--projects-mt5-tradi
 
 ## Don't surprise the user
 
-- This project is **broker-agnostic**. No hardcoded broker URLs / server names / symbol conventions. Broker is the launch reference user, not an embedded constraint.
+- This project is **broker-agnostic**. No hardcoded broker URLs / server names / symbol conventions. The launch reference broker is not an embedded constraint.
 - This project is **local-first**. No cloud component, no telemetry by default, no auto-update. The MCP runs on the customer's machine in the same process tree as their agent runtime.
 - The MCP is **not the security boundary** — the broker's MT5 server enforces hard limits. Pre-flight checks in the policy engine (Phase 2) are UX guardrails, not security controls.
 

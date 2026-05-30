@@ -84,5 +84,5 @@ Tool failures arrive as MCP errors carrying a structured envelope: `{code, messa
 ## See also
 
 - `mt5-trading` skill — covers placing, modifying, cancelling, and closing orders. Loads automatically when the user wants to actually trade.
-- Architecture spec at `mt5-mcp-architecture.md` for the full data model.
+- `src/mt5_mcp/types.py` for the full data model (the Pydantic field definitions).
 - `CHANGELOG.md` for known limitations and bug history.

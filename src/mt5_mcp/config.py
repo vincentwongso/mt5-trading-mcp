@@ -32,9 +32,21 @@ def _user_data_path(filename: str) -> str:
     return str(Path(user_data_dir("mt5-mcp", appauthor=False)) / filename)
 
 
+class BridgeConfig(_Sub):
+    """RPyC bridge to an MT5 terminal running elsewhere (e.g. the
+    gmag11/metatrader5_vnc Docker container on Linux). When present, the
+    adapter connects via an mt5linux client instead of importing the
+    Windows-only MetaTrader5 package in-process."""
+    host: str = "127.0.0.1"
+    port: int = Field(8001, ge=1, le=65535)
+
+
 class MT5Section(_Sub):
     terminal_path: str = ""
     preferred_login: int | None = None
+    # Presence of this block selects the RPyC bridge backend; omit it for the
+    # native (Windows-native or Wine-prefix Python) in-process backend.
+    bridge: BridgeConfig | None = None
 
 
 class PolicySection(_Sub):

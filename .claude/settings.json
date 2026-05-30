@@ -31,7 +31,9 @@
       "mcp__mt5-mcp__get_market_hours",
       "mcp__mt5-mcp__get_positions",
       "mcp__mt5-mcp__get_orders",
-      "mcp__mt5-mcp__get_history"
+      "mcp__mt5-mcp__get_history",
+      "mcp__mt5-mcp__get_rates",
+      "mcp__mt5-mcp__calc_margin"
     ]
   }
 }

@@ -162,10 +162,10 @@ def test_widen_tp_on_sell_position_round_trips_through_mt5_dict(server_and_mt5):
 
 def test_modify_unparseable_sl_returns_invalid_request(server_and_mt5):
     """Regression: a malformed SL string used to escape as INTERNAL_ERROR
-    via `decimal.InvalidOperation`, losing which field broke. Stage 2's
-    'SL-modify failed → close the position' branch then unwound a clean
-    fill (ticket 88406038, 2026-05-11). Now surfaces as INVALID_REQUEST
-    with the offending field+value so callers can correct the next call."""
+    via `decimal.InvalidOperation`, losing which field broke. A caller's
+    'SL-modify failed → close the position' branch could then unwind a clean
+    fill. Now surfaces as INVALID_REQUEST with the offending field+value so
+    callers can correct the next call."""
     server, fake = server_and_mt5
     out = _call(server, "modify_order", ticket=42, sl="not-a-number")
     assert out["error"]["code"] == "INVALID_REQUEST"

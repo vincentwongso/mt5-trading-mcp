@@ -70,7 +70,7 @@ def test_get_terminal_info_populates_fields(server_and_mt5):
     assert info.build == 4150
     assert info.broker_tz_offset_minutes == 180
     assert info.login == 123456
-    assert info.server == "Broker-Demo"
+    assert info.server == "Example-Demo"
 
 
 def test_get_terminal_info_when_disconnected(server_and_mt5):

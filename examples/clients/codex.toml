@@ -1,0 +1,46 @@
+# Register mt5-trading-mcp with the OpenAI Codex CLI.
+#
+# Add this table to ~/.codex/config.toml (user-level), or to .codex/config.toml
+# at your project root (project-scoped config is only loaded for trusted projects).
+#
+# Quick add via CLI:  codex mcp add mt5-mcp -- python -m mt5_mcp serve
+# (the CLI writes command/args only; add the tool scoping below by hand.)
+
+[mcp_servers.mt5-mcp]
+command = "python"
+args = ["-m", "mt5_mcp", "serve"]
+# startup_timeout_sec = 10   # optional; default is 10s
+
+# Safe default: expose ONLY the 11 read-only tools, so the agent can't trade.
+# Delete this array to expose all 15 tools, or use the consent gate below to
+# keep the 4 mutating tools available but human-confirmed. `disabled_tools` is
+# the inverse (a denylist applied after this allowlist).
+enabled_tools = [
+  "ping",
+  "get_terminal_info",
+  "get_account_info",
+  "get_quote",
+  "get_symbols",
+  "get_market_hours",
+  "get_rates",
+  "calc_margin",
+  "get_positions",
+  "get_orders",
+  "get_history",
+]
+
+# --- Consent gate (alternative to enabled_tools) ----------------------------
+# Keep every tool registered, but require a human to approve each call.
+# default_tools_approval_mode is one of: "auto" | "prompt" | "approve".
+#   default_tools_approval_mode = "prompt"
+# Per-tool override (e.g. let one read tool run unattended):
+#   [mcp_servers.mt5-mcp.tools.get_quote]
+#   approval_mode = "auto"
+
+# --- HTTP transport (alternative to command/args) ---------------------------
+# Start the server first:  python -m mt5_mcp serve --transport http
+# Then replace the [mcp_servers.mt5-mcp] table above with:
+#   [mcp_servers.mt5-mcp]
+#   url = "http://localhost:8765/mcp"
+#   bearer_token_env_var = "MT5_MCP_TOKEN"   # only if transport.http.auth_token is set
+#   enabled_tools = [ ... same 11 read tools ... ]

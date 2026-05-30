@@ -109,10 +109,20 @@ def build_context(
             cfg = watcher.current
         else:
             cfg = load_config()  # defaults
-        # Client.
+        # Client. When no module is injected (production), resolve the backend
+        # LAZILY per config — native import or the [mt5.bridge] RPyC proxy — so
+        # the server constructs even on a host without MetaTrader5 installed.
+        from mt5_mcp.adapter.mt5_client import resolve_mt5_module
+        backend_label = (
+            f"bridge → {cfg.mt5.bridge.host}:{cfg.mt5.bridge.port}"
+            if cfg.mt5.bridge is not None
+            else "native"
+        )
         client = MT5Client(
             terminal_path=cfg.mt5.terminal_path or None,
             mt5_module=mt5_module,
+            mt5_factory=(None if mt5_module is not None else lambda: resolve_mt5_module(cfg)),
+            backend_label=backend_label,
         )
         symbols = SymbolPrep(client)
         policy = PolicyEngine(

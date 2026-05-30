@@ -8,7 +8,7 @@ version = "1.0.14"
 description = "Model Context Protocol server wrapping the MetaTrader 5 Python library."
 readme = "README.md"
 license = { file = "LICENSE" }
-authors = [{ name = "Vincent", email = "vincent.wongso.saputro@gmail.com" }]
+authors = [{ name = "Vincent Wongso Saputro", email = "vincent.wongso.saputro@gmail.com" }]
 requires-python = ">=3.10"
 classifiers = [
   "License :: OSI Approved :: MIT License",

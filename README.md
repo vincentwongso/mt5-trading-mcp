@@ -1,6 +1,14 @@
 # mt5-mcp
 
+[![PyPI version](https://img.shields.io/pypi/v/mt5-trading-mcp.svg)](https://pypi.org/project/mt5-trading-mcp/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://pypi.org/project/mt5-trading-mcp/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Tests](https://img.shields.io/github/actions/workflow/status/vincentwongso/mt5-trading-mcp/test.yml?branch=main&label=tests)](https://github.com/vincentwongso/mt5-trading-mcp/actions/workflows/test.yml)
+
 Model Context Protocol server wrapping the MetaTrader 5 Python library — exposes a logged-in MT5 terminal as a set of MCP tools an AI agent can call.
+
+<!-- Demo GIF goes here — e.g. ![mt5-mcp demo](assets/demo.gif) -->
+
 
 > ⚠️ **This software places _real_ trades through your MetaTrader 5 terminal — real orders, real money, irreversible fills.** Read [DISCLAIMER.md](DISCLAIMER.md) and [SECURITY.md](SECURITY.md) before connecting it to a live account.
 

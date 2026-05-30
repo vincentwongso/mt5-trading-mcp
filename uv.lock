@@ -404,7 +404,7 @@ wheels = [
 
 [[package]]
 name = "mt5-trading-mcp"
-version = "1.0.14"
+version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },

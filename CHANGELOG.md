@@ -4,6 +4,47 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.1.0] - 2026-05-30
+
+Public open-source launch release. Adds Linux support and rounds out the
+docs, examples, and release tooling. No breaking changes to the tool or
+resource APIs.
+
+### Added
+
+- **Linux support via a Docker/RPyC bridge.** Set `[mt5.bridge]` (host/port)
+  in `config.toml` and the server connects to an MT5 terminal running in a
+  Wine container over RPyC, instead of the native in-process `MetaTrader5`
+  library. Install the bridge client with the new `mt5-trading-mcp[bridge]`
+  extra. The backend resolves lazily, so `serve` and `doctor` start without
+  `MetaTrader5` installed (degrading to `TERMINAL_NOT_CONNECTED`), and
+  `doctor` reports the active backend (`native` | `bridge -> host:port`).
+- Drop-in client config examples under `examples/clients/`: Hermes, Claude
+  Code, Codex (`enabled_tools` read-only scope), OpenClaw, Claude Desktop
+  (stdio + HTTP), and Cursor — plus `examples/docker-compose.yml` and
+  `examples/config.toml.example`.
+- `DISCLAIMER.md` (real-money risk) and a prompt-injection threat model in
+  `SECURITY.md`.
+- Python 3.13 and Linux classifiers.
+
+### Changed
+
+- README rewritten for agent-followable Windows + Linux setup, with the
+  accurate eleven read-tool catalogue (now lists `get_rates` and
+  `calc_margin`) and PyPI / Python / license / CI badges.
+- `LICENCE` renamed to `LICENSE` (MIT; copyright holder "mt5-mcp
+  contributors").
+- Release workflow hardened: tag-only publish, gated `pypi` environment,
+  least-privilege permissions, PEP 740 attestations, and OIDC Trusted
+  Publishing only (no API tokens).
+
+### Fixed
+
+- `doctor` reports `[FAIL]` for the `ping` check when the terminal is
+  unreachable (previously it could read as healthy).
+- The bundled Claude Code allowlist now covers all eleven read tools, so
+  `get_rates` and `calc_margin` no longer trigger a permission prompt.
+
 ## [1.0.14] - 2026-05-19
 
 Preflight release. The `comment` field on `place_order` is a frequent silent

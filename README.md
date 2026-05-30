@@ -12,7 +12,7 @@ Model Context Protocol server wrapping the MetaTrader 5 Python library — expos
 
 > ⚠️ **This software places _real_ trades through your MetaTrader 5 terminal — real orders, real money, irreversible fills.** Read [DISCLAIMER.md](DISCLAIMER.md) and [SECURITY.md](SECURITY.md) before connecting it to a live account.
 
-**Status:** v1.0 — first public release. Windows (native) or Linux (via Docker); Python 3.10+.
+**Status:** v1.1.0 — first public release. Windows (native) or Linux (via Docker); Python 3.10+.
 
 ## Requirements
 

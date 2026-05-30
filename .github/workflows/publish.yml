@@ -61,3 +61,83 @@ jobs:
         with:
           attestations: true   # PEP 740 provenance
           skip-existing: true
+
+  github-release:
+    name: Publish GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Mirror the PyPI release: only ever from a tag, and only after the
+    # PyPI publish above has succeeded, so the two never drift apart.
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write   # create/edit the GitHub release and upload assets
+    steps:
+      - name: Checkout (for CHANGELOG.md)
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      # Slice the notes for this exact version out of CHANGELOG.md so the
+      # GitHub release reads identically to the changelog entry.
+      - name: Extract release notes from CHANGELOG.md
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+          # Match the "## [VERSION]" header as a literal string (index()==1),
+          # not a regex — so the dots in the version can't act as wildcards
+          # and awk's -v escape handling can't mangle the value.
+          awk -v ver="$VERSION" '
+            BEGIN { marker = "## [" ver "]" }
+            index($0, marker) == 1 { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+
+          # Trim leading/trailing blank lines so the release body is tidy.
+          sed -i -e '/./,$!d' notes.md
+          # (reverse-trim trailing blanks)
+          tac notes.md | sed -e '/./,$!d' | tac > notes.trimmed && mv notes.trimmed notes.md
+
+          if [ ! -s notes.md ]; then
+            echo "::warning::No CHANGELOG.md section found for ${VERSION}; using a fallback body."
+            printf 'Release %s. See [CHANGELOG.md](https://github.com/%s/blob/%s/CHANGELOG.md).\n' \
+              "$TAG" "$GITHUB_REPOSITORY" "$TAG" > notes.md
+          fi
+
+          echo "----- release notes preview -----"
+          cat notes.md
+          echo "---------------------------------"
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # PEP 440 / SemVer pre-releases carry a letter (a/b/rc/dev) or a
+          # hyphen; a plain release is digits and dots only. Pass the value
+          # explicitly (--prerelease=true|false) so re-runs are idempotent —
+          # the bare --prerelease flag toggles rather than sets.
+          is_pre=false
+          if printf '%s' "${VERSION}" | grep -qE '[A-Za-z]|-'; then
+            is_pre=true
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists; updating notes and assets."
+            gh release edit "$TAG" --title "$TAG" --notes-file notes.md --prerelease="$is_pre"
+            gh release upload "$TAG" dist/* --clobber
+          else
+            echo "Creating release $TAG."
+            gh release create "$TAG" --title "$TAG" --notes-file notes.md --prerelease="$is_pre" dist/*
+          fi

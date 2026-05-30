@@ -4,7 +4,7 @@
 
 ## Where to start
 
-1. **README.md** — what the project is, the tool catalogue, install, and config.
+1. **README.md** — what the project is, a quickstart, and the "For AI agents" install directive. Detailed guides live under **`docs/`** (`installation.md`, `configuration.md`, `tools.md`, `clients.md`, `deployment.md`); contributor guidance is in **CONTRIBUTING.md**.
 2. **The code** — `src/mt5_mcp/` is organised by concern: `adapter/` (the `MetaTrader5` wrapper + type conversions), `tools/` (the MCP tools), `resources/` (subscribable resources), `policy/` (consent / idempotency / audit), `streaming/` (change-detection), and `types.py` / `config.py` (the Pydantic schemas).
 3. **CHANGELOG.md** — bug history, known limitations, and the per-release rationale.
 

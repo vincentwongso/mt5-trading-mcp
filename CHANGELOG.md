@@ -4,6 +4,30 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.1.1] - 2026-05-30
+
+Documentation and release-tooling update. No changes to the server, tools,
+resources, or their runtime behaviour.
+
+### Added
+
+- `CONTRIBUTING.md` — a high-level contribution guide (ways to contribute,
+  project principles, dev setup, test workflow, the key invariants, and the
+  PR/security/license process).
+- A `docs/` directory that splits the setup, configuration, tool reference,
+  client setup, and deployment detail out of the README into focused pages
+  (`installation.md`, `configuration.md`, `tools.md`, `clients.md`,
+  `deployment.md`).
+- Release workflow now publishes a matching **GitHub release** whenever it
+  publishes to PyPI: the body is sliced verbatim from this changelog's section
+  for the tag, the built wheel + sdist are attached, and re-runs are idempotent.
+
+### Changed
+
+- README rewritten as a concise landing page — capability summary, Windows
+  quickstart, a documentation index, and a new **"For AI agents"** install
+  directive for agents handed the repository to install and run.
+
 ## [1.1.0] - 2026-05-30
 
 Public open-source launch release. Adds Linux support and rounds out the

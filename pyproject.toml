@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mt5-trading-mcp"
-version = "1.1.1"
+version = "1.2.0"
 description = "Model Context Protocol server wrapping the MetaTrader 5 Python library."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -16,6 +16,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Operating System :: Microsoft :: Windows",
   "Operating System :: POSIX :: Linux",
   "Topic :: Office/Business :: Financial :: Investment",

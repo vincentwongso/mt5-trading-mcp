@@ -4,6 +4,20 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.2.0] - 2026-05-31
+
+Compatibility release. Extends official Python support to 3.13 and 3.14. No
+changes to the server, tools, resources, or their runtime behaviour.
+
+### Changed
+
+- **Python 3.13 and 3.14 are now officially supported and tested.** The CI
+  matrix runs the unit suite on `windows-latest` across Python 3.10–3.14, and
+  the `3.14` trove classifier was added (`3.13` was already present). Every
+  binary dependency ships wheels for both interpreters — `MetaTrader5`
+  (cp313/cp314), `pydantic-core` (cp313/cp314), and `watchdog` — so the
+  existing `>=` version floors resolve cleanly with no dependency changes.
+
 ## [1.1.1] - 2026-05-30
 
 Documentation and release-tooling update. No changes to the server, tools,

@@ -5,30 +5,30 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/github/actions/workflow/status/vincentwongso/mt5-trading-mcp/test.yml?branch=main&label=tests)](https://github.com/vincentwongso/mt5-trading-mcp/actions/workflows/test.yml)
 
-Model Context Protocol server wrapping the MetaTrader 5 Python library — exposes
+Model Context Protocol server wrapping the MetaTrader 5 Python library: exposes
 a logged-in MT5 terminal as a set of MCP tools an AI agent can call.
 
 <!-- Demo GIF goes here — e.g. ![mt5-mcp demo](assets/demo.gif) -->
 
-> ⚠️ **This software places _real_ trades through your MetaTrader 5 terminal —
-> real orders, real money, irreversible fills.** Read [DISCLAIMER.md](DISCLAIMER.md)
-> and [SECURITY.md](SECURITY.md) before connecting it to a live account.
+> ⚠️ **This software places _real_ trades through your MetaTrader 5 terminal with
+> real orders and irreversible fills.** Read [DISCLAIMER.md](DISCLAIMER.md)
+> and [SECURITY.md](SECURITY.md) before connecting it to a live account. Always test
+> using your demo account first.
 
-**Status:** v1.1.0 — first public release. Windows (native) or Linux (via
-Docker); Python 3.10+.
+Windows (native) or Linux (via Docker); Python 3.10+.
 
 ## What it is
 
 `mt5-mcp` lets an AI agent read your MetaTrader 5 account and place trades
 through it, over the Model Context Protocol. It runs locally, in the same
-process tree as your agent — no cloud, no telemetry.
+process tree as your agent, no cloud, no telemetry.
 
-- **11 read-only tools** — account, quotes, positions, orders, history, OHLC
+- **11 read-only tools**: account, quotes, positions, orders, history, OHLC
   bars, and broker-authoritative margin estimates. No consent gate.
-- **4 mutating tools** — `place_order`, `modify_order`, `cancel_order`,
+- **4 mutating tools**: `place_order`, `modify_order`, `cancel_order`,
   `close_position`, each behind a preflight + human-consent + idempotency +
   audit layer.
-- **3 subscribable resources** — live `account://`, `positions://`, and
+- **3 subscribable resources**: live `account://`, `positions://`, and
   `quotes://{symbol}` snapshots that push change notifications.
 
 Full catalogue and the consent flow: **[docs/tools.md](docs/tools.md)**.
@@ -41,7 +41,7 @@ pip install mt5-trading-mcp
 
 1. Launch MetaTrader 5 and log into your broker. Enable **AlgoTrading** (toolbar
    button green).
-2. Verify the terminal is reachable: `python -m mt5_mcp doctor` — expect
+2. Verify the terminal is reachable: `python -m mt5_mcp doctor`: expect
    `[INFO] backend: native` and `[PASS]` lines.
 3. Run it: `python -m mt5_mcp serve`.
 
@@ -69,13 +69,13 @@ run, follow this procedure.**
    check is `[FAIL]`, report it to the human and stop.
 4. **Register / run the server:** `python -m mt5_mcp serve` (stdio). To wire it
    into your own harness, use the matching config under
-   [`examples/clients/`](examples/clients/) — e.g.
+   [`examples/clients/`](examples/clients/) e.g.
    [`hermes.json`](examples/clients/hermes.json) or
-   [`openclaw.json`](examples/clients/openclaw.json) — which scope you to the
+   [`openclaw.json`](examples/clients/openclaw.json) which scope you to the
    read-only tools by default.
 5. **Operate read-only unless explicitly asked to trade.** The read tools are
    safe to call freely.
-6. **⚠️ Hard rule — real money.** `place_order`, `modify_order`, and
+6. **⚠️ Hard rule, if live account and using real money.** `place_order`, `modify_order`, and
    `close_position` execute **real, irreversible trades**. When one returns an
    `ApprovalPreview`, show it **verbatim** to the human and only retry with
    `approval_confirmed=true` after they explicitly approve **that specific
@@ -99,7 +99,7 @@ Under Claude Code, the skills in `.claude/skills/` teach these directly.
 
 ## Safety
 
-`mt5-mcp` is **not** the security boundary — the broker's MT5 server enforces
+`mt5-mcp` is **not** the security boundary, the broker's MT5 server enforces
 the hard limits (margin, max-lot, symbol permissions). Pre-flight checks in the
 policy engine are UX guardrails to catch agent mistakes early, not security
 controls.
@@ -122,9 +122,9 @@ truth for the data and config schemas.
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the dev
+Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md) for the dev
 setup, test workflow, and project principles.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT - see [`LICENSE`](LICENSE).

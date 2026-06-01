@@ -91,7 +91,15 @@ def run_doctor(
     server = build_server(mt5_module=mt5_module, config_path=config_path)
     tm = server._tool_manager
     from mt5_mcp.server import get_context
-    print(f"[INFO] backend: {get_context().client.backend_label}")
+    client = get_context().client
+    print(f"[INFO] backend: {client.backend_label}")
+    # Programmatic-login diagnostics (headless operators confirm the account
+    # without opening the terminal UI). Omitted on the attach path. The
+    # password is never printed.
+    if client.login is not None:
+        print(f"[INFO] authenticated as {client.login}")
+    if client.server:
+        print(f"[INFO] connected: {client.server}")
 
     def call(name: str, **kwargs):
         return tm.get_tool(name).fn(**kwargs)

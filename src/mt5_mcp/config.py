@@ -43,7 +43,15 @@ class BridgeConfig(_Sub):
 
 class MT5Section(_Sub):
     terminal_path: str = ""
-    preferred_login: int | None = None
+    # Programmatic-login credentials for headless / container deployments.
+    # When `login` is set, the adapter authenticates via initialize(login=,
+    # password=, server=) instead of attaching to an already-logged-in
+    # terminal. `MT5_LOGIN` / `MT5_SERVER` env vars override these values
+    # (see `load_config`). There is deliberately NO `password` field — the
+    # password is env-only (`MT5_PASSWORD`) so it never lands in a config file
+    # or a serialized Config object.
+    login: int | None = None
+    server: str | None = None
     # Presence of this block selects the RPyC bridge backend; omit it for the
     # native (Windows-native or Wine-prefix Python) in-process backend.
     bridge: BridgeConfig | None = None
@@ -130,11 +138,19 @@ def default_config_path() -> Path:
 
 
 def load_config(path: Path | None = None) -> Config:
-    """Load + validate a config file.
+    """Load + validate a config file, then overlay credential env vars.
 
     If `path` is None and the default location is absent, returns a
     Config with defaults so the server can still start for smoke testing.
+    `MT5_LOGIN` / `MT5_SERVER` env vars always override the file (env wins);
+    see `_apply_mt5_env_overrides`.
     """
+    config = _read_config_file(path)
+    _apply_mt5_env_overrides(config)
+    return config
+
+
+def _read_config_file(path: Path | None) -> Config:
     if path is None:
         path = default_config_path()
         if not path.exists():
@@ -153,6 +169,26 @@ def load_config(path: Path | None = None) -> Config:
         return Config(**raw)
     except (ValidationError, TypeError) as exc:
         raise ValueError(f"invalid config at {path}: {exc}") from exc
+
+
+def _apply_mt5_env_overrides(config: Config) -> None:
+    """Overlay `MT5_LOGIN` / `MT5_SERVER` onto the `[mt5]` section (env wins).
+
+    The password is deliberately NOT read here — it is resolved at connect
+    time, env-only (`MT5_PASSWORD`), so it never lands in a Config object that
+    could be logged or serialized. Empty-string env vars are treated as unset.
+    """
+    login_env = os.environ.get("MT5_LOGIN")
+    if login_env:
+        try:
+            config.mt5.login = int(login_env)
+        except ValueError as exc:
+            raise ValueError(
+                f"MT5_LOGIN must be an integer account number, got {login_env!r}"
+            ) from exc
+    server_env = os.environ.get("MT5_SERVER")
+    if server_env:
+        config.mt5.server = server_env
 
 
 class _ReloadHandler(FileSystemEventHandler):

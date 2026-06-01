@@ -237,3 +237,73 @@ def test_mt5_bridge_rejects_bad_port(tmp_path):
     import pytest
     with pytest.raises(ValueError):
         load_config(cfg_file)
+
+
+# --- programmatic-login credentials (Task 2) ----------------------------
+
+
+def test_mt5_login_server_from_config_when_no_env(tmp_path, monkeypatch):
+    monkeypatch.delenv("MT5_LOGIN", raising=False)
+    monkeypatch.delenv("MT5_SERVER", raising=False)
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text('[mt5]\nlogin = 7000592\nserver = "Fintrix-Live"\n', encoding="utf-8")
+    cfg = load_config(cfg_file)
+    assert cfg.mt5.login == 7000592
+    assert cfg.mt5.server == "Fintrix-Live"
+
+
+def test_mt5_login_server_env_overrides_config(tmp_path, monkeypatch):
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text('[mt5]\nlogin = 111\nserver = "Cfg-Server"\n', encoding="utf-8")
+    monkeypatch.setenv("MT5_LOGIN", "999")
+    monkeypatch.setenv("MT5_SERVER", "Env-Server")
+    cfg = load_config(cfg_file)
+    assert cfg.mt5.login == 999
+    assert cfg.mt5.server == "Env-Server"
+
+
+def test_mt5_login_server_from_env_when_no_config_keys(tmp_path, monkeypatch):
+    """The container path: creds arrive purely via env, no [mt5] keys."""
+    monkeypatch.setenv("MT5_LOGIN", "7000592")
+    monkeypatch.setenv("MT5_SERVER", "Fintrix-Live")
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text("", encoding="utf-8")
+    cfg = load_config(cfg_file)
+    assert cfg.mt5.login == 7000592
+    assert cfg.mt5.server == "Fintrix-Live"
+
+
+def test_mt5_login_defaults_none_without_env_or_config(tmp_path, monkeypatch):
+    monkeypatch.delenv("MT5_LOGIN", raising=False)
+    monkeypatch.delenv("MT5_SERVER", raising=False)
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text("", encoding="utf-8")
+    cfg = load_config(cfg_file)
+    assert cfg.mt5.login is None
+    assert cfg.mt5.server is None
+
+
+def test_mt5_login_env_must_be_integer(tmp_path, monkeypatch):
+    monkeypatch.setenv("MT5_LOGIN", "not-a-number")
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_config(cfg_file)
+
+
+def test_mt5_password_field_rejected_in_config(tmp_path):
+    """Password must NEVER be a config key — env-only by design."""
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text('[mt5]\npassword = "leak"\n', encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_config(cfg_file)
+
+
+def test_mt5_password_env_not_loaded_into_config(tmp_path, monkeypatch):
+    monkeypatch.setenv("MT5_PASSWORD", "topsecret")
+    monkeypatch.setenv("MT5_LOGIN", "7000592")
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text("", encoding="utf-8")
+    cfg = load_config(cfg_file)
+    assert not hasattr(cfg.mt5, "password")
+    assert "topsecret" not in cfg.model_dump_json()

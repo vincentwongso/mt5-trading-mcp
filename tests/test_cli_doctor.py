@@ -250,3 +250,48 @@ def test_doctor_skips_symbol_probes_when_broker_has_no_symbols(capsys, tmp_path)
     assert rc == 0
     assert "[SKIP] symbol-dependent probes" in captured.out
     assert "get_quote(" not in captured.out
+
+
+def test_doctor_reports_authenticated_login_and_server(capsys, tmp_path, monkeypatch):
+    """When configured for programmatic login, doctor surfaces who/where it
+    authenticates as so a headless operator can confirm the right account."""
+    monkeypatch.delenv("MT5_LOGIN", raising=False)
+    monkeypatch.delenv("MT5_SERVER", raising=False)
+    fake = FakeMT5()
+    fake._terminal_info = FakeTerminalInfo(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
+    )
+    fake._symbols_get = ()
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[mt5]\nlogin = 7000592\nserver = "Fintrix-Live"\n'
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+
+    rc = run_doctor(mt5_module=fake, config_path=cfg, check_streaming=False)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "[INFO] authenticated as 7000592" in out
+    assert "[INFO] connected: Fintrix-Live" in out
+
+
+def test_doctor_omits_auth_lines_when_attaching(capsys, tmp_path, monkeypatch):
+    """No creds (attach path) → no authenticated/connected lines."""
+    monkeypatch.delenv("MT5_LOGIN", raising=False)
+    monkeypatch.delenv("MT5_SERVER", raising=False)
+    fake = FakeMT5()
+    fake._terminal_info = FakeTerminalInfo(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
+    )
+    fake._symbols_get = ()
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+
+    rc = run_doctor(mt5_module=fake, config_path=cfg, check_streaming=False)
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "authenticated as" not in out

@@ -110,6 +110,11 @@ class MT5Client:
         self,
         *,
         terminal_path: str | None = None,
+        login: int | None = None,
+        password: str | None = None,
+        server: str | None = None,
+        connect_retries: int = 0,
+        connect_retry_delay_s: float = 2.0,
         mt5_module: Any | None = None,
         mt5_factory: Callable[[], Any] | None = None,
         backend_label: str = "native",
@@ -121,10 +126,46 @@ class MT5Client:
         self._mt5_resolved = mt5_module
         self._mt5_factory = mt5_factory or _import_mt5
         self._terminal_path = terminal_path or None
+        # Programmatic-login credentials (headless / container-boot path). When
+        # `login` is set, connect() authenticates via initialize(login=,
+        # password=, server=) instead of bare-attaching to an already-logged-in
+        # terminal. `login`/`server` are non-secret and exposed for diagnostics
+        # (doctor); `password` is held privately and MUST NEVER be logged,
+        # echoed, or placed in an error message.
+        self.login = login
+        self.server = server
+        self._password = password
+        # Startup wait: when the MCP boots inside the container the terminal
+        # may not be ready yet. `connect_retries` retries are spent on the
+        # FIRST connect only (a one-shot boot wait); later mid-session reinits
+        # fail fast so a real outage doesn't hang a tool call for the whole
+        # window. Default 0 = native/attach behaviour (single attempt).
+        self._connect_retries = connect_retries
+        self._connect_retry_delay_s = connect_retry_delay_s
+        self._first_connect = True
         self._lock = threading.RLock()
         self._initialised = False
         self.broker_offset_minutes = 0
         self.backend_label = backend_label
+
+    def _initialize_terminal(self) -> bool:
+        """Call the backend's ``initialize`` with the right shape.
+
+        - No credentials → bare ``initialize()`` (attach to a terminal already
+          logged in, e.g. via a one-time VNC login).
+        - ``login`` set → ``initialize(login=, password=, server=)`` to
+          authenticate programmatically (headless container boot).
+        - ``terminal_path`` is always the leading positional arg when present.
+        """
+        args: tuple[Any, ...] = (self._terminal_path,) if self._terminal_path else ()
+        kwargs: dict[str, Any] = {}
+        if self.login is not None:
+            kwargs["login"] = self.login
+            if self._password is not None:
+                kwargs["password"] = self._password
+            if self.server is not None:
+                kwargs["server"] = self.server
+        return bool(self._mt5.initialize(*args, **kwargs))
 
     @property
     def _mt5(self) -> Any:
@@ -138,25 +179,46 @@ class MT5Client:
     # --- lifecycle -------------------------------------------------------
 
     def connect(self) -> None:
-        """Initialise the underlying library and cache broker TZ."""
+        """Initialise the underlying library and cache broker TZ.
+
+        On the first connect, retries up to ``self._connect_retries`` times
+        (sleeping ``self._connect_retry_delay_s`` between) to wait out a
+        terminal that's still starting at container boot. Subsequent connects
+        (mid-session reinit) get a single attempt — see ``__init__``.
+        """
         with self._lock:
             if self._initialised:
                 return
-            ok = (
-                self._mt5.initialize(self._terminal_path)
-                if self._terminal_path
-                else self._mt5.initialize()
-            )
-            if not ok:
-                raise MT5Error(self._connection_error("initialize returned False"))
-            ti = self._mt5.terminal_info()
-            if ti is None:
-                raise MT5Error(self._connection_error("terminal_info returned None"))
-            self.broker_offset_minutes = self._derive_broker_offset(ti)
-            self._initialised = True
-            logger.info(
-                "MT5 connected; broker TZ offset = %+d min", self.broker_offset_minutes
-            )
+            retries = self._connect_retries if self._first_connect else 0
+            self._first_connect = False
+            attempt = 0
+            while True:
+                try:
+                    self._connect_once()
+                    return
+                except MT5Error:
+                    if attempt >= retries:
+                        raise
+                    attempt += 1
+                    logger.warning(
+                        "MT5 connect attempt %d/%d failed; the terminal may "
+                        "still be starting — retrying in %.1fs",
+                        attempt, retries, self._connect_retry_delay_s,
+                    )
+                    time.sleep(self._connect_retry_delay_s)
+
+    def _connect_once(self) -> None:
+        ok = self._initialize_terminal()
+        if not ok:
+            raise MT5Error(self._connection_error("initialize returned False"))
+        ti = self._mt5.terminal_info()
+        if ti is None:
+            raise MT5Error(self._connection_error("terminal_info returned None"))
+        self.broker_offset_minutes = self._derive_broker_offset(ti)
+        self._initialised = True
+        logger.info(
+            "MT5 connected; broker TZ offset = %+d min", self.broker_offset_minutes
+        )
 
     def _derive_broker_offset(self, ti: Any) -> int:
         """Derive the broker TZ offset (minutes from UTC).

@@ -289,6 +289,10 @@ class FakeMT5:
     # `order_send_calls` records the request dict passed to each order_send
     # call, in order. Tests use `len()` to count and indexing to inspect.
     order_send_calls: list[dict[str, Any]] = field(default_factory=list)
+    # `initialize_calls` records each initialize() invocation as
+    # {"args": (...), "kwargs": {...}} so credential-wiring tests can assert
+    # the login/password/server passed through. Records every call, in order.
+    initialize_calls: list[dict[str, Any]] = field(default_factory=list)
     _last_error: tuple[int, str] = (0, "")
 
     # Call-counter bookkeeping — useful for cache-hit assertions.
@@ -300,6 +304,7 @@ class FakeMT5:
 
     def initialize(self, *args: Any, **kwargs: Any) -> bool:
         self._bump("initialize")
+        self.initialize_calls.append({"args": args, "kwargs": dict(kwargs)})
         return self._initialize
 
     def shutdown(self) -> None:

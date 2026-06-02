@@ -1,6 +1,6 @@
 # mt5-mcp
 
-**Let an AI agent read your MetaTrader 5 account and place real trades over the [Model Context Protocol](https://modelcontextprotocol.io) - behind a preflight + human-consent + append-only-audit safety layer.**
+**Let an AI agent manage your MetaTrader 5 account over [Model Context Protocol](https://modelcontextprotocol.io) - with configurable human approval gate.**
 
 [![PyPI version](https://img.shields.io/pypi/v/mt5-trading-mcp.svg)](https://pypi.org/project/mt5-trading-mcp/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/mt5-trading-mcp.svg)](https://pypi.org/project/mt5-trading-mcp/)

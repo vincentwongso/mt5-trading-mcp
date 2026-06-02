@@ -1,6 +1,6 @@
 # mt5-mcp
 
-**Let an AI agent read your MetaTrader 5 account and place real trades over the [Model Context Protocol](https://modelcontextprotocol.io) — behind a preflight + human-consent + append-only-audit safety layer.**
+**Let an AI agent read your MetaTrader 5 account and place real trades over the [Model Context Protocol](https://modelcontextprotocol.io) - behind a preflight + human-consent + append-only-audit safety layer.**
 
 [![PyPI version](https://img.shields.io/pypi/v/mt5-trading-mcp.svg)](https://pypi.org/project/mt5-trading-mcp/)
 [![PyPI downloads](https://img.shields.io/pypi/dm/mt5-trading-mcp.svg)](https://pypi.org/project/mt5-trading-mcp/)
@@ -16,7 +16,7 @@
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/vincentwongso/mt5-trading-mcp/main/demo/mt5-history.png" width="820" alt="The same round-trip in MetaTrader 5's History tab"><br>
-  <sub>Not a mock-up — the same round-trip in MetaTrader 5's own History tab; the tickets and balance match the recording.</sub>
+  <sub>Not a mock-up - the same round-trip in MetaTrader 5's own History tab; the tickets and balance match the recording.</sub>
 </p>
 
 > ⚠️ **This software places _real_ trades through your MetaTrader 5 terminal with
@@ -25,7 +25,7 @@
 > and [SECURITY.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/SECURITY.md)
 > before connecting it to a live account. Always test using your demo account first.
 
-Runs locally — in the same process tree as your agent, no cloud, no telemetry.
+Runs locally - in the same process tree as your agent, no cloud, no telemetry.
 Windows (native) or Linux (via Docker); Python 3.10+.
 
 ## What it is
@@ -54,7 +54,7 @@ Full catalogue and the consent flow: **[docs/tools.md](https://github.com/vincen
   by default) → idempotency → an append-only audit log, so an agent can't quietly
   fire-and-forget irreversible orders.
 - **An honest threat model.** It treats an LLM wired to `place_order` as a live
-  attack surface and says so plainly — the MCP is explicitly *not* the security
+  attack surface and says so plainly - the MCP is explicitly *not* the security
   boundary (see [SECURITY.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/SECURITY.md)).
 - **Verifiable proof, not a mock-up.** The demo above is a real round-trip; the
   tickets and balance match MetaTrader 5's own History tab.
@@ -93,7 +93,7 @@ agent at `http://127.0.0.1:8765/mcp`. Full walkthrough:
 **If you've been handed this repository to install and run, follow the runbook
 in [docs/agents.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/docs/agents.md).**
 It covers platform detection, install, verification, registering the server, and
-the hard safety rules for trades — read it before calling any mutating tool.
+the hard safety rules for trades - read it before calling any mutating tool.
 
 ## Documentation
 
@@ -139,8 +139,8 @@ log regardless. For vulnerability disclosure, see
  │   read +        subscribable      consent · idempotency  │
  │   mutating      account/quotes    · audit (JSONL)        │
  │                                                          │
- │   streaming/  — change-detection poller + dispatcher     │
- │   types.py · config.py — Pydantic schemas: source of     │
+ │   streaming/  - change-detection poller + dispatcher     │
+ │   types.py · config.py - Pydantic schemas: source of     │
  │                          truth for data + config         │
  │                                                          │
  └──────────────────────────────────────────────────────────┘

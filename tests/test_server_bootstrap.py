@@ -1,4 +1,4 @@
-"""Server scaffolding only — real tool behaviour tested in tests/test_tools_*.py."""
+"""Server scaffolding only - real tool behaviour tested in tests/test_tools_*.py."""
 
 from mt5_mcp.server import build_server, reset_context_for_tests
 from tests.fakes import FakeMT5
@@ -133,7 +133,7 @@ def test_build_context_no_startup_retries_when_attaching(monkeypatch, tmp_path):
 
 def test_build_context_password_without_login_is_ignored(monkeypatch, tmp_path):
     """A half-filled .env (MT5_PASSWORD set, MT5_LOGIN missing) must not retain
-    an unusable secret on the client nor arm the boot retry window — the
+    an unusable secret on the client nor arm the boot retry window - the
     password is meaningless without a login to pair it with."""
     from mt5_mcp.server import build_context, get_context, reset_context_for_tests
 

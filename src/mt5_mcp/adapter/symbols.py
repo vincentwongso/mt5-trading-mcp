@@ -1,4 +1,4 @@
-"""Symbol preparation pipeline — selects, validates, caches.
+"""Symbol preparation pipeline - selects, validates, caches.
 
 Hides mt5lib's sharp edges described in §10.1 of the architecture doc:
   - symbol_info() returning None for unknown names
@@ -29,7 +29,7 @@ _CACHE_TTL_S = 60.0
 # bits are inlined here. These are the canonical values from MQL5 docs.
 _SYMBOL_FILLING_FOK = 1  # bit 0
 _SYMBOL_FILLING_IOC = 2  # bit 1
-_SYMBOL_FILLING_BOC = 4  # bit 2 — "Book or Cancel" (RETURN in the order-side enum)
+_SYMBOL_FILLING_BOC = 4  # bit 2 - "Book or Cancel" (RETURN in the order-side enum)
 
 
 # Indirection so tests can monkeypatch the clock.
@@ -137,11 +137,11 @@ class SymbolPrep:
         mask = int(info.filling_mode)
         mt5 = self._client.mt5
         # Pending orders: ORDER_FILLING_RETURN is the only semantically valid
-        # choice — IOC/FOK imply immediate execution, which contradicts
+        # choice - IOC/FOK imply immediate execution, which contradicts
         # "rest in the book until price reaches the limit." MT5 itself returns
         # NULL from order_send when a pending order carries IOC/FOK, even if
         # the symbol's filling mask doesn't advertise the BOC bit (many CFD
-        # brokers — e.g. on USOIL/UKOIL — advertise only IOC; that mask
+        # brokers - e.g. on USOIL/UKOIL - advertise only IOC; that mask
         # is for market orders, not pending). Don't gate on the mask here.
         if order_type != "market":
             return mt5.ORDER_FILLING_RETURN

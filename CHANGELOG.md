@@ -14,14 +14,14 @@ RPyC-bridge paths are unaffected.
 
 - **All-in-one headless Linux Docker image** (`deploy/`). One image runs the MT5
   terminal under Wine, a KasmVNC web UI for a one-time broker login, and
-  `mt5-mcp` serving MCP over HTTP — no host Python and no `mt5linux`/`rpyc`
+  `mt5-mcp` serving MCP over HTTP - no host Python and no `mt5linux`/`rpyc`
   version-matching (the project's biggest Linux pain point). `socat` bridges the
   container interface to the loopback-bound server, so `-p 127.0.0.1:8765:8765`
   works without relaxing the loopback-only bind. Ships with `docker-compose.yml`
   and `.env.example`.
 - **Programmatic MT5 login** for headless / container boots. New `[mt5] login`
   and `[mt5] server` config keys, plus `MT5_LOGIN` / `MT5_PASSWORD` /
-  `MT5_SERVER` environment variables (env wins). The **password is env-only** —
+  `MT5_SERVER` environment variables (env wins). The **password is env-only** -
   it never enters a config file, a serialized `Config`, a log line, or an error
   message. When both a login and password are present, `MT5Client` authenticates
   via `initialize(login=, password=, server=)`; a login configured without a
@@ -51,10 +51,10 @@ changes to the server, tools, resources, or their runtime behaviour.
 ### Changed
 
 - **Python 3.13 and 3.14 are now officially supported and tested.** The CI
-  matrix runs the unit suite on `windows-latest` across Python 3.10–3.14, and
+  matrix runs the unit suite on `windows-latest` across Python 3.10-3.14, and
   the `3.14` trove classifier was added (`3.13` was already present). Every
-  binary dependency ships wheels for both interpreters — `MetaTrader5`
-  (cp313/cp314), `pydantic-core` (cp313/cp314), and `watchdog` — so the
+  binary dependency ships wheels for both interpreters - `MetaTrader5`
+  (cp313/cp314), `pydantic-core` (cp313/cp314), and `watchdog` - so the
   existing `>=` version floors resolve cleanly with no dependency changes.
 
 ## [1.1.1] - 2026-05-30
@@ -64,7 +64,7 @@ resources, or their runtime behaviour.
 
 ### Added
 
-- `CONTRIBUTING.md` — a high-level contribution guide (ways to contribute,
+- `CONTRIBUTING.md` - a high-level contribution guide (ways to contribute,
   project principles, dev setup, test workflow, the key invariants, and the
   PR/security/license process).
 - A `docs/` directory that splits the setup, configuration, tool reference,
@@ -77,7 +77,7 @@ resources, or their runtime behaviour.
 
 ### Changed
 
-- README rewritten as a concise landing page — capability summary, Windows
+- README rewritten as a concise landing page - capability summary, Windows
   quickstart, a documentation index, and a new **"For AI agents"** install
   directive for agents handed the repository to install and run.
 
@@ -98,7 +98,7 @@ resource APIs.
   `doctor` reports the active backend (`native` | `bridge -> host:port`).
 - Drop-in client config examples under `examples/clients/`: Hermes, Claude
   Code, Codex (`enabled_tools` read-only scope), OpenClaw, Claude Desktop
-  (stdio + HTTP), and Cursor — plus `examples/docker-compose.yml` and
+  (stdio + HTTP), and Cursor - plus `examples/docker-compose.yml` and
   `examples/config.toml.example`.
 - `DISCLAIMER.md` (real-money risk) and a prompt-injection threat model in
   `SECURITY.md`.
@@ -128,7 +128,7 @@ Preflight release. The `comment` field on `place_order` is a frequent silent
 killer: MT5 brokers reject `order_send` with no retcode when the comment
 exceeds 31 chars, contains non-ASCII (em-dash, smart quotes), or holds control
 characters (tab, newline). The rejection looks identical to terminal-
-disconnected, AutoTrading-off, and invalid-filling-mode — and pre-v1.0.13
+disconnected, AutoTrading-off, and invalid-filling-mode - and pre-v1.0.13
 there was no last_error context to disambiguate. We discovered this on
 2026-05-19 when 1-lot USOIL/UKOIL pending buy-limits failed repeatedly with
 `MT5_NULL_RESPONSE` even after the v1.0.12 filling-mode fix; the trades placed
@@ -143,7 +143,7 @@ cleanly only after the comment was dropped entirely.
   `modify_order` path benefits.
 - The `INVALID_COMMENT` envelope's `details` carries `reason`
   (`too_long` / `non_ascii` / `control_char`), the offending `value`, its
-  `length`, and the `max_length` (31) — enough for an agent to fix and retry
+  `length`, and the `max_length` (31) - enough for an agent to fix and retry
   without operator intervention.
 - 15 regression tests in `tests/test_adapter_comment.py` pinning the
   boundary, character-class, and integration behavior.
@@ -155,7 +155,7 @@ Observability release. When `mt5lib.order_send()` returns `None` (the
 the resulting envelope previously lacked the only diagnostic that
 distinguishes the underlying cause: `mt5.last_error()`. Operators had no
 way to tell e.g. "terminal disconnected" from "invalid filling mode" from
-"AutoTrading disabled" from "symbol not in Market Watch" — every NULL
+"AutoTrading disabled" from "symbol not in Market Watch" - every NULL
 response looked identical in the audit log and tool response.
 
 ### Fixed
@@ -180,7 +180,7 @@ broker: mt5lib's `order_send` returned `None`, surfacing as the
 `MT5_NULL_RESPONSE` envelope. The symbol's `filling_mode` mask
 describes what's accepted for **market** orders only; pending orders
 require `ORDER_FILLING_RETURN` (any other choice is semantically
-incoherent — IOC/FOK imply immediate execution, which contradicts
+incoherent - IOC/FOK imply immediate execution, which contradicts
 "rest in the book"). The previous `pick_filling_mode` implementation
 gated pending orders on the BOC bit and fell back to IOC/FOK when it
 was absent, producing the rejection.
@@ -204,7 +204,7 @@ mt5lib directly (bypassing the reinit-aware `self.call()` wrapper) on
 the assumption that "ping should report raw IPC state." In practice,
 when the IPC was in a NOT_INITIALIZED state that other read tools
 transparently recover from, all three ping layers raised/returned None
-in lockstep — so `ping.ok=false` while `get_account_info`,
+in lockstep - so `ping.ok=false` while `get_account_info`,
 `get_terminal_info`, and quotes all worked. Confirmed on a live demo
 terminal immediately after upgrading to 1.0.10.
 
@@ -213,7 +213,7 @@ terminal immediately after upgrading to 1.0.10.
 - `MT5Client.ping()` now routes each layer through `self.call(...)`,
   picking up the same transparent NOT_INITIALIZED → reinit → retry
   behavior every other read tool has. The earlier "ping bypasses
-  retry" rule is dropped — the layered `via` field already supplies
+  retry" rule is dropped - the layered `via` field already supplies
   the per-source diagnostic that probe-vs-recovered consumers would
   have wanted from a raw probe.
 - New regression test
@@ -296,7 +296,7 @@ NoneType object has no attribute retcode` instead of a typed broker envelope.
 Same trap fires for any caller of `place_order`, `modify_order`,
 `cancel_order`, or `close_position` whenever `mt5lib`'s `order_send` rejects
 the request locally (invalid stops, terminal disconnected, AutoTrading
-toggled off mid-session, symbol freeze-level breach, etc.) — `mt5lib` returns
+toggled off mid-session, symbol freeze-level breach, etc.) - `mt5lib` returns
 `None` rather than a result struct, and the conversion layer's
 `int(raw.retcode)` raised `AttributeError` before the `@error_envelope`
 decorator could map a retcode.
@@ -317,7 +317,7 @@ decorator could map a retcode.
 Bugfix release. `load_config` now tolerates a UTF-8 BOM at the start of
 `config.toml`. Surfaced when a Windows VPS user edited the file in Notepad
 and got `tomllib.TOMLDecodeError: Invalid statement (at line 1, column 1)`
-on next start — the BOM bytes (`EF BB BF`) parse as garbage before the first
+on next start - the BOM bytes (`EF BB BF`) parse as garbage before the first
 `[`. Same trap fires for anyone using PS 5.1's `Set-Content -Encoding UTF8`,
 which also writes a BOM by default.
 
@@ -325,7 +325,7 @@ which also writes a BOM by default.
 
 - `load_config` reads `config.toml` with the `utf-8-sig` codec instead of
   bare `utf-8`. `utf-8-sig` strips the BOM if present and behaves
-  identically to `utf-8` otherwise — no behavior change for files written
+  identically to `utf-8` otherwise - no behavior change for files written
   without a BOM.
 
 ## [1.0.6] - 2026-05-02
@@ -337,7 +337,7 @@ deployment hostname (replaced with `example.host.com`).
 ## [1.0.5] - 2026-05-02
 
 Bugfix release. Surfaced when the HTTP transport sat behind a Tailscale serve
-reverse proxy on a Windows VPS — the proxy forwarded the original
+reverse proxy on a Windows VPS - the proxy forwarded the original
 `Host: <machine>.<tailnet>.ts.net` header, which FastMCP's DNS-rebinding-
 protection middleware rejected with `421 Misdirected Request` and an
 `Invalid Host header` warning. Same shape would hit anyone fronting the MCP
@@ -349,7 +349,7 @@ etc.
 - `[transport.http] trusted_hosts` and `[transport.http] trusted_origins`
   config keys (both `list[str]`, default `[]`). Values are *appended* to
   FastMCP's existing localhost defaults (`127.0.0.1:*`, `localhost:*`,
-  `[::1]:*`) — local-only setups need no config change. Operators behind a
+  `[::1]:*`) - local-only setups need no config change. Operators behind a
   reverse proxy add their public-facing hostname:
 
   ```toml
@@ -381,14 +381,14 @@ broker-specific naming) failed three checks (`get_quote`, `get_market_hours`,
 
 ## [1.0.3] - 2026-05-01
 
-Surface enrichment to support downstream reasoning skills (CFD trading skills consumer) plus a PyPI distribution rename. Pure adapter additions — no new mt5lib calls beyond `copy_rates_from_pos` and `order_calc_margin`. Backwards-compatible: existing tools and resources unchanged; `SymbolInfo` gains 13 new fields (additive, no renames).
+Surface enrichment to support downstream reasoning skills (CFD trading skills consumer) plus a PyPI distribution rename. Pure adapter additions - no new mt5lib calls beyond `copy_rates_from_pos` and `order_calc_margin`. Backwards-compatible: existing tools and resources unchanged; `SymbolInfo` gains 13 new fields (additive, no renames).
 
 ### Added
 
 - `SymbolInfo` enriched with broker-side fields the adapter previously dropped:
-  - **Pricing & cash math:** `tick_value`, `tick_value_profit`, `tick_value_loss` — cash value of one tick in deposit currency, removing the need for downstream consumers to do their own currency conversion.
-  - **Calc-mode dispatch:** `calc_mode` (string enum: `forex`, `cfd`, `cfd_index`, `cfd_leverage`, `forex_no_leverage`, `futures`, `exch_stocks`, `exch_futures`, `exch_futures_forts`, `exch_options`, `exch_options_margin`, `exch_bonds`, `exch_stocks_moex`, `exch_bonds_moex`, `serv_collateral`, `unknown`) — drives which margin formula applies per `EnCalcMode`.
-  - **Margin parameters:** `margin_initial`, `margin_maintenance`, `margin_hedged` — per-symbol broker-set values used by futures/exchange calc modes.
+  - **Pricing & cash math:** `tick_value`, `tick_value_profit`, `tick_value_loss` - cash value of one tick in deposit currency, removing the need for downstream consumers to do their own currency conversion.
+  - **Calc-mode dispatch:** `calc_mode` (string enum: `forex`, `cfd`, `cfd_index`, `cfd_leverage`, `forex_no_leverage`, `futures`, `exch_stocks`, `exch_futures`, `exch_futures_forts`, `exch_options`, `exch_options_margin`, `exch_bonds`, `exch_stocks_moex`, `exch_bonds_moex`, `serv_collateral`, `unknown`) - drives which margin formula applies per `EnCalcMode`.
+  - **Margin parameters:** `margin_initial`, `margin_maintenance`, `margin_hedged` - per-symbol broker-set values used by futures/exchange calc modes.
   - **Swaps:** `swap_long`, `swap_short`, `swap_mode` (string enum: `disabled`, `by_points`, `by_base_currency`, `by_margin_currency`, `by_deposit_currency`, `by_interest_current`, `by_interest_open`, `by_reopen_current`, `by_reopen_bid`, `unknown`), `triple_swap_weekday` (string enum, `sunday`..`saturday`).
   - **Order-distance constraints:** `stops_level`, `freeze_level` (in points; multiply by `tick_size` for price).
 - New tool `get_rates(symbol, timeframe, count)` returning OHLC bars. Timeframes: `M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`, `W1`, `MN1`. `count` clamped to `[1, 5000]`. Backed by `mt5.copy_rates_from_pos(...)`. Errors: `INVALID_TIMEFRAME`, `INVALID_COUNT`, `NO_RATES_AVAILABLE`, plus the usual `SYMBOL_NOT_FOUND` / `SYMBOL_NOT_ENABLED` from `SymbolPrep`.
@@ -398,7 +398,7 @@ Surface enrichment to support downstream reasoning skills (CFD trading skills co
 
 ### Changed
 
-- **PyPI distribution renamed `mt5-mcp` → `mt5-trading-mcp`.** The short name `mt5-mcp` was already taken on PyPI by an unrelated project (versions 0.4.0–0.5.2), which had quietly blocked every prior publish attempt. `1.0.3` is the first version actually published to PyPI; the `1.0.0`–`1.0.2` tags exist only as Git tags. Install command is now `pip install mt5-trading-mcp`. The CLI command (`mt5-mcp`), Python module (`mt5_mcp`), brand, repo URL, and storage paths are all unchanged — only the name on PyPI moves.
+- **PyPI distribution renamed `mt5-mcp` → `mt5-trading-mcp`.** The short name `mt5-mcp` was already taken on PyPI by an unrelated project (versions 0.4.0-0.5.2), which had quietly blocked every prior publish attempt. `1.0.3` is the first version actually published to PyPI; the `1.0.0`-`1.0.2` tags exist only as Git tags. Install command is now `pip install mt5-trading-mcp`. The CLI command (`mt5-mcp`), Python module (`mt5_mcp`), brand, repo URL, and storage paths are all unchanged - only the name on PyPI moves.
 - `FakeSymbolInfo` extended with the broker-side fields above (sane defaults so existing tests are unaffected). `FakeMT5` gains `_copy_rates_from_pos`, `_order_calc_margin` slots and `TIMEFRAME_*` constants. New `FakeRate` dataclass.
 - `mt5-market-data` skill SKILL.md updated to document the two new tools and the enriched `SymbolInfo`.
 
@@ -416,23 +416,23 @@ Production fixes surfaced by Phase 5 integration testing against a real MT5 demo
 
 ### Fixed
 
-- `place_order` (and any tool that goes through `pick_filling_mode`) crashed with `AttributeError: module 'MetaTrader5' has no attribute 'SYMBOL_FILLING_IOC'` against any live broker. The Python `MetaTrader5` module exports only `ORDER_FILLING_*` constants — the `SYMBOL_FILLING_*` symbol-side bitmask values must be inlined. Fixed in `src/mt5_mcp/adapter/symbols.py`. The `FakeMT5` test helper used to expose those attributes, masking the bug; it no longer does, so any future regression of this shape fails immediately in the unit suite.
+- `place_order` (and any tool that goes through `pick_filling_mode`) crashed with `AttributeError: module 'MetaTrader5' has no attribute 'SYMBOL_FILLING_IOC'` against any live broker. The Python `MetaTrader5` module exports only `ORDER_FILLING_*` constants - the `SYMBOL_FILLING_*` symbol-side bitmask values must be inlined. Fixed in `src/mt5_mcp/adapter/symbols.py`. The `FakeMT5` test helper used to expose those attributes, masking the bug; it no longer does, so any future regression of this shape fails immediately in the unit suite.
 - MT5 retcode `10027` ("AutoTrading disabled by client") was mapped to the generic `MT5_UNKNOWN_RETCODE` envelope. Now mapped to a dedicated `AUTO_TRADING_DISABLED` code with an actionable message ("Click the 'AlgoTrading' button in the MT5 toolbar so it turns green, then retry.").
-- `get_positions` crashed with `AttributeError: 'TradePosition' object has no attribute 'commission'` against any live broker. The real MT5 `TradePosition` does not expose commission for open positions — commission is recorded per-deal at close time. Removed the `commission` field from the `Position` Pydantic model and from `position_from_raw` in `adapter/conversions.py`. Agents that need commission data should query `get_history`, where `Deal.commission` lives. `FakePosition` no longer exposes the field either.
+- `get_positions` crashed with `AttributeError: 'TradePosition' object has no attribute 'commission'` against any live broker. The real MT5 `TradePosition` does not expose commission for open positions - commission is recorded per-deal at close time. Removed the `commission` field from the `Position` Pydantic model and from `position_from_raw` in `adapter/conversions.py`. Agents that need commission data should query `get_history`, where `Deal.commission` lives. `FakePosition` no longer exposes the field either.
 
 ## [1.0.0] - 2026-04-28
 
-First public release on PyPI. The underlying feature set is the cumulative output of phases 1–3; this release adds packaging, public-facing documentation, and CI.
+First public release on PyPI. The underlying feature set is the cumulative output of phases 1-3; this release adds packaging, public-facing documentation, and CI.
 
 ### Added
 
 - Public PyPI distribution: `pip install mt5-trading-mcp`.
 - `SECURITY.md` with vulnerability disclosure policy and explicit scope statement (`mt5-mcp` is not the security boundary; the broker is).
-- `CHANGELOG.md` (this file), retroactively documenting phases 1–3.
+- `CHANGELOG.md` (this file), retroactively documenting phases 1-3.
 - `examples/clients/` directory with drop-in MCP-client configs:
-  - `claude-desktop-stdio.json` — Claude Desktop stdio transport.
-  - `claude-desktop-http.json` — Claude Desktop HTTP transport (for VPS / SSH-tunnel deployments).
-  - `cursor.json` — Cursor stdio transport.
+  - `claude-desktop-stdio.json` - Claude Desktop stdio transport.
+  - `claude-desktop-http.json` - Claude Desktop HTTP transport (for VPS / SSH-tunnel deployments).
+  - `cursor.json` - Cursor stdio transport.
 - README section on deploying `mt5-mcp` to a Windows VPS (Pattern A: agent on VPS; Pattern B: agent local with SSH tunnel to loopback HTTP).
 - GitHub Actions test CI workflow (`pytest -m "not integration"` on Windows runners across Python 3.10 / 3.11 / 3.12, on push to `main` and on PRs).
 - `[project.urls]` block in `pyproject.toml` (Repository, Issues, Changelog).
@@ -462,7 +462,7 @@ Resources, HTTP transport, and streaming subsystem (Phase 3, internal release).
 
 ### Changed
 
-- Change-detection for `account://current` and `positions://current` excludes floating P&L by design — only identity/structural changes wake subscribers.
+- Change-detection for `account://current` and `positions://current` excludes floating P&L by design - only identity/structural changes wake subscribers.
 
 ## [0.2.0] - 2026-04-26
 

@@ -1,4 +1,4 @@
-"""End-to-end coverage for place_order — the canonical Phase-2 tool flow."""
+"""End-to-end coverage for place_order - the canonical Phase-2 tool flow."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def test_above_threshold_returns_preview(server_and_mt5):
     server, fake = server_and_mt5
     # 10.0 lots × 1.0824 = 10.824 notional > 1000 threshold (oh wait, it's not).
     # Actually with auto_approve_notional="1000" and notional=10.824, this is BELOW.
-    # The threshold is interpreted in raw "volume × price" terms — for FX it's tiny.
+    # The threshold is interpreted in raw "volume × price" terms - for FX it's tiny.
     # Use a much larger volume to trigger.
     out = _call(server, "place_order",
                 symbol="EURUSD", side="buy", type="market", volume="10000.0")
@@ -120,7 +120,7 @@ def test_default_config_is_fail_closed(tmp_path, frozen_utc):
 
 
 def test_above_max_notional_rejected_even_with_approval(tmp_path):
-    """Pre-flight refusals are absolute — a stray approval token can't bypass them.
+    """Pre-flight refusals are absolute - a stray approval token can't bypass them.
 
     With the gate disabled (auto_approve_notional set above the order's notional),
     a stray approval_confirmed/approval_request_id is ignored and pre-flight still

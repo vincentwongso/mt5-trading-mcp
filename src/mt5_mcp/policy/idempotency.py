@@ -117,7 +117,7 @@ class IdempotencyStore:
             if row is not None:
                 stored_hash, stored_exp = row
                 if stored_exp > now:
-                    # Unexpired entry already cached — first-write-wins.
+                    # Unexpired entry already cached - first-write-wins.
                     if stored_hash != request_hash:
                         logger.warning(
                             "idempotency.put: ignoring divergent hash for key=%r "
@@ -125,7 +125,7 @@ class IdempotencyStore:
                             key, action,
                         )
                     return
-                # Expired — fall through and overwrite below.
+                # Expired - fall through and overwrite below.
             self._conn.execute(
                 "INSERT INTO idempotency "
                 "(key, action, request_hash, result_json, created_at, expires_at) "

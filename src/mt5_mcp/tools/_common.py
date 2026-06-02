@@ -29,7 +29,7 @@ def ensure_connected(ctx: AppContext) -> ErrorDetail | None:
 def error_envelope(fn: Callable[..., R]) -> Callable[..., Any]:
     """Wrap a tool handler so failures become a structured ``{"error": ...}``.
 
-    The wrapped function must accept **no** positional ``ctx`` argument —
+    The wrapped function must accept **no** positional ``ctx`` argument -
     it should call ``get_context()`` internally.  The envelope:
 
     1. Calls ``get_context()`` and ``ensure_connected`` before invoking ``fn``.

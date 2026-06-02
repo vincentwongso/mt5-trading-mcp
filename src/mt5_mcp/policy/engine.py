@@ -1,4 +1,4 @@
-"""PolicyEngine — single facade over preflight + consent + idempotency + audit.
+"""PolicyEngine - single facade over preflight + consent + idempotency + audit.
 
 Tools call `with engine.guard(action, request, requires_approval=..., ...)`
 inside their body, after they've computed the gate logic. The engine
@@ -142,7 +142,7 @@ class PolicyEngine:
         approval_confirmed = bool(getattr(request, "approval_confirmed", False))
         approval_request_id = getattr(request, "approval_request_id", None)
 
-        # 3. Consent (confirmed retry) — runs BEFORE preflight so a
+        # 3. Consent (confirmed retry) - runs BEFORE preflight so a
         # bait-and-switch surfaces as INVALID_APPROVAL rather than being
         # masked by EXCEEDS_LOCAL_LIMIT (architecture §8.1).
         if requires_approval and approval_confirmed:
@@ -187,7 +187,7 @@ class PolicyEngine:
                 g.short_circuit = {"error": err.model_dump(mode="json")}
                 yield g
                 return
-            # Approval matched — fall through to preflight then execute.
+            # Approval matched - fall through to preflight then execute.
 
         # 4. Preflight checks.
         if preflight_inputs is not None:
@@ -200,7 +200,7 @@ class PolicyEngine:
                 yield g
                 return
 
-        # 5. Consent (first-pass preview generation) — only when approval is
+        # 5. Consent (first-pass preview generation) - only when approval is
         # required AND the agent has not yet supplied approval_confirmed=True.
         if requires_approval and not approval_confirmed:
             if preview_factory is None:
@@ -220,7 +220,7 @@ class PolicyEngine:
             yield g
             return
 
-        # 5.5 Velocity cap — checked only on the executing path (we've passed
+        # 5.5 Velocity cap - checked only on the executing path (we've passed
         # consent + preflight and are about to run order_send). place_order adds
         # exposure, so it's throttled; closes/cancels reduce exposure and aren't.
         cap = self._config.policy.max_orders_per_minute

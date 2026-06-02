@@ -1,21 +1,21 @@
 #!/bin/bash
 #
-# All-in-one headless mt5-mcp bootstrap (Option 1 — mt5-mcp runs in-process
+# All-in-one headless mt5-mcp bootstrap (Option 1 - mt5-mcp runs in-process
 # under 64-bit Wine-Python, importing the official MetaTrader5 package; no
 # third-party bridge). Replaces the stock gmag11 start.sh.
 #
 # Runs as the KasmVNC desktop autostart (user `abc`, HOME=/config, DISPLAY=:1).
 # Everything heavy installs into the /config VOLUME on first boot (so it
-# persists across restarts), guarded by existence checks — exactly the gmag11
+# persists across restarts), guarded by existence checks - exactly the gmag11
 # model. On later boots this is fast.
 #
 # Flow:
 #   1. Wine-Mono            (gmag11)
 #   2. MetaTrader 5         (gmag11)
-#   3. Launch the terminal  (gmag11) — needed so a login (programmatic OR a
+#   3. Launch the terminal  (gmag11) - needed so a login (programmatic OR a
 #                           one-time VNC login) can attach.
-#   4. 64-bit Wine-Python 3.11   (NEW — stock gmag11 ships 3.9 32-bit)
-#   5. mt5-trading-mcp + numpy<2 (NEW — drops mt5linux entirely)
+#   4. 64-bit Wine-Python 3.11   (NEW - stock gmag11 ships 3.9 32-bit)
+#   5. mt5-trading-mcp + numpy<2 (NEW - drops mt5linux entirely)
 #   6. socat bridge + `mt5_mcp serve --transport http`  (NEW)
 #
 # Credentials (MT5_LOGIN / MT5_PASSWORD / MT5_SERVER) are read by mt5-mcp from
@@ -47,7 +47,7 @@ mt5setup_url="https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5
 # to it so Docker `-p 127.0.0.1:8765:8765` forwarding can reach it.
 #
 # The internal port is FIXED at 8765: `mt5_mcp serve` always binds the config
-# default (8765) — this script writes no config and passes no --port — and the
+# default (8765) - this script writes no config and passes no --port - and the
 # compose file maps the container's 8765. Remapping the *host* port is Docker's
 # job (`-p 127.0.0.1:<host>:8765` / the compose `MCP_PORT` var), so this must
 # stay 8765 or socat would forward to a port nothing is listening on.
@@ -109,7 +109,7 @@ fi
 # --- 5. mt5-trading-mcp + numpy<2 ---------------------------------------
 # The official MetaTrader5 package rides in as a dependency (its environment
 # marker is platform_system=='Windows', which Wine-Python satisfies). numpy
-# MUST stay <2 — numpy 2.x crashes the MetaTrader5 import under Wine.
+# MUST stay <2 - numpy 2.x crashes the MetaTrader5 import under Wine.
 if ! $wine_executable "$python_win" -m pip show mt5-trading-mcp >/dev/null 2>&1; then
     log "[5/6] Installing ${mt5_mcp_spec} + numpy<2 into Wine-Python..."
     $wine_executable "$python_win" -m pip install --upgrade --no-cache-dir pip

@@ -114,7 +114,7 @@ def exceeds_local_limit_error(
     configured: Any,
     attempted: Any,
 ) -> ErrorDetail:
-    """Pre-flight refusal — request would breach a configured local limit."""
+    """Pre-flight refusal - request would breach a configured local limit."""
     return ErrorDetail(
         code="EXCEEDS_LOCAL_LIMIT",
         message=(
@@ -132,7 +132,7 @@ def exceeds_local_limit_error(
 
 
 def idempotency_diverged_error(*, key: str, action: str) -> ErrorDetail:
-    """Same idempotency key, different request body — caller bug."""
+    """Same idempotency key, different request body - caller bug."""
     return ErrorDetail(
         code="IDEMPOTENCY_DIVERGED",
         message=(
@@ -153,7 +153,7 @@ def invalid_request_error(
 ) -> ErrorDetail:
     """Request argument failed local parsing (e.g. unparseable Decimal).
 
-    Caller bug — surfaces the field name and offending value so the agent
+    Caller bug - surfaces the field name and offending value so the agent
     can correct the next call instead of seeing a generic INTERNAL_ERROR.
     """
     return ErrorDetail(
@@ -166,7 +166,7 @@ def invalid_request_error(
 
 
 def invalid_ticket_error(*, ticket: int, kind: Literal["order", "position"]) -> ErrorDetail:
-    """Ticket lookup failed — order/position doesn't exist."""
+    """Ticket lookup failed - order/position doesn't exist."""
     return ErrorDetail(
         code="INVALID_TICKET",
         message=f"No {kind} with ticket {ticket}.",

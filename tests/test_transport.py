@@ -107,7 +107,7 @@ def test_run_http_with_token_installs_bearer_middleware():
 
 
 def test_run_http_empty_token_logs_unauthenticated_warning(caplog):
-    """An empty auth_token means the loopback HTTP server is unauthenticated —
+    """An empty auth_token means the loopback HTTP server is unauthenticated -
     a real-money foot-gun the operator must be warned about at startup."""
     import logging
     mcp = _StubFastMCP()

@@ -47,7 +47,7 @@ class MT5Section(_Sub):
     # When `login` is set, the adapter authenticates via initialize(login=,
     # password=, server=) instead of attaching to an already-logged-in
     # terminal. `MT5_LOGIN` / `MT5_SERVER` env vars override these values
-    # (see `load_config`). There is deliberately NO `password` field — the
+    # (see `load_config`). There is deliberately NO `password` field - the
     # password is env-only (`MT5_PASSWORD`) so it never lands in a config file
     # or a serialized Config object.
     login: int | None = None
@@ -58,7 +58,7 @@ class MT5Section(_Sub):
 
 
 class PolicySection(_Sub):
-    # All Decimals — the architecture insists no floats on money amounts.
+    # All Decimals - the architecture insists no floats on money amounts.
     auto_approve_notional: Decimal = Decimal("0")
     max_notional_per_trade: Decimal = Decimal("0")
     max_realised_loss_per_close: Decimal = Decimal("0")
@@ -92,7 +92,7 @@ class TransportHTTPSection(_Sub):
     # Hostnames to add to FastMCP's DNS-rebinding-protection allow list.
     # FastMCP defaults already include 127.0.0.1, localhost, [::1] (with
     # wildcard ports). Add entries here when the MCP sits behind a reverse
-    # proxy that forwards a non-loopback Host header — e.g. Tailscale serve
+    # proxy that forwards a non-loopback Host header - e.g. Tailscale serve
     # at https://<machine>.<tailnet>.ts.net.
     trusted_hosts: list[str] = Field(default_factory=list)
     trusted_origins: list[str] = Field(default_factory=list)
@@ -163,7 +163,7 @@ def _read_config_file(path: Path | None) -> Config:
         raise FileNotFoundError(path)
     # `utf-8-sig` strips a leading UTF-8 BOM (EF BB BF) if present; otherwise
     # behaves identically to `utf-8`. Notepad and Windows PowerShell 5.1's
-    # `Set-Content -Encoding UTF8` both write BOMs by default — without this
+    # `Set-Content -Encoding UTF8` both write BOMs by default - without this
     # the user gets a confusing `tomllib.TOMLDecodeError: Invalid statement
     # (at line 1, column 1)` because the BOM bytes parse as garbage before
     # the first `[`.
@@ -177,7 +177,7 @@ def _read_config_file(path: Path | None) -> Config:
 def _apply_mt5_env_overrides(config: Config) -> None:
     """Overlay `MT5_LOGIN` / `MT5_SERVER` onto the `[mt5]` section (env wins).
 
-    The password is deliberately NOT read here — it is resolved at connect
+    The password is deliberately NOT read here - it is resolved at connect
     time, env-only (`MT5_PASSWORD`), so it never lands in a Config object that
     could be logged or serialized. Empty-string env vars are treated as unset.
     """
@@ -213,7 +213,7 @@ class _ReloadHandler(FileSystemEventHandler):
 class ConfigWatcher:
     """Watches the config file and reloads on change.
 
-    A broken reload (invalid TOML, schema violation) is logged and ignored —
+    A broken reload (invalid TOML, schema violation) is logged and ignored -
     `.current` keeps the last-good config so the running server isn't
     destabilised by a typo.
     """

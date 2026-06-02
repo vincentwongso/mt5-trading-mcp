@@ -1,4 +1,4 @@
-"""`python -m mt5_mcp doctor` — green/red health report."""
+"""`python -m mt5_mcp doctor` - green/red health report."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def _check(label: str, fn: Callable[[], Any]) -> bool:
     try:
         result = fn()
         if isinstance(result, dict) and "error" in result:
-            print(f"[FAIL] {label}: {result['error']['code']} — {result['error']['message']}")
+            print(f"[FAIL] {label}: {result['error']['code']} - {result['error']['message']}")
             return False
         print(f"[PASS] {label}")
         return True
@@ -35,7 +35,7 @@ def _resolve_probe_symbol(requested: str, available: list[str]) -> str | None:
     """Pick a probe symbol the broker actually exposes.
 
     `requested != "auto"` is treated as an explicit user override and returned
-    unchanged — even if it's missing on the broker, so the user sees the
+    unchanged - even if it's missing on the broker, so the user sees the
     SYMBOL_NOT_FOUND failure they asked for.
 
     For `"auto"`, try `_DEFAULT_PROBE_CANDIDATES` in order, then fall back to
@@ -73,9 +73,9 @@ def _streaming_check(symbol: str) -> bool:
         ctx.dispatcher.unsubscribe(handle)
 
     if received:
-        print(f"[PASS] streaming({symbol}) — {len(received)} tick(s) dispatched")
+        print(f"[PASS] streaming({symbol}) - {len(received)} tick(s) dispatched")
         return True
-    print(f"[FAIL] streaming({symbol}) — no ticks observed in ~1s")
+    print(f"[FAIL] streaming({symbol}) - no ticks observed in ~1s")
     return False
 
 
@@ -99,7 +99,7 @@ def run_doctor(
     if client.login is not None:
         print(f"[INFO] authenticated as {client.login}")
     if client.server:
-        # `server:`, not `connected:` — this echoes the configured broker server
+        # `server:`, not `connected:` - this echoes the configured broker server
         # and prints before any health check runs, so it must not imply an
         # established MT5 connection. The `ping` line below reports reachability.
         print(f"[INFO] server: {client.server}")
@@ -129,7 +129,7 @@ def run_doctor(
     symbols_result = call("get_symbols")
     if isinstance(symbols_result, dict) and "error" in symbols_result:
         print(
-            f"[FAIL] get_symbols: {symbols_result['error']['code']} — "
+            f"[FAIL] get_symbols: {symbols_result['error']['code']} - "
             f"{symbols_result['error']['message']}"
         )
         results.append(False)
@@ -144,7 +144,7 @@ def run_doctor(
         print(f"[INFO] Auto-selected probe symbol: {probe}")
 
     if probe is None:
-        print("[SKIP] symbol-dependent probes — broker exposes no symbols")
+        print("[SKIP] symbol-dependent probes - broker exposes no symbols")
     else:
         results.append(_check(f"get_quote({probe})", lambda: call("get_quote", symbol=probe)))
         results.append(_check(f"get_market_hours({probe})", lambda: call("get_market_hours", symbol=probe)))
@@ -157,7 +157,7 @@ def run_doctor(
 
     if smoke_trade:
         if probe is None:
-            print("[SKIP] smoke-trade — broker exposes no symbols")
+            print("[SKIP] smoke-trade - broker exposes no symbols")
         else:
             place = tm.get_tool("place_order").fn(
                 symbol=probe, side="buy", type="market", volume="0.01",

@@ -172,7 +172,7 @@ def test_close_falls_back_to_price_current_when_tick_missing(server_and_mt5):
 
 def test_close_errors_when_tick_missing_and_price_current_zero(server_and_mt5):
     """If both tick AND position price_current are unavailable, surface
-    SYMBOL_NOT_ENABLED — there's nothing to fall back to."""
+    SYMBOL_NOT_ENABLED - there's nothing to fall back to."""
     server, fake = server_and_mt5
     fake._symbol_info_tick = {"EURUSD": None}
     fake._positions_get = (
@@ -187,7 +187,7 @@ def test_close_errors_when_tick_missing_and_price_current_zero(server_and_mt5):
 
 def test_close_errors_when_tick_missing_and_close_above_approval_threshold(tmp_path, frozen_utc):
     """The tick fallback only applies to closes that auto-approve. If the
-    close needs human approval, the human needs a fresh quote — refuse
+    close needs human approval, the human needs a fresh quote - refuse
     rather than synthesise a stale preview."""
     fake = FakeMT5()
     fake._terminal_info = FakeTerminalInfo(
@@ -215,7 +215,7 @@ def test_close_errors_when_tick_missing_and_close_above_approval_threshold(tmp_p
 
 def test_close_unsupported_position_type_returns_explicit_error(server_and_mt5):
     """A position with an unrecognised type (neither BUY nor SELL) must
-    surface UNSUPPORTED_POSITION_TYPE — not silently default to one side."""
+    surface UNSUPPORTED_POSITION_TYPE - not silently default to one side."""
     server, fake = server_and_mt5
     fake._positions_get = (
         FakePosition(ticket=44, symbol="EURUSD", type=99,  # bogus type
@@ -227,5 +227,5 @@ def test_close_unsupported_position_type_returns_explicit_error(server_and_mt5):
     assert out["error"]["code"] == "UNSUPPORTED_POSITION_TYPE"
     assert out["error"]["details"]["ticket"] == 44
     assert out["error"]["details"]["position_type"] == 99
-    # Critically, no order was sent — the guard fires before order_send.
+    # Critically, no order was sent - the guard fires before order_send.
     assert len(fake.order_send_calls) == 0

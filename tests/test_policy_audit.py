@@ -1,4 +1,4 @@
-"""AuditLog — JSONL append-only with size-based rotation."""
+"""AuditLog - JSONL append-only with size-based rotation."""
 
 from __future__ import annotations
 

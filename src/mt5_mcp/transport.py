@@ -92,7 +92,7 @@ def run(mcp: Any, *, transport: str, config: Config) -> None:
         else:
             logger.warning(
                 "transport.http.auth_token is empty: the loopback HTTP server "
-                "accepts UNAUTHENTICATED requests — any local process (or a "
+                "accepts UNAUTHENTICATED requests - any local process (or a "
                 "misconfigured port-forward) can place real trades. Set "
                 "transport.http.auth_token whenever the HTTP transport is "
                 "reachable beyond a single trusted user."

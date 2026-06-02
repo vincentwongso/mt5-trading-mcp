@@ -1,7 +1,7 @@
 """Pydantic models returned by MCP tools.
 
 All money / price / volume fields are `Decimal` (JSON-encoded as string).
-All datetimes are timezone-aware UTC — `adapter/conversions.py` is the only
+All datetimes are timezone-aware UTC - `adapter/conversions.py` is the only
 place naive timestamps become aware.
 """
 
@@ -53,7 +53,7 @@ class _Base(BaseModel):
         if isinstance(v, datetime):
             if v.tzinfo is None:
                 raise ValueError(f"{info.field_name}: datetime must be timezone-aware (UTC)")
-            # Enforce UTC — any non-zero offset is a broker-TZ leak.
+            # Enforce UTC - any non-zero offset is a broker-TZ leak.
             if v.utcoffset() != timedelta(0):
                 raise ValueError(f"{info.field_name}: datetime must be UTC (offset must be 0)")
         return v
@@ -94,7 +94,7 @@ class Position(_Base):
     tp: _DecimalStr | None
     profit: _DecimalStr
     swap: _DecimalStr
-    # NOTE: no `commission` field — the real MT5 `TradePosition` does not
+    # NOTE: no `commission` field - the real MT5 `TradePosition` does not
     # expose commission for open positions. Commission is recorded per-deal
     # at close time; query `get_history` to read it from the closing Deal.
     time_open: datetime
@@ -138,7 +138,7 @@ class Quote(_Base):
 class SymbolInfo(_Base):
     name: str
     description: str
-    category: str  # Derived from `path` — "Forex", "Indices", "Metals", "Crypto", "Stocks", or raw first path segment.
+    category: str  # Derived from `path` - "Forex", "Indices", "Metals", "Crypto", "Stocks", or raw first path segment.
     contract_size: _DecimalStr
     tick_size: _DecimalStr
     tick_value: _DecimalStr           # Cash value of one tick in deposit currency (default direction).
@@ -152,7 +152,7 @@ class SymbolInfo(_Base):
     filling_modes: list[Literal["fok", "ioc", "return"]]
     digits: int
     is_tradeable: bool
-    # Margin / profit calc dispatch — drives which formula applies. See
+    # Margin / profit calc dispatch - drives which formula applies. See
     # docs/mt5/margin_requirements_formula.md in the cfd-claculator project.
     calc_mode: Literal[
         "forex", "futures", "cfd", "cfd_index", "cfd_leverage",
@@ -175,7 +175,7 @@ class SymbolInfo(_Base):
         "by_reopen_current", "by_reopen_bid", "unknown",
     ]
     # Weekday of the 3x swap rollover (typically Wednesday for FX, Friday
-    # for some index/equity brokers). Always a real weekday — irrelevance
+    # for some index/equity brokers). Always a real weekday - irrelevance
     # is encoded by `swap_mode == "disabled"`.
     triple_swap_weekday: Literal[
         "sunday", "monday", "tuesday", "wednesday",

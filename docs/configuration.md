@@ -2,7 +2,7 @@
 
 [← Back to README](../README.md)
 
-Configuration is optional — the server starts with built-in defaults if the
+Configuration is optional - the server starts with built-in defaults if the
 file is absent.
 
 ## Config file location
@@ -39,7 +39,7 @@ ttl_seconds = 86400  # 24h replay window for mutating tools that pass an idempot
 [transport.http]
 # Only relevant when using --transport http. Loopback-only in v1.0.
 port = 8765
-auth_token = ""  # bearer token; EMPTY = unauthenticated (any local process can trade) — set one for HTTP
+auth_token = ""  # bearer token; EMPTY = unauthenticated (any local process can trade) - set one for HTTP
 
 [streaming]
 quote_poll_interval_ms = 200       # how often quotes://{symbol} checks for price changes
@@ -48,7 +48,7 @@ positions_poll_interval_ms = 1000  # how often positions://current is checked
 ```
 
 > **Defaults differ from this example.** `auto_approve_notional` defaults to `0`,
-> which is **fail-closed** — out of the box *every* mutating call requires human
+> which is **fail-closed** - out of the box *every* mutating call requires human
 > approval. The `max_*` limits default to `0`, which for them means **off** (no
 > local cap; the broker still enforces its own). The values above are a suggested
 > configuration; raise `auto_approve_notional` to auto-approve orders below that

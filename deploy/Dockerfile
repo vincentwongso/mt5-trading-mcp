@@ -2,7 +2,7 @@
 #
 # Layers our headless-MCP bootstrap onto the gmag11 MetaTrader5 + KasmVNC base:
 # 64-bit Wine-Python 3.11 + the official MetaTrader5 package + mt5-trading-mcp
-# serving MCP over HTTP on :8765. The stock mt5linux RPyC bridge is dropped —
+# serving MCP over HTTP on :8765. The stock mt5linux RPyC bridge is dropped -
 # Option 1: mt5-mcp runs in-process under Wine-Python (the same native code
 # path it uses on Windows).
 #
@@ -18,7 +18,7 @@ FROM gmag11/metatrader5_vnc:2.3@sha256:2fdff449cf70b74c242319828b6859592ab52dfb0
 #
 # The base leaves the WineHQ apt source configured but DELETES its signing key,
 # so a derived `apt-get update` fails GPG verification on that repo. We only
-# need socat (Debian main) — drop the unsigned WineHQ source first. Wine is
+# need socat (Debian main) - drop the unsigned WineHQ source first. Wine is
 # already installed in the base, so nothing here needs that repo.
 RUN rm -f /etc/apt/sources.list.d/winehq*.sources /etc/apt/sources.list.d/winehq*.list \
     && apt-get update \

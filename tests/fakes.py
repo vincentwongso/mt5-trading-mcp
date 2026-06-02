@@ -1,5 +1,5 @@
 """
-FakeMT5 — hand-rolled stand-in for the MetaTrader5 module.
+FakeMT5 - hand-rolled stand-in for the MetaTrader5 module.
 
 The real MetaTrader5 library is Windows-only and exposes ~30 module-level
 functions that return NamedTuples. FakeMT5 mimics only the subset we call,
@@ -28,7 +28,7 @@ ORDER_FILLING_RETURN = 2
 
 # NOTE: SYMBOL_FILLING_* constants are deliberately NOT exposed.
 # The real MetaTrader5 Python module does not expose them as module
-# attributes either — they're inlined as integer literals in
+# attributes either - they're inlined as integer literals in
 # `src/mt5_mcp/adapter/symbols.py` (see _SYMBOL_FILLING_FOK/IOC/BOC).
 # A v1.0 bug surfaced in Phase 5 because production code was reading
 # them from the fake; FakeMT5 must mirror the real module's surface
@@ -57,7 +57,7 @@ ORDER_TYPE_SELL_STOP = 5
 ORDER_TYPE_BUY_STOP_LIMIT = 6
 ORDER_TYPE_SELL_STOP_LIMIT = 7
 
-# mt5lib ENUM_TIMEFRAMES — used by `copy_rates_from_pos`.
+# mt5lib ENUM_TIMEFRAMES - used by `copy_rates_from_pos`.
 TIMEFRAME_M1 = 1
 TIMEFRAME_M5 = 5
 TIMEFRAME_M15 = 15
@@ -162,7 +162,7 @@ class FakeTick:
 
 @dataclass
 class FakePosition:
-    """Mirrors the real `mt5.TradePosition` named tuple shape — note: NO
+    """Mirrors the real `mt5.TradePosition` named tuple shape - note: NO
     `commission` field. The real MT5 module does not expose commission on
     open positions; it lives on the closing deal (see `FakeDeal`)."""
     ticket: int = 1
@@ -295,7 +295,7 @@ class FakeMT5:
     initialize_calls: list[dict[str, Any]] = field(default_factory=list)
     _last_error: tuple[int, str] = (0, "")
 
-    # Call-counter bookkeeping — useful for cache-hit assertions.
+    # Call-counter bookkeeping - useful for cache-hit assertions.
     calls: dict[str, int] = field(default_factory=dict)
 
     # --- API surface ---
@@ -369,7 +369,7 @@ class FakeMT5:
 
     def order_send(self, request: dict[str, Any]) -> FakeOrderSendResult | None:
         self._bump("order_send")
-        # Defensive copy — tests may mutate the dict afterwards.
+        # Defensive copy - tests may mutate the dict afterwards.
         self.order_send_calls.append(dict(request))
         return self._order_send
 

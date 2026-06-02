@@ -71,7 +71,7 @@ def register(mcp: FastMCP) -> None:
     ) -> dict:
         """Place a market or pending order. Optional SL / TP / deviation.
 
-        At or above `policy.auto_approve_notional` (which defaults to 0 — so
+        At or above `policy.auto_approve_notional` (which defaults to 0 - so
         every order by default), returns an ApprovalPreview; retry with
         approval_confirmed=true and the same request fields to proceed. Pass
         `idempotency_key` (UUIDv4 recommended) to dedupe retries within
@@ -91,7 +91,7 @@ def register(mcp: FastMCP) -> None:
             approval_request_id=approval_request_id,
         )
 
-        # Adapter prep — raises MT5Error caught by error_envelope.
+        # Adapter prep - raises MT5Error caught by error_envelope.
         info = ctx.symbols.get(symbol)
         ctx.symbols.validate_volume(symbol, req.volume)
         if req.price is not None:

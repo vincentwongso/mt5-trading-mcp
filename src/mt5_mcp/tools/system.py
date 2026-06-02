@@ -16,7 +16,7 @@ from mt5_mcp.types import TerminalInfo
 def register(mcp: FastMCP) -> None:
     @mcp.tool()
     def ping() -> dict[str, Any]:
-        """Health check — verifies the MT5 terminal is reachable.
+        """Health check - verifies the MT5 terminal is reachable.
 
         Returns ``{"ok": bool, "latency_ms": int, "via": str | None}``.
         ``via`` names the layer that answered (``terminal_info``,

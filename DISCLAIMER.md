@@ -14,7 +14,7 @@ MetaTrader 5 terminal. By running it you accept the following.
   your initial deposit. **You can lose more than you put in.**
 - An AI agent can misunderstand instructions, react to bad or manipulated data,
   or behave unpredictably. The consent and pre-flight checks in this project are
-  **UX guardrails to catch mistakes, not guarantees** — they are not a safety net
+  **UX guardrails to catch mistakes, not guarantees** - they are not a safety net
   and they are explicitly **not a security boundary** (see [SECURITY.md](SECURITY.md)).
 
 ## It is not financial advice

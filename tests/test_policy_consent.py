@@ -1,4 +1,4 @@
-"""ApprovalStore — in-memory preview cache + retry-validation logic."""
+"""ApprovalStore - in-memory preview cache + retry-validation logic."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def test_store_and_pop_roundtrip():
     s.put(p)
     out = s.pop("01HX0000000000000000000001")
     assert out is p
-    # Preview is consumed on retrieval — single-use.
+    # Preview is consumed on retrieval - single-use.
     assert s.pop("01HX0000000000000000000001") is None
 
 
@@ -111,7 +111,7 @@ def test_validate_retry_rejects_symbol_mismatch():
 
     Regression guard: an earlier implementation removed `symbol` from the
     identical-fields loop, allowing an agent to receive approval for
-    EURUSD and submit GBPUSD — exactly the bait-and-switch the consent
+    EURUSD and submit GBPUSD - exactly the bait-and-switch the consent
     gate is supposed to prevent.
     """
     p = _preview(request_id="01HX0000000000000000000099", symbol="EURUSD")

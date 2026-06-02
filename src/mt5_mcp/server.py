@@ -93,7 +93,7 @@ _ctx: AppContext | None = None
 # Startup wait applied to the FIRST connect when programmatic-login credentials
 # are present (the headless container boot path): the MT5 terminal can take a
 # while to come up after `docker run`. ~30 × 2s ≈ a 60s boot window. The native
-# attach path (no creds) gets no retries — a genuine failure should surface
+# attach path (no creds) gets no retries - a genuine failure should surface
 # immediately rather than hang.
 _BOOT_CONNECT_RETRIES = 30
 _BOOT_CONNECT_RETRY_DELAY_S = 2.0
@@ -119,7 +119,7 @@ def build_context(
         else:
             cfg = load_config()  # defaults
         # Client. When no module is injected (production), resolve the backend
-        # LAZILY per config — native import or the [mt5.bridge] RPyC proxy — so
+        # LAZILY per config - native import or the [mt5.bridge] RPyC proxy - so
         # the server constructs even on a host without MetaTrader5 installed.
         from mt5_mcp.adapter.mt5_client import resolve_mt5_module
         backend_label = (
@@ -133,7 +133,7 @@ def build_context(
         # When a login is configured we're booting (likely in the container), so
         # give connect() a startup wait window for the terminal to come up.
         #
-        # The password is only meaningful alongside a login — read it ONLY then,
+        # The password is only meaningful alongside a login - read it ONLY then,
         # so a half-filled .env (MT5_PASSWORD set, MT5_LOGIN missing) neither
         # retains an unusable secret on the client nor arms the boot retry window.
         booting_with_login = cfg.mt5.login is not None
@@ -210,7 +210,7 @@ def _wire_subscribe_hooks(mcp: FastMCP) -> None:
 
     Uses mcp._mcp_server (a mcp.server.lowlevel.server.Server) which exposes
     subscribe_resource() and unsubscribe_resource() decorator factories.
-    Both map a single async handler per message type — only one handler can
+    Both map a single async handler per message type - only one handler can
     be active at a time, so we handle all URIs in one place.
 
     Session-keyed handle map: dict[(uri_str, session_id)] -> SubscriptionHandle
@@ -238,7 +238,7 @@ def _wire_subscribe_hooks(mcp: FastMCP) -> None:
             old_handle = _active.get(key)
             _active[key] = handle
         if old_handle is not None:
-            # Previous subscription for same (uri, session) — clean up the
+            # Previous subscription for same (uri, session) - clean up the
             # orphan before it accumulates in the dispatcher.
             ctx.dispatcher.unsubscribe(old_handle)
         logger.debug("subscribe_resource: registered %s (session %s)", uri_str, id(session))

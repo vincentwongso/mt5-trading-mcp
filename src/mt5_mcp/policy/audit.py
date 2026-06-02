@@ -3,7 +3,7 @@
 One file handle per process; an RLock guards both `write()` and rotation
 so the file remains consistent under concurrent FastMCP request threads.
 The `ts` field is generated inside the lock so file order matches wall
-clock order — important for operators reconstructing event sequences.
+clock order - important for operators reconstructing event sequences.
 
 Durability trade-offs (acceptable for a local-first developer tool):
 - Line-buffered mode means each `\\n`-terminated write reaches the OS,
@@ -19,7 +19,7 @@ Durability trade-offs (acceptable for a local-first developer tool):
 
 Rotation renames the current file to `audit.jsonl.<unix_epoch>` (with a
 `.<suffix>` counter for same-second collisions) and opens a fresh handle.
-No compression — operators rotate or archive manually.
+No compression - operators rotate or archive manually.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ class AuditLog:
         # Line-buffered text mode so each write is flushed without an
         # explicit .flush() call. UTF-8 on every platform.
         self._fp = open(self._path, "a", encoding="utf-8", buffering=1)
-        # The log records intentional trade activity (tickets, fills) — keep it
+        # The log records intentional trade activity (tickets, fills) - keep it
         # owner-only on POSIX. Best-effort; effectively a no-op on Windows.
         try:
             os.chmod(self._path, 0o600)

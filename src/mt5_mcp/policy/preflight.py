@@ -1,4 +1,4 @@
-"""Pre-flight limit checks. UX optimisation, not a security control —
+"""Pre-flight limit checks. UX optimisation, not a security control -
 the broker's MT5 server enforces the real boundary."""
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def check_preflight_limits(
 
     symbol = getattr(request, "symbol", None)
 
-    # Symbol allow/denylist (skip when symbol is unknown — modify/close use ticket).
+    # Symbol allow/denylist (skip when symbol is unknown - modify/close use ticket).
     if symbol is not None:
         if symbol in config.symbols.denylist:
             return exceeds_local_limit_error(
@@ -57,7 +57,7 @@ def check_preflight_limits(
                 attempted=symbol,
             )
 
-    # max_notional_per_trade — applies only to actions that ADD exposure.
+    # max_notional_per_trade - applies only to actions that ADD exposure.
     if action == "place_order" and config.policy.max_notional_per_trade > 0:
         if inputs.notional > config.policy.max_notional_per_trade:
             return exceeds_local_limit_error(
@@ -66,7 +66,7 @@ def check_preflight_limits(
                 attempted=inputs.notional,
             )
 
-    # Daily loss cap — applies to place_order only. Compared against the
+    # Daily loss cap - applies to place_order only. Compared against the
     # absolute value of running realised P&L (which is negative when losing).
     # Once realised losses meet the cap, no new trade is permitted today.
     if action == "place_order" and config.policy.max_daily_loss > 0:
@@ -78,7 +78,7 @@ def check_preflight_limits(
                 attempted=loss_so_far,
             )
 
-    # Realised-loss-on-close cap — close_position only.
+    # Realised-loss-on-close cap - close_position only.
     if action == "close_position" and config.policy.max_realised_loss_per_close > 0:
         loss_on_close = -inputs.estimated_realised_loss_on_close
         if loss_on_close > config.policy.max_realised_loss_per_close:

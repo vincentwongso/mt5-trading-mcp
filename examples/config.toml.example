@@ -31,5 +31,5 @@ max_notional_per_trade = "0"   # 0 = no local cap (the broker still enforces its
 # --- Optional loopback HTTP transport (default is stdio). ---
 [transport.http]
 port = 8765
-auth_token = ""   # EMPTY = UNAUTHENTICATED — any local process can place trades.
+auth_token = ""   # EMPTY = UNAUTHENTICATED - any local process can place trades.
                   # Set a token to require Authorization: Bearer <token> over HTTP.

@@ -119,7 +119,7 @@ class MT5Client:
         mt5_factory: Callable[[], Any] | None = None,
         backend_label: str = "native",
     ) -> None:
-        # `mt5_module` (a pre-resolved module/proxy) is used directly — tests
+        # `mt5_module` (a pre-resolved module/proxy) is used directly - tests
         # inject FakeMT5 here. Otherwise the backend is resolved LAZILY on first
         # use via `mt5_factory` (defaulting to the native import), so the server
         # can be constructed on a host without MetaTrader5 installed.
@@ -187,7 +187,7 @@ class MT5Client:
         On the first connect, retries up to ``self._connect_retries`` times
         (sleeping ``self._connect_retry_delay_s`` between) to wait out a
         terminal that's still starting at container boot. Subsequent connects
-        (mid-session reinit) get a single attempt — see ``__init__``.
+        (mid-session reinit) get a single attempt - see ``__init__``.
         """
         with self._lock:
             if self._initialised:
@@ -205,7 +205,7 @@ class MT5Client:
                     attempt += 1
                     logger.warning(
                         "MT5 connect attempt %d/%d failed; the terminal may "
-                        "still be starting — retrying in %.1fs",
+                        "still be starting - retrying in %.1fs",
                         attempt, retries, self._connect_retry_delay_s,
                     )
                     time.sleep(self._connect_retry_delay_s)
@@ -226,16 +226,16 @@ class MT5Client:
     def _derive_broker_offset(self, ti: Any) -> int:
         """Derive the broker TZ offset (minutes from UTC).
 
-        Layered fallback — degrades gracefully so the server still starts
+        Layered fallback - degrades gracefully so the server still starts
         when the canonical source is missing:
 
-        1. ``terminal_info().time`` — cheap and accurate when the broker's
+        1. ``terminal_info().time`` - cheap and accurate when the broker's
            MT5 build exposes it. Some builds (and most demo configurations
            we've seen) omit ``.time`` from the named tuple entirely.
         2. The freshest tick on a common always-streaming symbol. The MT5
            Python module's ``symbol_info_tick().time`` IS documented stable
            API. Validated by re-applying the inferred offset and checking
-           the tick's residual age — a fresh tick on a broker at offset N
+           the tick's residual age - a fresh tick on a broker at offset N
            must land within ``_FRESH_TICK_SECONDS`` of real-utc-now once
            the offset is removed; a weekend-stale tick blows that gap out
            by hours and is rejected.
@@ -309,7 +309,7 @@ class MT5Client:
 
         Each layer routes through ``self.call()`` so a transient
         NOT_INITIALIZED state triggers a reinit attempt before the layer
-        gives up — same recovery behavior as every other read tool. The
+        gives up - same recovery behavior as every other read tool. The
         earlier rule "ping bypasses retry to detect raw IPC state" gave
         agents a probe that lied about usability whenever the IPC needed
         a transparent reconnect; the layered fallback already provides

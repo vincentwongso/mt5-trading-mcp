@@ -1,4 +1,4 @@
-"""check_preflight_limits — hard refusal layer (no approval can override)."""
+"""check_preflight_limits - hard refusal layer (no approval can override)."""
 
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ def test_blocks_when_allowlist_set_and_symbol_missing():
 def test_blocks_when_running_daily_loss_at_or_above_cap():
     """Once realised daily loss meets the cap, no new trades are allowed.
 
-    The cap is about realised drawdown — notional doesn't enter the
+    The cap is about realised drawdown - notional doesn't enter the
     decision because notional is not equal to the trade's potential loss.
     """
     req = OrderRequest(symbol="EURUSD", side="buy", type="market", volume=Decimal("0.1"))

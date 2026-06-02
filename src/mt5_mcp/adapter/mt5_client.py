@@ -153,16 +153,19 @@ class MT5Client:
 
         - No credentials → bare ``initialize()`` (attach to a terminal already
           logged in, e.g. via a one-time VNC login).
-        - ``login`` set → ``initialize(login=, password=, server=)`` to
-          authenticate programmatically (headless container boot).
+        - ``login`` AND ``password`` set → ``initialize(login=, password=,
+          server=)`` to authenticate programmatically (headless container boot).
+        - A partial set (``login`` configured for diagnostics but no
+          ``password``, because the human logs in via VNC) → bare ``initialize()``.
+          Passing ``login=`` without a password would make mt5lib reject or
+          replace the existing attach instead of joining it.
         - ``terminal_path`` is always the leading positional arg when present.
         """
         args: tuple[Any, ...] = (self._terminal_path,) if self._terminal_path else ()
         kwargs: dict[str, Any] = {}
-        if self.login is not None:
+        if self.login is not None and self._password is not None:
             kwargs["login"] = self.login
-            if self._password is not None:
-                kwargs["password"] = self._password
+            kwargs["password"] = self._password
             if self.server is not None:
                 kwargs["server"] = self.server
         return bool(self._mt5.initialize(*args, **kwargs))

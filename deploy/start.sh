@@ -45,8 +45,14 @@ mt5setup_url="https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5
 # mt5-mcp binds loopback only (a hard project invariant). It serves on this
 # port inside the container; socat bridges the container's network interface
 # to it so Docker `-p 127.0.0.1:8765:8765` forwarding can reach it.
+#
+# The internal port is FIXED at 8765: `mt5_mcp serve` always binds the config
+# default (8765) — this script writes no config and passes no --port — and the
+# compose file maps the container's 8765. Remapping the *host* port is Docker's
+# job (`-p 127.0.0.1:<host>:8765` / the compose `MCP_PORT` var), so this must
+# stay 8765 or socat would forward to a port nothing is listening on.
 mcp_host="127.0.0.1"
-mcp_port="${MT5_MCP_PORT:-8765}"
+mcp_port="8765"
 # Optionally pin the published mt5-trading-mcp version (else latest from PyPI).
 mt5_mcp_spec="mt5-trading-mcp${MT5_MCP_VERSION:+==${MT5_MCP_VERSION}}"
 

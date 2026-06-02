@@ -73,11 +73,11 @@ login, and `mt5-mcp` serving MCP over HTTP. No host Python, no bridge, no
    config file or logged. To keep it out of a file entirely, inject it at
    runtime instead, e.g. with 1Password:
    ```
-   op run -- docker compose -f deploy/docker-compose.yml up -d --build
+   op run -- docker compose -f deploy/docker-compose.yml up -d
    ```
 2. **Start it:**
    ```
-   docker compose -f deploy/docker-compose.yml up -d --build
+   docker compose -f deploy/docker-compose.yml up -d
    ```
    First boot installs MetaTrader 5 + 64-bit Wine-Python into the container's
    volume — a few minutes. (If MT5's installer fails with `socket: Function not
@@ -96,7 +96,8 @@ login, and `mt5-mcp` serving MCP over HTTP. No host Python, no bridge, no
 Ports are overridable via `MCP_PORT` (default `8765`) and `VNC_PORT` (default
 `3001`). The published image is
 `ghcr.io/vincentwongso/mt5-trading-mcp:headless` — `docker compose pull` fetches
-it instead of building locally.
+it. The commands above use it as-is; add `--build` only when you've modified
+`deploy/` locally and want Compose to rebuild the image instead.
 
 > **Symbol names are broker-specific.** Some brokers suffix instruments — e.g.
 > `EURUSD.z`, `XAUUSD.z` (crypto such as `BTCUSD` is often unsuffixed). Always

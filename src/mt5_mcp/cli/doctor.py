@@ -99,7 +99,10 @@ def run_doctor(
     if client.login is not None:
         print(f"[INFO] authenticated as {client.login}")
     if client.server:
-        print(f"[INFO] connected: {client.server}")
+        # `server:`, not `connected:` — this echoes the configured broker server
+        # and prints before any health check runs, so it must not imply an
+        # established MT5 connection. The `ping` line below reports reachability.
+        print(f"[INFO] server: {client.server}")
 
     def call(name: str, **kwargs):
         return tm.get_tool(name).fn(**kwargs)

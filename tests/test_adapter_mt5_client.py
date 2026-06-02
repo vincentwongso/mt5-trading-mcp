@@ -454,6 +454,18 @@ def test_connect_with_terminal_path_and_credentials(fake_mt5, frozen_utc):
     assert call["kwargs"]["login"] == 42
 
 
+def test_connect_with_login_but_no_password_bare_attaches(fake_mt5, frozen_utc):
+    """A partial credential set — login configured (e.g. for doctor diagnostics)
+    but no password, because the human logs in via VNC — must NOT pass login= to
+    initialize(). A partial set would make mt5lib reject/replace the existing
+    attach; bare-attach instead."""
+    c = MT5Client(mt5_module=fake_mt5, login=7000592, server="Fintrix-Live")
+    c.connect()
+    call = fake_mt5.initialize_calls[-1]
+    assert call["args"] == ()
+    assert call["kwargs"] == {}
+
+
 def test_connect_never_logs_password(fake_mt5, frozen_utc, caplog):
     import logging
     c = MT5Client(mt5_module=fake_mt5, login=1, password="SUPERSECRET", server="S")

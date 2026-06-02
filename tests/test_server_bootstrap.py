@@ -129,3 +129,23 @@ def test_build_context_no_startup_retries_when_attaching(monkeypatch, tmp_path):
         assert get_context().client._connect_retries == 0
     finally:
         reset_context_for_tests()
+
+
+def test_build_context_password_without_login_is_ignored(monkeypatch, tmp_path):
+    """A half-filled .env (MT5_PASSWORD set, MT5_LOGIN missing) must not retain
+    an unusable secret on the client nor arm the boot retry window — the
+    password is meaningless without a login to pair it with."""
+    from mt5_mcp.server import build_context, get_context, reset_context_for_tests
+
+    monkeypatch.delenv("MT5_LOGIN", raising=False)
+    monkeypatch.setenv("MT5_PASSWORD", "orphaned-secret")
+    monkeypatch.delenv("MT5_SERVER", raising=False)
+    reset_context_for_tests()
+    build_context(mt5_module=FakeMT5(), config_path=_sandbox_cfg(tmp_path))
+    try:
+        client = get_context().client
+        assert client.login is None
+        assert client._password is None
+        assert client._connect_retries == 0
+    finally:
+        reset_context_for_tests()

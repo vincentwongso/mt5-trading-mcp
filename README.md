@@ -62,8 +62,9 @@ run, follow this procedure.**
    - **Windows:** `pip install .` (or `uv sync --extra dev`). Tell the human to
      launch MetaTrader 5, log into their broker, and enable **AlgoTrading**.
    - **Linux (recommended):** bring up the Docker image — creds in
-     `deploy/.env`, then `docker compose -f deploy/docker-compose.yml up -d
-     --build`. The server runs in the container and serves MCP over HTTP; the
+     `deploy/.env`, then `docker compose -f deploy/docker-compose.yml up -d`
+     (it uses the published image; add `--build` only for local `deploy/`
+     changes). The server runs in the container and serves MCP over HTTP; the
      one-time VNC login + bridge alternative are in `docs/installation.md`.
 3. **Verify before doing anything else:** Windows → `python -m mt5_mcp doctor`
    (expect the backend + `[PASS]` lines); Docker image → after the human's

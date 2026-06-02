@@ -273,11 +273,11 @@ def test_doctor_reports_authenticated_login_and_server(capsys, tmp_path, monkeyp
     out = capsys.readouterr().out
     assert rc == 0
     assert "[INFO] authenticated as 7000592" in out
-    assert "[INFO] connected: Fintrix-Live" in out
+    assert "[INFO] server: Fintrix-Live" in out
 
 
 def test_doctor_omits_auth_lines_when_attaching(capsys, tmp_path, monkeypatch):
-    """No creds (attach path) → no authenticated/connected lines."""
+    """No creds (attach path) → no authenticated/server lines."""
     monkeypatch.delenv("MT5_LOGIN", raising=False)
     monkeypatch.delenv("MT5_SERVER", raising=False)
     fake = FakeMT5()

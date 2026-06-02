@@ -130,10 +130,16 @@ def build_context(
         # Programmatic-login credentials: login/server come from the (already
         # env-overlaid) config; the password is env-only and read here so it
         # never enters a Config object that could be logged or serialized.
-        # When creds are present we're booting (likely in the container), so
+        # When a login is configured we're booting (likely in the container), so
         # give connect() a startup wait window for the terminal to come up.
-        login_password = os.environ.get("MT5_PASSWORD") or None
-        booting_with_login = cfg.mt5.login is not None or login_password is not None
+        #
+        # The password is only meaningful alongside a login — read it ONLY then,
+        # so a half-filled .env (MT5_PASSWORD set, MT5_LOGIN missing) neither
+        # retains an unusable secret on the client nor arms the boot retry window.
+        booting_with_login = cfg.mt5.login is not None
+        login_password = (
+            (os.environ.get("MT5_PASSWORD") or None) if booting_with_login else None
+        )
         client = MT5Client(
             terminal_path=cfg.mt5.terminal_path or None,
             login=cfg.mt5.login,

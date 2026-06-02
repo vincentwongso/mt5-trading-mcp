@@ -71,10 +71,11 @@ def register(mcp: FastMCP) -> None:
     ) -> dict:
         """Place a market or pending order. Optional SL / TP / deviation.
 
-        Above `policy.auto_approve_notional`, returns an ApprovalPreview;
-        retry with approval_confirmed=true and the same request fields to
-        proceed. Pass `idempotency_key` (UUIDv4 recommended) to dedupe
-        retries within `idempotency.ttl_seconds`.
+        At or above `policy.auto_approve_notional` (which defaults to 0 - so
+        every order by default), returns an ApprovalPreview; retry with
+        approval_confirmed=true and the same request fields to proceed. Pass
+        `idempotency_key` (UUIDv4 recommended) to dedupe retries within
+        `idempotency.ttl_seconds`.
         """
         ctx = get_context()
         req = OrderRequest(
@@ -90,7 +91,7 @@ def register(mcp: FastMCP) -> None:
             approval_request_id=approval_request_id,
         )
 
-        # Adapter prep — raises MT5Error caught by error_envelope.
+        # Adapter prep - raises MT5Error caught by error_envelope.
         info = ctx.symbols.get(symbol)
         ctx.symbols.validate_volume(symbol, req.volume)
         if req.price is not None:
@@ -117,10 +118,10 @@ def register(mcp: FastMCP) -> None:
         notional = req.volume * ref_price
 
         cfg = ctx.config
-        requires_approval = (
-            cfg.policy.auto_approve_notional > 0
-            and notional >= cfg.policy.auto_approve_notional
-        )
+        # Fail-closed: at the default auto_approve_notional=0 every order gates
+        # (notional >= 0 is always true). Raise the threshold to auto-approve
+        # orders below it; set it above any order you'll place to disable the gate.
+        requires_approval = notional >= cfg.policy.auto_approve_notional
 
         account = ctx.client.call(lambda m: m.account_info())
         leverage = Decimal(str(account.leverage)) if account else Decimal("1")

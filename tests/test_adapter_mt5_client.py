@@ -174,7 +174,7 @@ def test_ping_recovers_from_not_initialized_via_call_wrapper(
 
 
 def test_ping_rejects_stale_tick(fake_mt5: FakeMT5, frozen_utc):
-    """A tick older than _FRESH_TICK_SECONDS (5min) is not a healthy signal —
+    """A tick older than _FRESH_TICK_SECONDS (5min) is not a healthy signal -
     the terminal could be connected to a frozen quote stream."""
     from datetime import datetime, timezone
     from tests.fakes import FakeTick
@@ -217,7 +217,7 @@ def test_connect_falls_back_when_terminal_info_lacks_time(fake_mt5: FakeMT5, fro
         name: str = "MetaTrader 5"
         company: str = "Example Broker Ltd"
         path: str = ""
-        # no `time` field — this is what some real MT5 builds omit
+        # no `time` field - this is what some real MT5 builds omit
 
     fake_mt5._terminal_info = _BrokenTerminalInfo()
     # No `_symbol_info_tick` entries → every probe call returns None.
@@ -420,7 +420,7 @@ def test_resolve_native_missing_lib_raises_terminal_not_connected(monkeypatch):
 
 def test_connect_with_credentials_passes_login_password_server(fake_mt5, frozen_utc):
     """When login is configured, connect() must authenticate programmatically:
-    initialize(login=, password=, server=) — the headless/container boot path."""
+    initialize(login=, password=, server=) - the headless/container boot path."""
     c = MT5Client(
         mt5_module=fake_mt5,
         login=7000592, password="s3cret", server="Fintrix-Live",
@@ -455,8 +455,8 @@ def test_connect_with_terminal_path_and_credentials(fake_mt5, frozen_utc):
 
 
 def test_connect_with_login_but_no_password_bare_attaches(fake_mt5, frozen_utc):
-    """A partial credential set — login configured (e.g. for doctor diagnostics)
-    but no password, because the human logs in via VNC — must NOT pass login= to
+    """A partial credential set - login configured (e.g. for doctor diagnostics)
+    but no password, because the human logs in via VNC - must NOT pass login= to
     initialize(). A partial set would make mt5lib reject/replace the existing
     attach; bare-attach instead."""
     c = MT5Client(mt5_module=fake_mt5, login=7000592, server="Fintrix-Live")

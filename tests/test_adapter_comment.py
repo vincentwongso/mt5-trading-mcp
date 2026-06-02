@@ -1,7 +1,7 @@
 """Preflight validation for the order_send `comment` field.
 
 MT5 brokers silently reject orders whose comment violates length/character
-constraints — the call returns None and there's no retcode. v1.0.14 catches
+constraints - the call returns None and there's no retcode. v1.0.14 catches
 these cases at the adapter layer and surfaces INVALID_COMMENT so the agent can
 shorten/strip and retry instead of chasing the wrong failure mode.
 """
@@ -57,9 +57,10 @@ def test_too_long_raises_invalid_comment():
 
 
 def test_non_ascii_raises_invalid_comment():
-    # em-dash (U+2014) — common LLM output that brokers tend to reject
+    # Non-ASCII LLM punctuation (here an ellipsis; em-dashes and smart quotes
+    # behave the same) is common output that brokers tend to reject.
     with pytest.raises(MT5Error) as ei:
-        sanitize_comment("stage2 — abc")
+        sanitize_comment("stage2 … abc")
     err = ei.value.detail
     assert err.code == "INVALID_COMMENT"
     assert err.details["reason"] == "non_ascii"
@@ -137,7 +138,7 @@ def test_order_request_dict_raises_on_invalid_comment(fake_mt5):
 
     req = OrderRequest(symbol="EURUSD", side="buy", type="market",
                        volume=Decimal("0.10"), deviation=10,
-                       comment="stage2 — em-dash")
+                       comment="stage2 … non-ascii")
     with pytest.raises(MT5Error) as ei:
         order_request_to_mt5_dict(
             req, symbol_info=FakeSymbolInfo(),

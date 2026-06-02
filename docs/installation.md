@@ -4,8 +4,8 @@
 
 ## Requirements
 
-- **Windows** (native) — the `MetaTrader5` library runs in-process; or
-- **Linux** — an all-in-one Docker image runs the MT5 terminal **and** the
+- **Windows** (native) - the `MetaTrader5` library runs in-process; or
+- **Linux** - an all-in-one Docker image runs the MT5 terminal **and** the
   server, reachable over HTTP (see
   [Linux](#linux--all-in-one-docker-image-recommended)). A host-side RPyC bridge
   remains available as an alternative.
@@ -61,7 +61,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full development workflow.
    Expect `[INFO] backend: native` and `[PASS]` lines. Then run
    `python -m mt5_mcp serve`.
 
-### Linux — all-in-one Docker image (recommended)
+### Linux - all-in-one Docker image (recommended)
 
 One image runs the MT5 terminal under Wine, a KasmVNC web UI for a one-time
 login, and `mt5-mcp` serving MCP over HTTP. No host Python, no bridge, no
@@ -69,7 +69,7 @@ login, and `mt5-mcp` serving MCP over HTTP. No host Python, no bridge, no
 
 1. **Credentials.** Copy [`deploy/.env.example`](../deploy/.env.example) to
    `deploy/.env` and fill in `MT5_LOGIN`, `MT5_PASSWORD`, `MT5_SERVER`. The
-   password is read **only** from the environment — it is never written to a
+   password is read **only** from the environment - it is never written to a
    config file or logged. To keep it out of a file entirely, inject it at
    runtime instead, e.g. with 1Password:
    ```
@@ -80,7 +80,7 @@ login, and `mt5-mcp` serving MCP over HTTP. No host Python, no bridge, no
    docker compose -f deploy/docker-compose.yml up -d
    ```
    First boot installs MetaTrader 5 + 64-bit Wine-Python into the container's
-   volume — a few minutes. (If MT5's installer fails with `socket: Function not
+   volume - a few minutes. (If MT5's installer fails with `socket: Function not
    implemented`, restart the container.)
 3. **Log the terminal in once.** Open `http://127.0.0.1:3001` (KasmVNC; web auth
    is `VNC_USER`/`VNC_PASSWORD` from `.env`) and choose **File → Login to Trade
@@ -95,16 +95,16 @@ login, and `mt5-mcp` serving MCP over HTTP. No host Python, no bridge, no
 
 Ports are overridable via `MCP_PORT` (default `8765`) and `VNC_PORT` (default
 `3001`). The published image is
-`ghcr.io/vincentwongso/mt5-trading-mcp:headless` — `docker compose pull` fetches
+`ghcr.io/vincentwongso/mt5-trading-mcp:headless` - `docker compose pull` fetches
 it. The commands above use it as-is; add `--build` only when you've modified
 `deploy/` locally and want Compose to rebuild the image instead.
 
-> **Symbol names are broker-specific.** Some brokers suffix instruments — e.g.
+> **Symbol names are broker-specific.** Some brokers suffix instruments - e.g.
 > `EURUSD.z`, `XAUUSD.z` (crypto such as `BTCUSD` is often unsuffixed). Always
 > use the exact name returned by `get_symbols`; a bare `EURUSD` may come back
 > `SYMBOL_NOT_FOUND`.
 
-### Linux — host-side bridge (alternative)
+### Linux - host-side bridge (alternative)
 
 The MT5 terminal runs in a Wine container; the server connects over RPyC.
 
@@ -120,9 +120,9 @@ The MT5 terminal runs in a Wine container; the server connects over RPyC.
    ```
    pip install 'mt5-trading-mcp[bridge]'
    ```
-3. Configure the bridge — copy
+3. Configure the bridge - copy
    [`examples/config.toml.example`](../examples/config.toml.example) to
-   `~/.config/mt5-mcp/config.toml` and keep the `[mt5.bridge]` block
+   `~/.config/mt5-mcp/config.toml` and uncomment the `[mt5.bridge]` block
    (`host = "127.0.0.1"`, `port = 8001`).
 4. Verify:
    ```
@@ -139,7 +139,7 @@ The MT5 terminal runs in a Wine container; the server connects over RPyC.
 ### Wire it to an agent
 
 Register the server with your agent harness. **Transport depends on the setup:**
-the all-in-one Docker image already serves MCP over **HTTP** — point the harness
+the all-in-one Docker image already serves MCP over **HTTP** - point the harness
 at `http://127.0.0.1:8765/mcp`. Windows-native and the bridge backend run over
 **stdio** (`python -m mt5_mcp serve`).
 
@@ -152,7 +152,7 @@ Desktop (HTTP + stdio), and Cursor have configs under
 
 ## Next steps
 
-- [Configuration](configuration.md) — `config.toml` schema and storage paths.
-- [Tools & resources](tools.md) — what the agent can actually call.
-- [MCP client setup](clients.md) — per-client config snippets.
-- [Transports & deployment](deployment.md) — HTTP transport and Windows VPS patterns.
+- [Configuration](configuration.md) - `config.toml` schema and storage paths.
+- [Tools & resources](tools.md) - what the agent can actually call.
+- [MCP client setup](clients.md) - per-client config snippets.
+- [Transports & deployment](deployment.md) - HTTP transport and Windows VPS patterns.

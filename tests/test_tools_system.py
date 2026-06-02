@@ -78,7 +78,7 @@ def test_get_terminal_info_when_disconnected(server_and_mt5):
     fake._terminal_info = None
     fake._account_info = None
     out = _call(server, "get_terminal_info")
-    # When disconnected we still return a structured response — the code
+    # When disconnected we still return a structured response - the code
     # surfaces TERMINAL_NOT_CONNECTED as an error detail.
     assert out["error"]["code"] == "TERMINAL_NOT_CONNECTED"
     assert out["error"]["requires_human"] is True
@@ -87,8 +87,8 @@ def test_get_terminal_info_when_disconnected(server_and_mt5):
 def test_error_envelope_catches_inner_mt5_error(server_and_mt5):
     """error_envelope catches MT5Error raised by the wrapped function itself.
 
-    This exercises the ``try/except MT5Error`` at _common.py:43-46 — the
-    inner-function-raise path — not the ensure_connected branch.
+    This exercises the ``try/except MT5Error`` at _common.py:43-46 - the
+    inner-function-raise path - not the ensure_connected branch.
     The server_and_mt5 fixture is used only to ensure get_context() is
     initialised; the synthetic ``boom`` function stands in for a real tool.
     """

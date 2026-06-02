@@ -2,7 +2,7 @@
 
 This is the only mutating test in Phase 5. Crank auto_approve_notional in
 live_server's config means 0.01-lot trades skip the approval gate (covered
-by Phase 2 units exhaustively). Idempotency replay isn't tested live —
+by Phase 2 units exhaustively). Idempotency replay isn't tested live -
 also broker-independent and covered by units.
 """
 
@@ -70,7 +70,7 @@ def test_lifecycle_market_buy_then_close(
     # The engine writes records with shape {"tool", "action", "request_hash",
     # "ticket", "duration_ms", "result_status"}. Tool name is in `tool`;
     # `action` is the event type (always "executed" for successful fills).
-    # `symbol` is NOT in the audit schema — it lives in the request_echo
+    # `symbol` is NOT in the audit schema - it lives in the request_echo
     # of the OrderResult, not the audit record.
     audit_lines = [
         json.loads(line)

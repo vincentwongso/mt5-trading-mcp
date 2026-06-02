@@ -80,7 +80,7 @@ def register(mcp: FastMCP) -> None:
 
         v1 limitation: ``is_open`` is derived from ``trade_mode`` (open
         when non-zero). ``next_open`` and ``next_close`` are always
-        ``None`` in v1 — parsing ``symbol_info().sessions_quotes`` is
+        ``None`` in v1 - parsing ``symbol_info().sessions_quotes`` is
         scheduled for a later release. Agents needing precise session
         boundaries should consult their broker's published schedule.
         """

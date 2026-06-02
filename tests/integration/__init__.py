@@ -1,4 +1,4 @@
-"""Phase 5 integration tests — drive the server end-to-end against a live MT5 demo terminal.
+"""Phase 5 integration tests - drive the server end-to-end against a live MT5 demo terminal.
 
 These tests are marked @pytest.mark.integration and excluded from the default
 pytest run. Invoke with `pytest -m integration -v`.

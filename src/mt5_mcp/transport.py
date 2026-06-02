@@ -1,8 +1,9 @@
 """Transport selection: STDIO (default) and HTTP/SSE (opt-in).
 
-HTTP mode binds loopback only in v0.3 and refuses to start otherwise.
-A configured ``transport.http.auth_token`` triggers a Starlette
-bearer-auth middleware with constant-time token comparison.
+HTTP mode binds loopback only and refuses to start otherwise. A configured
+``transport.http.auth_token`` triggers a Starlette bearer-auth middleware with
+constant-time token comparison; an empty token logs an unauthenticated-access
+warning at startup.
 """
 
 from __future__ import annotations
@@ -68,7 +69,7 @@ def run(mcp: Any, *, transport: str, config: Config) -> None:
         port = config.transport.http.port
         if not _is_loopback(host):
             raise TransportConfigError(
-                f"transport.http.host must be a loopback address in v0.3 "
+                f"transport.http.host must be a loopback address "
                 f"(got {host!r}); set 127.0.0.1, ::1, or localhost"
             )
         # FastMCP 3.x reads host/port from mcp.settings, not from run() kwargs.
@@ -88,6 +89,14 @@ def run(mcp: Any, *, transport: str, config: Config) -> None:
         token = config.transport.http.auth_token
         if token:
             mcp.add_middleware(_make_bearer_middleware_factory(token))
+        else:
+            logger.warning(
+                "transport.http.auth_token is empty: the loopback HTTP server "
+                "accepts UNAUTHENTICATED requests - any local process (or a "
+                "misconfigured port-forward) can place real trades. Set "
+                "transport.http.auth_token whenever the HTTP transport is "
+                "reachable beyond a single trusted user."
+            )
         mcp.run(transport="streamable-http")
         return
     raise TransportConfigError(f"unknown transport: {transport!r}")

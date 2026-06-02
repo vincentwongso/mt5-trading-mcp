@@ -131,7 +131,7 @@ def test_http_resources_list_contains_quotes_template(http_server):
         # Collect all URIs/templates from both response lists.
         # Fixed-URI resources (account://current, positions://current) come
         # from list_resources(); URI templates (quotes://{symbol}) come from
-        # list_resource_templates() — the MCP spec keeps them separate.
+        # list_resource_templates() - the MCP spec keeps them separate.
         if hasattr(resources_result, "resources") and resources_result.resources:
             all_uris.extend(str(r.uri) for r in resources_result.resources)
         if hasattr(templates_result, "resourceTemplates") and templates_result.resourceTemplates:
@@ -145,7 +145,7 @@ def test_http_resources_list_contains_quotes_template(http_server):
             f"{type(e).__name__}: {e}"
         )
 
-    # Assertion is OUTSIDE the try — failures here surface as FAILED, not SKIPPED.
+    # Assertion is OUTSIDE the try - failures here surface as FAILED, not SKIPPED.
     assert any("quotes://" in u for u in all_uris), (
         f"Expected a quotes:// resource/template in resources/list but got: {all_uris}"
     )

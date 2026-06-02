@@ -106,6 +106,25 @@ def test_run_http_with_token_installs_bearer_middleware():
     assert "s3cr3t" in repr(mw_obj) or getattr(mw_obj, "_expected", "").endswith("s3cr3t")
 
 
+def test_run_http_empty_token_logs_unauthenticated_warning(caplog):
+    """An empty auth_token means the loopback HTTP server is unauthenticated -
+    a real-money foot-gun the operator must be warned about at startup."""
+    import logging
+    mcp = _StubFastMCP()
+    with caplog.at_level(logging.WARNING, logger="mt5_mcp.transport"):
+        run(mcp, transport="http", config=_cfg(token=""))
+    assert any("unauthenticated" in r.message.lower() for r in caplog.records)
+    assert mcp.middlewares == []
+
+
+def test_run_http_with_token_emits_no_unauthenticated_warning(caplog):
+    import logging
+    mcp = _StubFastMCP()
+    with caplog.at_level(logging.WARNING, logger="mt5_mcp.transport"):
+        run(mcp, transport="http", config=_cfg(token="s3cr3t"))
+    assert not any("unauthenticated" in r.message.lower() for r in caplog.records)
+
+
 def test_run_http_non_loopback_raises_config_error():
     mcp = _StubFastMCP()
     with pytest.raises(Exception) as exc_info:

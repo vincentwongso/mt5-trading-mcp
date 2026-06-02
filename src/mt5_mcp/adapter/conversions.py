@@ -30,7 +30,7 @@ def epoch_to_utc(epoch_naive: int, broker_offset_minutes: int) -> datetime:
 
     `broker_offset_minutes` is the broker's timezone offset from UTC in
     minutes. GMT+3 (EET summer) is +180. The mt5lib epoch is "broker local
-    time treated as UTC" — so subtracting the offset yields real UTC.
+    time treated as UTC" - so subtracting the offset yields real UTC.
     """
     # `fromtimestamp(epoch, tz=UTC)` treats the epoch as real UTC; for mt5lib
     # that produces broker-local-time labelled UTC. We adjust.
@@ -66,7 +66,7 @@ def _d(v: Any) -> Decimal:
 
 
 def _opt_d(v: Any) -> Decimal | None:
-    """Treat 0.0 as None for sl/tp-style fields — mt5lib uses 0 to mean 'unset'."""
+    """Treat 0.0 as None for sl/tp-style fields - mt5lib uses 0 to mean 'unset'."""
     if v is None or v == 0.0:
         return None
     return _d(v)
@@ -82,7 +82,7 @@ def _opt_str(v: str | None) -> str | None:
 
 _MARGIN_MODES = {0: "retail_netting", 1: "exchange", 2: "retail_hedging"}
 
-# mt5lib: ORDER_TYPE_* — buy/sell constants are 0/1 for market; pending are 2..7.
+# mt5lib: ORDER_TYPE_* - buy/sell constants are 0/1 for market; pending are 2..7.
 _ORDER_TYPES = {
     2: "buy_limit",
     3: "sell_limit",
@@ -92,7 +92,7 @@ _ORDER_TYPES = {
     7: "sell_stop_limit",
 }
 
-# mt5lib: DEAL_TYPE_* — 0/1 are buy/sell; 2..8 are balance/credit/etc.
+# mt5lib: DEAL_TYPE_* - 0/1 are buy/sell; 2..8 are balance/credit/etc.
 _DEAL_TYPES = {
     0: "buy",
     1: "sell",
@@ -106,7 +106,7 @@ _DEAL_TYPES = {
 
 _TRADE_MODE_DISABLED = 0
 
-# mt5lib: ENUM_SYMBOL_CALC_MODE — drives which margin / profit formula applies.
+# mt5lib: ENUM_SYMBOL_CALC_MODE - drives which margin / profit formula applies.
 _CALC_MODES = {
     0: "forex",
     1: "futures",
@@ -125,7 +125,7 @@ _CALC_MODES = {
     64: "serv_collateral",
 }
 
-# mt5lib: ENUM_SYMBOL_SWAP_MODE — how overnight financing is denominated.
+# mt5lib: ENUM_SYMBOL_SWAP_MODE - how overnight financing is denominated.
 _SWAP_MODES = {
     0: "disabled",
     1: "by_points",
@@ -138,7 +138,7 @@ _SWAP_MODES = {
     8: "by_reopen_bid",
 }
 
-# mt5lib's `swap_rollover3days` — int 0..6 with 0 = Sunday. Default to
+# mt5lib's `swap_rollover3days` - int 0..6 with 0 = Sunday. Default to
 # Wednesday (3) when out-of-range, since that's the dominant FX convention.
 _WEEKDAYS = {
     0: "sunday",
@@ -165,7 +165,7 @@ def position_from_raw(raw: Any, *, broker_offset_minutes: int) -> Position:
         tp=_opt_d(raw.tp),
         profit=_d(raw.profit),
         swap=_d(raw.swap),
-        # No `commission` — TradePosition does not expose it. See Position type.
+        # No `commission` - TradePosition does not expose it. See Position type.
         time_open=epoch_to_utc(raw.time, broker_offset_minutes),
         comment=_opt_str(raw.comment),
     )
@@ -429,7 +429,7 @@ def order_result_from_mt5_response(
 
     `mt5_module` is the live mt5lib module (typically `ctx.client.mt5`). When
     provided, the NULL-response branch calls `mt5.last_error()` and surfaces
-    the (code, message) tuple in the error envelope — that's the only way to
+    the (code, message) tuple in the error envelope - that's the only way to
     distinguish e.g. "terminal disconnected" from "broker rejected pre-flight."
     Tests may omit it; details just won't include last_error.
     """
@@ -463,7 +463,7 @@ def order_result_from_mt5_response(
             error=ErrorDetail(
                 code="MT5_NULL_RESPONSE",
                 message=(
-                    "mt5lib order_send returned None — request rejected before "
+                    "mt5lib order_send returned None - request rejected before "
                     "reaching the broker (check terminal connection, AutoTrading "
                     "toggle, stops_level/freeze_level, and symbol tradeability)."
                 ),

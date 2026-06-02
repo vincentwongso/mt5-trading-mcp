@@ -8,6 +8,7 @@ Same-key-same-hash → replay; same-key-different-hash → divergent (caller bug
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 import threading
 import time
@@ -40,6 +41,16 @@ class IdempotencyStore:
         self._ttl = int(ttl_seconds)
         self._lock = threading.RLock()
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        # Cached order results (tickets, fills) are operator-sensitive. Create the
+        # DB owner-only BEFORE sqlite opens it so the WAL/SHM sidecars SQLite
+        # derives inherit 0o600. Best-effort; effectively a no-op on Windows.
+        try:
+            if not self._path.exists():
+                os.close(os.open(str(self._path), os.O_CREAT | os.O_WRONLY, 0o600))
+            else:
+                os.chmod(self._path, 0o600)
+        except OSError:
+            pass
         self._conn = sqlite3.connect(str(self._path), check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(_SCHEMA)
@@ -106,7 +117,7 @@ class IdempotencyStore:
             if row is not None:
                 stored_hash, stored_exp = row
                 if stored_exp > now:
-                    # Unexpired entry already cached — first-write-wins.
+                    # Unexpired entry already cached - first-write-wins.
                     if stored_hash != request_hash:
                         logger.warning(
                             "idempotency.put: ignoring divergent hash for key=%r "
@@ -114,7 +125,7 @@ class IdempotencyStore:
                             key, action,
                         )
                     return
-                # Expired — fall through and overwrite below.
+                # Expired - fall through and overwrite below.
             self._conn.execute(
                 "INSERT INTO idempotency "
                 "(key, action, request_hash, result_json, created_at, expires_at) "

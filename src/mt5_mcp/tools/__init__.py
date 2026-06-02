@@ -1,4 +1,4 @@
-"""Tool registry — each subsequent task adds a register_* function here."""
+"""Tool registry - each subsequent task adds a register_* function here."""
 
 from __future__ import annotations
 

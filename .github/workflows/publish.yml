@@ -37,7 +37,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Only ever publish from a release tag — a manual run on a branch is refused.
+    # Only ever publish from a release tag - a manual run on a branch is refused.
     if: github.ref_type == 'tag'
     # Deploys into the protected 'pypi' environment. Add a required reviewer in
     # repo Settings -> Environments -> pypi to gate every publish behind manual
@@ -55,7 +55,7 @@ jobs:
           name: dist
           path: dist/
 
-      # Authentication is via OIDC Trusted Publishing — no username/password/token.
+      # Authentication is via OIDC Trusted Publishing - no username/password/token.
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -93,7 +93,7 @@ jobs:
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
 
           # Match the "## [VERSION]" header as a literal string (index()==1),
-          # not a regex — so the dots in the version can't act as wildcards
+          # not a regex - so the dots in the version can't act as wildcards
           # and awk's -v escape handling can't mangle the value.
           awk -v ver="$VERSION" '
             BEGIN { marker = "## [" ver "]" }
@@ -126,7 +126,7 @@ jobs:
 
           # PEP 440 / SemVer pre-releases carry a letter (a/b/rc/dev) or a
           # hyphen; a plain release is digits and dots only. Pass the value
-          # explicitly (--prerelease=true|false) so re-runs are idempotent —
+          # explicitly (--prerelease=true|false) so re-runs are idempotent -
           # the bare --prerelease flag toggles rather than sets.
           is_pre=false
           if printf '%s' "${VERSION}" | grep -qE '[A-Za-z]|-'; then

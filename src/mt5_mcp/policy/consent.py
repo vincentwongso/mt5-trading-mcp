@@ -24,7 +24,7 @@ from mt5_mcp.types import ApprovalPreview, ErrorDetail
 
 
 def new_request_id() -> str:
-    """Mint a ULID — 128-bit, time-ordered, 26-char Crockford base32."""
+    """Mint a ULID - 128-bit, time-ordered, 26-char Crockford base32."""
     return str(ULID())
 
 
@@ -42,7 +42,7 @@ class ApprovalStore:
     def pop(self, request_id: str) -> ApprovalPreview | None:
         """Remove and return the preview if it exists and is un-expired.
 
-        Returns None for both "unknown id" and "expired id" — the engine
+        Returns None for both "unknown id" and "expired id" - the engine
         converts both into the generic INVALID_APPROVAL response, so the
         distinction is not exposed to callers.
         """
@@ -70,7 +70,7 @@ def validate_retry(
       - preview not expired
 
     Validated elsewhere:
-      - `action` (place_order vs close_position vs ...) — the engine
+      - `action` (place_order vs close_position vs ...) - the engine
         dispatches by action at the call site, so a retry can only ever
         reach validate_retry under the action that issued the preview.
 
@@ -109,7 +109,7 @@ def validate_retry(
             )
 
     # Price drift tolerance: max(0.5% of reference, deviation_points * point).
-    # `deviation` comes from the snapshot — the human approved THAT slippage.
+    # `deviation` comes from the snapshot - the human approved THAT slippage.
     ref_price = preview.reference_quote.ask if echo.get("side") == "buy" \
                 else preview.reference_quote.bid
     pct_band = ref_price * Decimal("0.005")

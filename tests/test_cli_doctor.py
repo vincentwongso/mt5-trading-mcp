@@ -117,7 +117,7 @@ def test_doctor_smoke_trade_off_by_default(capsys, tmp_path, frozen_utc):
 # --- _resolve_probe_symbol ---------------------------------------------------
 
 def test_resolve_picks_first_default_candidate_present():
-    # Broker has BTCUSD, EURUSD, USDJPY — picker prefers BTCUSD (top of list).
+    # Broker has BTCUSD, EURUSD, USDJPY - picker prefers BTCUSD (top of list).
     assert _resolve_probe_symbol("auto", ["EURUSD", "BTCUSD", "USDJPY"]) == "BTCUSD"
 
 
@@ -127,7 +127,7 @@ def test_resolve_walks_candidate_list_in_order():
 
 
 def test_resolve_falls_back_to_first_symbol_when_no_candidate_matches():
-    # Suffixed broker — none of the bare candidate names match.
+    # Suffixed broker - none of the bare candidate names match.
     assert _resolve_probe_symbol("auto", ["EURUSD.r", "GBPUSD.r"]) == "EURUSD.r"
 
 
@@ -176,7 +176,7 @@ def test_doctor_auto_picks_btcusd_when_available(capsys, tmp_path):
 
 
 def test_doctor_auto_falls_back_to_suffixed_symbol(capsys, tmp_path):
-    """Broker that suffixes names (EURUSD.r) — auto picks the broker's first symbol."""
+    """Broker that suffixes names (EURUSD.r) - auto picks the broker's first symbol."""
     fake = FakeMT5()
     fake._terminal_info = FakeTerminalInfo(
         time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
@@ -215,7 +215,7 @@ def test_doctor_reports_fail_when_ping_returns_ok_false(capsys, tmp_path):
     fake._terminal_info = None
     # Layer 2: account_info() returns None (no login available)
     fake._account_info = None
-    # Layer 3: _symbol_info_tick is empty by default — no fresh ticks
+    # Layer 3: _symbol_info_tick is empty by default - no fresh ticks
     cfg = tmp_path / "config.toml"
     cfg.write_text(
         f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
@@ -231,7 +231,7 @@ def test_doctor_reports_fail_when_ping_returns_ok_false(capsys, tmp_path):
 
 
 def test_doctor_skips_symbol_probes_when_broker_has_no_symbols(capsys, tmp_path):
-    """Empty broker catalogue — skip the symbol-dependent checks gracefully."""
+    """Empty broker catalogue - skip the symbol-dependent checks gracefully."""
     fake = FakeMT5()
     fake._terminal_info = FakeTerminalInfo(
         time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())

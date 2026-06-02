@@ -1,4 +1,4 @@
-"""End-to-end coverage for place_order — the canonical Phase-2 tool flow."""
+"""End-to-end coverage for place_order - the canonical Phase-2 tool flow."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def test_above_threshold_returns_preview(server_and_mt5):
     server, fake = server_and_mt5
     # 10.0 lots × 1.0824 = 10.824 notional > 1000 threshold (oh wait, it's not).
     # Actually with auto_approve_notional="1000" and notional=10.824, this is BELOW.
-    # The threshold is interpreted in raw "volume × price" terms — for FX it's tiny.
+    # The threshold is interpreted in raw "volume × price" terms - for FX it's tiny.
     # Use a much larger volume to trigger.
     out = _call(server, "place_order",
                 symbol="EURUSD", side="buy", type="market", volume="10000.0")
@@ -90,8 +90,41 @@ def test_approval_confirmed_retry_executes(server_and_mt5):
     assert out["ticket"] == 12345
 
 
+def test_default_config_is_fail_closed(tmp_path, frozen_utc):
+    """Fail-closed default: with no auto_approve_notional configured (default 0),
+    even a tiny order requires human approval instead of auto-executing."""
+    fake = FakeMT5()
+    fake._terminal_info = FakeTerminalInfo(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
+    )
+    fake._account_info = FakeAccountInfo(currency="USD", leverage=100)
+    fake._symbol_info = {"EURUSD": FakeSymbolInfo(name="EURUSD", visible=True)}
+    fake._symbol_info_tick = {"EURUSD": FakeTick(time=1, bid=1.0823, ask=1.0824)}
+    fake._order_send = FakeOrderSendResult(retcode=TRADE_RETCODE_DONE,
+                                            order=12345, deal=99,
+                                            volume=0.10, price=1.0824)
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        # No [policy] block → auto_approve_notional defaults to 0 (fail-closed).
+        f'[idempotency]\npath = "{(tmp_path / "i.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "a.jsonl").as_posix()}"\n'
+    )
+    server = build_server(mt5_module=fake, config_path=cfg)
+    out = server._tool_manager.get_tool("place_order").fn(
+        symbol="EURUSD", side="buy", type="market", volume="0.10",
+    )
+    # Did NOT execute; returned an approval preview instead.
+    assert len(fake.order_send_calls) == 0
+    assert out.get("action") == "place_order"
+    assert "request_id" in out
+
+
 def test_above_max_notional_rejected_even_with_approval(tmp_path):
-    """Pre-flight refusals are absolute — approval doesn't override."""
+    """Pre-flight refusals are absolute - a stray approval token can't bypass them.
+
+    With the gate disabled (auto_approve_notional set above the order's notional),
+    a stray approval_confirmed/approval_request_id is ignored and pre-flight still
+    refuses with EXCEEDS_LOCAL_LIMIT."""
     reset_context_for_tests()
     fake = FakeMT5()
     fake._terminal_info = FakeTerminalInfo(
@@ -103,7 +136,7 @@ def test_above_max_notional_rejected_even_with_approval(tmp_path):
     cfg = tmp_path / "config2.toml"
     cfg.write_text(
         '[policy]\n'
-        'auto_approve_notional = "0"\n'
+        'auto_approve_notional = "1000000"\n'  # gate disabled; stray token must be ignored
         'max_notional_per_trade = "5"\n\n'
         f'[idempotency]\npath = "{(tmp_path / "i.db").as_posix()}"\n'
         f'[audit]\npath = "{(tmp_path / "a.jsonl").as_posix()}"\n'

@@ -6,7 +6,7 @@
     Registers a scheduled task that auto-starts `mt5-mcp serve --transport http`
     after the configured user logs on. Pairs with a separate scheduled task
     that launches the MT5 terminal itself. Both must run in the user's
-    interactive session — the MetaTrader5 Python library only talks to a
+    interactive session - the MetaTrader5 Python library only talks to a
     terminal in the same Windows session, so this can't be a Session 0
     Windows service (NSSM-style).
 

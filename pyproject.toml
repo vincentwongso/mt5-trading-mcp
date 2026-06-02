@@ -5,12 +5,28 @@ build-backend = "hatchling.build"
 [project]
 name = "mt5-trading-mcp"
 version = "1.2.1"
-description = "Model Context Protocol server wrapping the MetaTrader 5 Python library."
+description = "MCP server for MetaTrader 5: let an AI agent read market data, watch trades, and place real trades - behind a consent/audit safety layer. Windows + Linux (Docker)."
 readme = "README.md"
+keywords = [
+  "mcp",
+  "model-context-protocol",
+  "metatrader5",
+  "mt5",
+  "metatrader",
+  "trading",
+  "forex",
+  "cfd",
+  "ai-agent",
+  "llm",
+  "fastmcp",
+]
 license = { file = "LICENSE" }
 authors = [{ name = "Vincent Wongso Saputro", email = "vincent.wongso.saputro@gmail.com" }]
 requires-python = ">=3.10"
 classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Financial and Insurance Industry",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -20,6 +36,8 @@ classifiers = [
   "Operating System :: Microsoft :: Windows",
   "Operating System :: POSIX :: Linux",
   "Topic :: Office/Business :: Financial :: Investment",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Framework :: AsyncIO",
 ]
 dependencies = [
   "mcp[cli]>=1.12",
@@ -49,7 +67,9 @@ bridge = [
 mt5-mcp = "mt5_mcp.__main__:main"
 
 [project.urls]
+Homepage = "https://github.com/vincentwongso/mt5-trading-mcp"
 Repository = "https://github.com/vincentwongso/mt5-trading-mcp"
+Documentation = "https://github.com/vincentwongso/mt5-trading-mcp/tree/main/docs"
 Issues = "https://github.com/vincentwongso/mt5-trading-mcp/issues"
 Changelog = "https://github.com/vincentwongso/mt5-trading-mcp/blob/main/CHANGELOG.md"
 

@@ -1,8 +1,10 @@
-"""AuditLog — JSONL append-only with size-based rotation."""
+"""AuditLog - JSONL append-only with size-based rotation."""
 
 from __future__ import annotations
 
 import json
+import stat
+import sys
 import threading
 from pathlib import Path
 
@@ -16,6 +18,17 @@ def audit(tmp_path: Path) -> AuditLog:
     a = AuditLog(path=tmp_path / "audit.jsonl", max_bytes=1024)
     yield a
     a.close()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes only")
+def test_audit_file_created_with_owner_only_perms(tmp_path: Path):
+    """The audit log records intentional trade activity (tickets, fills); on a
+    shared POSIX host it must not be group/world-readable."""
+    log = AuditLog(path=tmp_path / "audit.jsonl", max_bytes=10_000_000)
+    log.write({"tool": "place_order", "action": "executed"})
+    log.close()
+    mode = stat.S_IMODE((tmp_path / "audit.jsonl").stat().st_mode)
+    assert mode == 0o600
 
 
 def test_writes_one_jsonl_line_per_event(audit: AuditLog, tmp_path: Path):

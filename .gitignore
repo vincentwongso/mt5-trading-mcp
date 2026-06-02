@@ -29,14 +29,12 @@ tmp_symbols.csv
 .claude/settings.json
 .claude/settings.local.json
 
-# Internal docs / working notes — kept local, not shipped publicly
+# Internal docs / working notes - kept local, not shipped publicly
 docs/superpowers/
 mt5-mcp-repo-cleanup.md
 
-# Agent handover notes — kept local, not shipped publicly
+# Agent handover notes - kept local, not shipped publicly
 CLAUDE.md
 
 # Git worktrees (isolated branches checked out for parallel work)
 .worktrees/
-
-symbols.csv

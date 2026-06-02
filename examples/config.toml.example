@@ -3,20 +3,25 @@
 #   Linux:   ~/.config/mt5-mcp/config.toml
 # The server runs with built-in defaults if this file is absent.
 
-# --- Linux only: connect to the MT5 terminal running in Docker over RPyC. ---
-# Omit this whole block on Windows (native in-process MetaTrader5 is used).
-[mt5.bridge]
-host = "127.0.0.1"
-port = 8001
+# --- Linux ALTERNATIVE only: host-side RPyC bridge. ---
+# NOT needed for the recommended all-in-one Docker image, which needs no config.
+# Uncomment only if you run the host-side bridge (see docs/installation.md).
+# Omit on Windows (native in-process MetaTrader5 is used).
+# [mt5.bridge]
+# host = "127.0.0.1"
+# port = 8001
 
 # --- Consent / pre-flight guardrails (apply on every platform). ---
 [policy]
-# Orders at or below this notional auto-execute; above it, a human must confirm.
-# Keep this low when an agent drives the mutating tools.
+# Approval gate (fail-closed). 0 (the default) requires human approval for EVERY
+# mutating call. Raise it to auto-approve orders whose notional is below it; orders
+# at or above it return an ApprovalPreview a human must confirm. Set it above any
+# order you'll place to disable the gate entirely.
 auto_approve_notional = "0"
 max_notional_per_trade = "0"   # 0 = no local cap (the broker still enforces its own)
 # max_daily_loss = "0"                 # 0 = no daily realised-loss cap; set e.g. "200" to halt after $200/day
 # max_realised_loss_per_close = "0"    # 0 = no per-close cap
+# max_orders_per_minute = 0            # 0 = no cap; set e.g. 5 to throttle a runaway/looping agent
 
 # --- Restrict which instruments the agent may trade (empty = no restriction). ---
 # [symbols]
@@ -26,4 +31,5 @@ max_notional_per_trade = "0"   # 0 = no local cap (the broker still enforces its
 # --- Optional loopback HTTP transport (default is stdio). ---
 [transport.http]
 port = 8765
-auth_token = ""   # set a token to require Authorization: Bearer <token>
+auth_token = ""   # EMPTY = UNAUTHENTICATED - any local process can place trades.
+                  # Set a token to require Authorization: Bearer <token> over HTTP.

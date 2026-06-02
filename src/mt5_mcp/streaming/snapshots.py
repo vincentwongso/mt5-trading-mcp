@@ -1,6 +1,6 @@
 """Internal snapshot dataclasses used by the Poller for diff detection.
 
-NOT the Pydantic types returned to MCP clients — those stay in
+NOT the Pydantic types returned to MCP clients - those stay in
 ``mt5_mcp.types`` and are produced by ``adapter/conversions.py``.
 Snapshots only carry the fields the diff logic compares.
 """
@@ -14,7 +14,7 @@ from dataclasses import dataclass
 class TickSnapshot:
     """Tracks price and volume fields that signal a meaningful quote change.
 
-    Excluded by design: spread, volume_real, flags — these are either
+    Excluded by design: spread, volume_real, flags - these are either
     derivable from bid/ask or too noisy to trigger notifications.
     """
     time_msc: int
@@ -28,7 +28,7 @@ class TickSnapshot:
 class AccountSnapshot:
     """Tracks identity-style fields only.
 
-    Excluded by design: equity, margin, free_margin, profit, margin_level —
+    Excluded by design: equity, margin, free_margin, profit, margin_level -
     these drift on every tick and would defeat the purpose of subscribing
     to ``account://current``.
     """
@@ -41,7 +41,7 @@ class AccountSnapshot:
 class PositionSnapshot:
     """Tracks identity + structural fields only.
 
-    Excluded by design: price_current, profit, swap, time_update — these
+    Excluded by design: price_current, profit, swap, time_update - these
     drift on every tick. Subscribers compose ``positions://current`` with
     ``quotes://{symbol}`` to compute floating P&L.
     """

@@ -118,7 +118,7 @@ def test_reload_survives_broken_edit(tmp_path: Path, caplog):
     try:
         original = watcher.current
 
-        # Write garbage — reload should fail, warn, and retain the previous config.
+        # Write garbage - reload should fail, warn, and retain the previous config.
         p.write_text("not valid [[ toml")
         time.sleep(0.5)
         assert watcher.current is original
@@ -292,7 +292,7 @@ def test_mt5_login_env_must_be_integer(tmp_path, monkeypatch):
 
 
 def test_mt5_password_field_rejected_in_config(tmp_path):
-    """Password must NEVER be a config key — env-only by design."""
+    """Password must NEVER be a config key - env-only by design."""
     cfg_file = tmp_path / "config.toml"
     cfg_file.write_text('[mt5]\npassword = "leak"\n', encoding="utf-8")
     with pytest.raises(ValueError):

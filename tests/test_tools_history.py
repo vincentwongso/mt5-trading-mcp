@@ -54,7 +54,7 @@ def test_get_history_requires_utc_timestamps(server_and_mt5):
     server, _ = server_and_mt5
     out = _call(
         server, "get_history",
-        from_ts="2026-04-20T00:00:00",  # naive — refuse
+        from_ts="2026-04-20T00:00:00",  # naive - refuse
         to_ts="2026-04-21T23:59:59Z",
     )
     assert out["error"]["code"] == "INVALID_TIMESTAMP"

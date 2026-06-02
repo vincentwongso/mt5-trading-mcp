@@ -27,7 +27,10 @@ Constraints in v1.0:
   below for the secure alternative.
 - **Optional bearer-token authentication** via `transport.http.auth_token` in
   `config.toml`. When set, every request must carry
-  `Authorization: Bearer <token>`. Comparison is constant-time.
+  `Authorization: Bearer <token>`. Comparison is constant-time. **Leaving it
+  empty means the (loopback) server is unauthenticated - any local process can
+  place real trades; the server logs a warning at startup.** Set a token whenever
+  the HTTP transport is reachable beyond a single trusted user.
 - Uses the `streamable-http` FastMCP transport under the hood, which supports
   both request/response and SSE streaming on a single endpoint.
 
@@ -38,7 +41,7 @@ Default port: `8765` (configurable via `[transport.http] port`).
 Common case: you want your MT5 terminal running 24/7 on a server, but laptops
 sleep. Two supported patterns:
 
-### Pattern A — Agent + MCP both on the VPS
+### Pattern A - Agent + MCP both on the VPS
 
 Simplest setup. RDP into the VPS, install Python and the MetaTrader 5 terminal,
 then:
@@ -57,12 +60,12 @@ Practical notes:
 - The MT5 terminal needs an active Windows desktop session to connect to the
   broker, so on an unattended VPS you'll want auto-logon configured at the OS
   level (your VPS provider's docs cover this) plus a Windows Task Scheduler
-  trigger of "At log on" to launch MT5. "At system startup" alone won't work —
+  trigger of "At log on" to launch MT5. "At system startup" alone won't work -
   MT5 needs a logged-in user.
-- The `config.toml` watchdog hot-reload still works — just edit the file on the
+- The `config.toml` watchdog hot-reload still works - just edit the file on the
   VPS.
 
-### Pattern B — Agent local, MCP on the VPS via SSH tunnel
+### Pattern B - Agent local, MCP on the VPS via SSH tunnel
 
 Use this when you want your agent running on your laptop but the MT5 terminal on
 the VPS.
@@ -79,13 +82,13 @@ On your local machine, open an SSH tunnel that forwards the loopback port:
 ssh -L 8765:localhost:8765 user@vps-host
 ```
 
-Now `http://localhost:8765/mcp` on your laptop reaches the MCP on the VPS —
+Now `http://localhost:8765/mcp` on your laptop reaches the MCP on the VPS -
 without ever exposing the HTTP port to the public internet. Use the
 [`claude-desktop-http.json`](../examples/clients/claude-desktop-http.json)
 example to register it with Claude Desktop.
 
 This is the secure default for remote MT5 terminals. Direct non-loopback HTTP
-binding is intentionally **not** supported in v1.0 — it would require a TLS
+binding is intentionally **not** supported in v1.0 - it would require a TLS
 termination story and tighter auth than a single bearer token. If you need it
 for a real deployment, please open an issue describing the use case.
 
@@ -95,7 +98,7 @@ For Pattern A's HTTP transport or Pattern B's VPS-side server, you'll want the
 process to survive reboots:
 
 - **NSSM** ([Non-Sucking Service Manager](https://nssm.cc/)) is the lightest
-  option — wrap `python -m mt5_mcp serve --transport http` as a Windows Service.
+  option - wrap `python -m mt5_mcp serve --transport http` as a Windows Service.
 - A scheduled task with "At system startup" + a restart-on-failure policy works
   too.
 

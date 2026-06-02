@@ -3,7 +3,7 @@
 Resolves a FastMCP resource URI (fixed or templated) and invokes the
 registered handler, returning the read result (JSON string).
 
-Verified against the installed mcp / FastMCP — look at
+Verified against the installed mcp / FastMCP - look at
 ``server._resource_manager._templates`` if FastMCP changes shape.
 """
 
@@ -21,7 +21,7 @@ def read_resource(server: Any, uri: str) -> str:
     Returns the raw JSON-string body that ``resource.read()`` produces.
     Caller parses with ``Model.model_validate_json(content)`` themselves.
 
-    Raises whatever the handler raises (e.g. ``MT5Error``) — the
+    Raises whatever the handler raises (e.g. ``MT5Error``) - the
     FastMCP-wrapping ``ValueError("Error creating resource from
     template: ...")`` is unwrapped via the cause chain so test code can
     use ``pytest.raises(MT5Error)`` directly.
@@ -36,7 +36,7 @@ def read_resource(server: Any, uri: str) -> str:
                     resource = asyncio.run(tmpl.create_resource(uri, params))
                 except ValueError as exc:
                     # FastMCP may use implicit (__context__) or explicit
-                    # (__cause__) chaining — walk both to surface MT5Error.
+                    # (__cause__) chaining - walk both to surface MT5Error.
                     cause = exc.__cause__ or exc.__context__
                     while cause is not None:
                         if isinstance(cause, MT5Error):

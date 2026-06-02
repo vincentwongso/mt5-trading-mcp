@@ -1,7 +1,9 @@
-"""IdempotencyStore — SQLite-backed cache for mutating-tool replays."""
+"""IdempotencyStore - SQLite-backed cache for mutating-tool replays."""
 
 from __future__ import annotations
 
+import stat
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,6 +16,16 @@ def store(tmp_path: Path) -> IdempotencyStore:
     s = IdempotencyStore(path=tmp_path / "idem.db", ttl_seconds=3600)
     yield s
     s.close()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes only")
+def test_idempotency_db_created_with_owner_only_perms(tmp_path: Path):
+    """The idempotency DB caches mutating-tool results (tickets, fills); on a
+    shared POSIX host it must not be group/world-readable."""
+    store = IdempotencyStore(path=tmp_path / "idem.db", ttl_seconds=3600)
+    store.close()
+    mode = stat.S_IMODE((tmp_path / "idem.db").stat().st_mode)
+    assert mode == 0o600
 
 
 def test_no_key_no_cache(store: IdempotencyStore):
@@ -41,7 +53,7 @@ def test_same_key_different_hash_is_divergent(store: IdempotencyStore):
 def test_lookup_evicts_expired_entries(tmp_path: Path, monkeypatch):
     # Drive a deterministic clock instead of sleeping. Timestamps are stored as
     # whole seconds and expiry is `expires_at <= now`, so a wall-clock sleep
-    # against a 1s TTL races the integer-second boundary — if a second ticks
+    # against a 1s TTL races the integer-second boundary - if a second ticks
     # between a re-insert (expires=now+1) and the immediately following lookup,
     # the fresh entry reads as already expired. That flaked under CI jitter
     # (Windows / py3.13). A controlled clock removes the race while still
@@ -55,7 +67,7 @@ def test_lookup_evicts_expired_entries(tmp_path: Path, monkeypatch):
     s.put(key="k1", action="place_order", request_hash="hash-1",
           result_json='{"ticket":42}')          # created 1_000_000, expires 1_000_001
     clock["t"] += 2                              # advance well past expiry
-    # Expired — lookup returns None and the row is deleted in-band.
+    # Expired - lookup returns None and the row is deleted in-band.
     assert s.lookup(key="k1", action="place_order", request_hash="hash-1") is None
     # Re-inserting under the same key is allowed (the old row is gone).
     s.put(key="k1", action="place_order", request_hash="hash-2",
@@ -66,7 +78,7 @@ def test_lookup_evicts_expired_entries(tmp_path: Path, monkeypatch):
 
 
 def test_lookup_scope_is_action_specific(store: IdempotencyStore):
-    # Same key on a different action is not a match — actions partition the namespace.
+    # Same key on a different action is not a match - actions partition the namespace.
     store.put(key="k1", action="place_order", request_hash="hash-1",
               result_json='{"ticket":42}')
     assert store.lookup(key="k1", action="close_position", request_hash="hash-1") is None
@@ -93,7 +105,7 @@ def test_put_does_not_overwrite_existing_unexpired_entry(store: IdempotencyStore
     """
     store.put(key="k1", action="place_order", request_hash="hash-1",
               result_json='{"ticket":42}')
-    # Second put with same key but different hash — must be a no-op.
+    # Second put with same key but different hash - must be a no-op.
     store.put(key="k1", action="place_order", request_hash="hash-2",
               result_json='{"ticket":99}')
     # Original entry survives.

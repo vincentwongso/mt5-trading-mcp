@@ -176,11 +176,11 @@ def test_dispatcher_refcount_symbol_released_on_last_unsub(server_and_ctx):
     assert "GBPUSD" in ctx.dispatcher.subscribed_symbols()
 
     ctx.dispatcher.unsubscribe(h1)
-    # Still one subscriber — symbol must remain.
+    # Still one subscriber - symbol must remain.
     assert "GBPUSD" in ctx.dispatcher.subscribed_symbols()
 
     ctx.dispatcher.unsubscribe(h2)
-    # Last handle removed — symbol gone.
+    # Last handle removed - symbol gone.
     assert "GBPUSD" not in ctx.dispatcher.subscribed_symbols()
 
 
@@ -198,10 +198,10 @@ def test_subscribe_hooks_registered_on_mcp_server(server_and_ctx):
     # after _wire_subscribe_hooks ran.
     handlers = server._mcp_server.request_handlers
     assert types.SubscribeRequest in handlers, (
-        "SubscribeRequest handler not registered — _wire_subscribe_hooks failed"
+        "SubscribeRequest handler not registered - _wire_subscribe_hooks failed"
     )
     assert types.UnsubscribeRequest in handlers, (
-        "UnsubscribeRequest handler not registered — _wire_subscribe_hooks failed"
+        "UnsubscribeRequest handler not registered - _wire_subscribe_hooks failed"
     )
 
 

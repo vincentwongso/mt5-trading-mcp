@@ -33,7 +33,7 @@ def _reset_app_context():
 @dataclass
 class LiveServer:
     """Bundle yielded by the `live_server` fixture."""
-    server: Any  # FastMCP — typed as Any to avoid an import for one annotation
+    server: Any  # FastMCP - typed as Any to avoid an import for one annotation
     cfg: Config
     audit_path: Path
     idem_path: Path
@@ -46,7 +46,7 @@ def call_tool(live: LiveServer, name: str, **kwargs: Any) -> Any:
     {"error": ...} dict on failure. Mutating tools always return a dict
     (containing either {ticket, success, ...} or {error: ...} or
     {request_id, summary, ...} for an approval preview). Test code is
-    expected to check the actual shape returned by each tool — don't
+    expected to check the actual shape returned by each tool - don't
     normalise here, the asymmetry is intentional in the production code.
     """
     return live.server._tool_manager.get_tool(name).fn(**kwargs)
@@ -88,7 +88,7 @@ def live_server(tmp_path_factory: pytest.TempPathFactory) -> LiveServer:
         try:
             import MetaTrader5 as mt5  # type: ignore[import]
         except ImportError:
-            pytest.skip("MetaTrader5 package not importable — Phase 5 needs Windows + MT5")
+            pytest.skip("MetaTrader5 package not importable - Phase 5 needs Windows + MT5")
 
         ok = mt5.initialize(login=int(login), password=password, server=server)
         if not ok:
@@ -120,7 +120,7 @@ EURUSD is the FX fallback. Edit this constant to add more brokers' symbols."""
 def probe_symbol(live_server: LiveServer) -> str:
     """Pick the first available symbol from _FALLBACK_SYMBOLS.
 
-    Raises if none are present on the broker — Phase 5 needs at least one
+    Raises if none are present on the broker - Phase 5 needs at least one
     of BTCUSD or EURUSD (or whatever Vincent adds to the constant).
     """
     symbols = call_tool(live_server, "get_symbols")
@@ -166,7 +166,7 @@ def assert_clean_account(live_server: LiveServer) -> None:
     Probes get_positions and get_orders once per session. Any non-empty
     list aborts the run with a clear "manual cleanup required" message.
     Treats the demo account as a shared resource (Vincent might be using
-    it manually too) — refuses to bulldoze unknown state.
+    it manually too) - refuses to bulldoze unknown state.
     """
     positions = call_tool(live_server, "get_positions")
     if isinstance(positions, dict) and "error" in positions:
@@ -201,7 +201,7 @@ def opened_tickets(live_server: LiveServer) -> list[int]:
     test failure).
 
     Tests SHOULD also wrap their place_order call in try/finally and
-    pop the ticket once it's been closed normally — this fixture is
+    pop the ticket once it's been closed normally - this fixture is
     the safety net for the unexpected-exception case.
     """
     import uuid

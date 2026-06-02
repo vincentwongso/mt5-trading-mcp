@@ -48,7 +48,7 @@ def test_position_rejects_float_for_volume():
             ticket=1,
             symbol="EURUSD",
             type="buy",
-            volume=0.1,  # float — must be Decimal or str
+            volume=0.1,  # float - must be Decimal or str
             price_open=Decimal("1.0"),
             price_current=Decimal("1.0"),
             sl=None,
@@ -78,7 +78,7 @@ def test_position_datetime_must_be_aware():
             profit=Decimal("0"),
             swap=Decimal("0"),
             commission=Decimal("0"),
-            time_open=datetime(2026, 4, 21),  # naive — reject
+            time_open=datetime(2026, 4, 21),  # naive - reject
             comment=None,
         )
 
@@ -195,7 +195,7 @@ def test_quote_rejects_float_bid():
     with pytest.raises(ValidationError):
         Quote(
             symbol="EURUSD",
-            bid=1.0823,  # float — must be Decimal
+            bid=1.0823,  # float - must be Decimal
             ask=Decimal("1.0824"),
             time=datetime(2026, 4, 21, 10, 0, tzinfo=timezone.utc),
         )
@@ -211,7 +211,7 @@ def test_account_info_rejects_float_balance():
             name="x",
             server="s",
             currency="USD",
-            balance=100.5,  # float — must be Decimal
+            balance=100.5,  # float - must be Decimal
             equity=Decimal("100.5"),
             margin=Decimal("0"),
             margin_free=Decimal("100.5"),

@@ -16,8 +16,8 @@ services:
     image: mt5-trading-mcp:headless
     container_name: mt5-mcp
     ports:
-      - "127.0.0.1:8765:8765"   # MCP over HTTP — host loopback only
-      - "127.0.0.1:3001:3000"   # KasmVNC web UI — one-time broker login
+      - "127.0.0.1:${MCP_PORT:-8765}:8765"   # MCP over HTTP — host loopback only
+      - "127.0.0.1:${VNC_PORT:-3001}:3000"   # KasmVNC web UI — one-time broker login
     environment:
       # Broker credentials for programmatic login (password is env-only).
       - MT5_LOGIN=${MT5_LOGIN:-}

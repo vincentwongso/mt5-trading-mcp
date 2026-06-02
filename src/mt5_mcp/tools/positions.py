@@ -94,10 +94,10 @@ def register(mcp: FastMCP) -> None:
         realised = (close_price - Decimal(str(pos.price_open))) * close_volume * sign
 
         cfg = ctx.config
-        requires_approval = (
-            cfg.policy.auto_approve_notional > 0
-            and notional >= cfg.policy.auto_approve_notional
-        )
+        # Fail-closed: at the default auto_approve_notional=0 every close gates
+        # (notional >= 0 is always true). Raise the threshold to auto-approve
+        # closes below it; set it above any close you'll make to disable the gate.
+        requires_approval = notional >= cfg.policy.auto_approve_notional
         # Tick fallback only applies to closes that auto-approve. If the
         # close needs human approval, the human needs a fresh quote.
         if tick is None and requires_approval:

@@ -50,8 +50,9 @@ Full catalogue and the consent flow: **[docs/tools.md](https://github.com/vincen
 ## Why mt5-mcp
 
 - **A safety layer, not just an API wrapper.** Every mutating call routes through
-  preflight checks → an opt-in human-consent gate → idempotency → an append-only
-  audit log, so an agent can't quietly fire-and-forget irreversible orders.
+  preflight checks → a fail-closed human-consent gate (every order needs approval
+  by default) → idempotency → an append-only audit log, so an agent can't quietly
+  fire-and-forget irreversible orders.
 - **An honest threat model.** It treats an LLM wired to `place_order` as a live
   attack surface and says so plainly — the MCP is explicitly *not* the security
   boundary (see [SECURITY.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/SECURITY.md)).
@@ -114,12 +115,12 @@ the hard limits (margin, max-lot, symbol permissions). Pre-flight checks in the
 policy engine are UX guardrails to catch agent mistakes early, not security
 controls.
 
-The human-consent gate is **opt-in**: `auto_approve_notional` defaults to `0`,
-which means it is **off** — every mutating call executes immediately. Set a
-*positive* threshold to arm it; then any order whose notional is at or above it
-(or that widens stops) returns an `ApprovalPreview` requiring explicit human
-approval. Every mutating call is recorded in an append-only audit JSONL log
-regardless. For vulnerability disclosure, see
+The human-consent gate is **fail-closed by default**: `auto_approve_notional`
+defaults to `0`, so **every mutating call requires explicit human approval** (an
+`ApprovalPreview` you confirm) before it executes. Raise the threshold to
+auto-approve orders below a notional you trust; orders that widen stops always
+require approval. Every mutating call is recorded in an append-only audit JSONL
+log regardless. For vulnerability disclosure, see
 [SECURITY.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/SECURITY.md).
 
 ## Architecture

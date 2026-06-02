@@ -21,7 +21,7 @@ All mutating tools return a result envelope on success: `{retcode, deal, order, 
 
 ## The two-call approval flow
 
-For `place_order`, `modify_order` (when widening), and `close_position`, the policy engine compares the trade's notional value against `policy.auto_approve_notional`. **This gate is opt-in: it defaults to `0`, which means it is OFF — every mutating call executes immediately with no confirmation. It is armed only when the operator sets a positive value.** When armed, an order whose notional is at or above that threshold returns an `ApprovalPreview` envelope on the **first** call instead of executing:
+For `place_order`, `modify_order` (when widening), and `close_position`, the policy engine compares the trade's notional value against `policy.auto_approve_notional`. **This gate is fail-closed: it defaults to `0`, so EVERY mutating call requires human approval. The operator raises the threshold to auto-approve orders below it.** An order whose notional is at or above the threshold (so: every order at the default `0`) returns an `ApprovalPreview` envelope on the **first** call instead of executing:
 
 ```
 {
@@ -93,7 +93,7 @@ User: "Buy 0.10 lots of EURUSD at market."
    ```
    place_order(symbol="EURUSD", side="buy", type="market", volume="0.10")
    ```
-3. **If the server returns** `approval_required: true` (i.e. the operator armed the gate and the notional 1.0851 × 0.10 × 100,000 ≈ 10,851 USD is at or above the configured `auto_approve_notional` threshold), present this to the user verbatim:
+3. **If the server returns** `approval_required: true` (the default — the notional 1.0851 × 0.10 × 100,000 ≈ 10,851 USD is at or above the configured `auto_approve_notional` threshold; at the default `0` every order is), present this to the user verbatim:
    > "About to BUY 0.10 EURUSD at market — roughly 10,851 USD notional, ~10.85 USD margin at your leverage. Confirm?"
    Wait for an explicit yes. Don't infer consent from the user's earlier "buy 0.10 lots" — that's the original request, not a confirmation of the preview.
 4. **Second call** (only after explicit yes):

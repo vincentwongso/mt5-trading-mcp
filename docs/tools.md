@@ -30,10 +30,10 @@ subscribable resources.
 | `close_position` | Close a position by ticket, in full or part. | Notional ≥ `auto_approve_notional` → `ApprovalPreview`. |
 | `cancel_order` | Cancel a pending order by ticket. | Never gates (reduces exposure). |
 
-> **The gate is opt-in.** `auto_approve_notional` defaults to `0`, which
-> *disables* it — every mutating call executes immediately with no confirmation.
-> Set a positive value (see [Configuration](configuration.md)) to require human
-> approval at or above that notional.
+> **The gate is fail-closed by default.** `auto_approve_notional` defaults to
+> `0`, so *every* mutating call requires human approval. Raise it (see
+> [Configuration](configuration.md)) to auto-approve orders below that notional;
+> set it above any order you'll place to disable the gate.
 
 ### Consent flow
 

@@ -44,11 +44,11 @@ trading surface, and untrusted text can try to steer it:
 There is no way for this server to tell an agent's "real" intent from an injected
 one — it only sees a tool call. Mitigations live in how you **operate** it:
 
-- **Arm the consent gate.** `auto_approve_notional` is the primary control, but it
-  is **opt-in and ships disabled**: the default `0` lets every mutating call
-  execute with no confirmation. Set a *positive* threshold so any order at or
-  above it requires explicit human approval, and keep it low enough that routine
-  orders are caught. Do not raise it to bypass prompts.
+- **Keep the consent gate armed.** `auto_approve_notional` is the primary control
+  and ships **fail-closed**: the default `0` requires explicit human approval for
+  *every* mutating call. Raising it auto-approves orders below that notional —
+  raise it no higher than necessary, and never above the largest order you'd place
+  (which disables the gate entirely).
 - **Don't run unsupervised against untrusted input.** Avoid connecting these
   mutating tools to an agent that autonomously ingests web/email/social content
   with no human in the loop on trades.

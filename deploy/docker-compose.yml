@@ -13,7 +13,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: mt5-trading-mcp:headless
+    # Pull the published image (docker compose pull) or build locally (--build).
+    image: ghcr.io/vincentwongso/mt5-trading-mcp:headless
     container_name: mt5-mcp
     ports:
       - "127.0.0.1:${MCP_PORT:-8765}:8765"   # MCP over HTTP — host loopback only

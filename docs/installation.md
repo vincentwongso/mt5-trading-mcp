@@ -122,7 +122,7 @@ The MT5 terminal runs in a Wine container; the server connects over RPyC.
    ```
 3. Configure the bridge — copy
    [`examples/config.toml.example`](../examples/config.toml.example) to
-   `~/.config/mt5-mcp/config.toml` and keep the `[mt5.bridge]` block
+   `~/.config/mt5-mcp/config.toml` and uncomment the `[mt5.bridge]` block
    (`host = "127.0.0.1"`, `port = 8001`).
 4. Verify:
    ```

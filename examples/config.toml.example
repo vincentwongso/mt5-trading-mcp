@@ -3,16 +3,20 @@
 #   Linux:   ~/.config/mt5-mcp/config.toml
 # The server runs with built-in defaults if this file is absent.
 
-# --- Linux only: connect to the MT5 terminal running in Docker over RPyC. ---
-# Omit this whole block on Windows (native in-process MetaTrader5 is used).
-[mt5.bridge]
-host = "127.0.0.1"
-port = 8001
+# --- Linux ALTERNATIVE only: host-side RPyC bridge. ---
+# NOT needed for the recommended all-in-one Docker image, which needs no config.
+# Uncomment only if you run the host-side bridge (see docs/installation.md).
+# Omit on Windows (native in-process MetaTrader5 is used).
+# [mt5.bridge]
+# host = "127.0.0.1"
+# port = 8001
 
 # --- Consent / pre-flight guardrails (apply on every platform). ---
 [policy]
-# Orders at or below this notional auto-execute; above it, a human must confirm.
-# Keep this low when an agent drives the mutating tools.
+# Approval gate. 0 (the default) DISABLES it — every mutating call executes
+# immediately with no confirmation. Set a POSITIVE value to arm it: orders whose
+# notional is at or above it return an ApprovalPreview a human must confirm;
+# smaller orders auto-execute. Recommended when an agent drives the mutating tools.
 auto_approve_notional = "0"
 max_notional_per_trade = "0"   # 0 = no local cap (the broker still enforces its own)
 # max_daily_loss = "0"                 # 0 = no daily realised-loss cap; set e.g. "200" to halt after $200/day

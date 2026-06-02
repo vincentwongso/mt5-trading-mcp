@@ -8,7 +8,9 @@
 #
 #   docker build -t mt5-trading-mcp:headless deploy
 #   # or: docker compose -f deploy/docker-compose.yml up -d --build
-FROM gmag11/metatrader5_vnc
+# Pinned to a digest for reproducible builds (tag 2.3 == latest at pin time).
+# Bump via Dependabot's docker ecosystem.
+FROM gmag11/metatrader5_vnc:2.3@sha256:2fdff449cf70b74c242319828b6859592ab52dfb05690d9a989c75107dabf4c1
 
 # socat bridges the container's network interface to the loopback-bound MCP
 # server, so Docker port-forwarding reaches it without relaxing mt5-mcp's

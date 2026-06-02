@@ -23,7 +23,7 @@ The full config schema is defined by the Pydantic models in
 terminal_path = "C:\\Program Files\\MetaTrader 5\\terminal64.exe"
 
 [policy]
-auto_approve_notional = "1000.00"      # above this, place_order returns an ApprovalPreview
+auto_approve_notional = "1000.00"      # at or above this, place_order returns an ApprovalPreview (0 = gate off, the default)
 max_notional_per_trade = "10000.00"    # hard cap; no approval can override
 max_realised_loss_per_close = "500.00" # close_position refuses if it would realise more
 max_daily_loss = "2000.00"             # place_order refuses once daily realised loss hits this
@@ -45,6 +45,13 @@ quote_poll_interval_ms = 200       # how often quotes://{symbol} checks for pric
 account_poll_interval_ms = 1000    # how often account://current is checked
 positions_poll_interval_ms = 1000  # how often positions://current is checked
 ```
+
+> **Defaults differ from this example.** `auto_approve_notional` and every
+> `[policy]` limit default to `0`, which means **off** — out of the box the
+> consent gate is disabled and there are no local notional/loss caps (the broker
+> still enforces its own). The values above are a *suggested armed* configuration;
+> set `auto_approve_notional` to a positive number to require human approval at or
+> above that notional.
 
 ## Hot reload
 

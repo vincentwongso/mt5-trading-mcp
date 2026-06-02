@@ -64,7 +64,7 @@ demo terminal — see [docs/installation.md](docs/installation.md) and
 `tests/integration/.env.example` for the requirements. Run it with
 `pytest -m integration -v`.
 
-CI runs the unit suite on Windows runners across Python 3.10 / 3.11 / 3.12 on
+CI runs the unit suite on Windows runners across Python 3.10 through 3.14 on
 every push to `main` and every PR.
 
 ## Code style

@@ -38,5 +38,3 @@ CLAUDE.md
 
 # Git worktrees (isolated branches checked out for parallel work)
 .worktrees/
-
-symbols.csv

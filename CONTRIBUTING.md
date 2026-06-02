@@ -84,10 +84,14 @@ Please keep these in mind — PRs that violate them will be sent back.
   the tool with `@error_envelope` and call `get_context()` as the **first line**
   of the body. `ping` is the one deliberate exception — it returns its
   structured health dict directly so callers can read it even on failure.
-- **Use the error factories** in `errors.py` (`terminal_not_connected_error()`,
-  `internal_error(exc)`) rather than inlining `ErrorDetail(...)`. The envelope
-  decorator catches everything and never lets a Python traceback reach the
-  client.
+- **Reuse the error factories where they fit.** `errors.py` provides
+  `terminal_not_connected_error()` and `internal_error(exc)` for those two
+  recurring cases — use them instead of re-rolling the same `ErrorDetail`.
+  Raising `MT5Error(ErrorDetail(...))` directly is fine and expected for
+  domain-specific errors (invalid volume, bad timeframe, unknown ticket, …) —
+  several read tools do exactly that. The point is just that the
+  `@error_envelope` decorator catches anything uncaught and wraps it as
+  `INTERNAL_ERROR`, so a raw Python traceback never reaches the client.
 - **Route mt5lib data calls through `ctx.client.call(...)`** — the reinit-aware
   wrapper that makes transparent reconnect real. Only MT5 *constants*
   (`m.ORDER_FILLING_IOC`, etc.) may be read directly off `ctx.client.mt5`.

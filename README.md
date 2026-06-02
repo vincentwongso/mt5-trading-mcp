@@ -91,7 +91,7 @@ disclosure, see [SECURITY.md](SECURITY.md).
 
 ## Architecture
 
-`mt5-mcp` wraps the MetaTrader 5 Python library behind a FastMCP server. A single `MT5Client` owns the terminal connection, broker-timezone inference, and type conversions; everything else sits on top of it. The Pydantic models in `types.py` / `config.py` are the source of truth for the data and config schemas.
+`mt5-mcp` wraps the MetaTrader 5 Python library behind a FastMCP server. A single `MT5Client` (`src/mt5_mcp/adapter/`) owns the terminal connection, broker-timezone inference, and type conversions; everything else sits on top of it. The Pydantic models in `src/mt5_mcp/types.py` / `src/mt5_mcp/config.py` are the source of truth for the data and config schemas.
 
 ```
      Agent / MCP client  (Hermes, OpenClaw, Claude Code, Claude Desktop, …)
@@ -123,6 +123,9 @@ disclosure, see [SECURITY.md](SECURITY.md).
                                ▼
 MetaTrader 5 Python library  →  broker terminal  →  broker server
 ```
+
+The module paths shown (`tools/`, `resources/`, `policy/`, `streaming/`,
+`adapter/`, `types.py`, `config.py`) all live under `src/mt5_mcp/`.
 
 ## Contributing
 

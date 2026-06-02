@@ -4,6 +4,45 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.2.1] - 2026-06-02
+
+A first-class Linux deployment story plus programmatic broker login for headless
+and container environments. No breaking changes; the Windows-native and existing
+RPyC-bridge paths are unaffected.
+
+### Added
+
+- **All-in-one headless Linux Docker image** (`deploy/`). One image runs the MT5
+  terminal under Wine, a KasmVNC web UI for a one-time broker login, and
+  `mt5-mcp` serving MCP over HTTP — no host Python and no `mt5linux`/`rpyc`
+  version-matching (the project's biggest Linux pain point). `socat` bridges the
+  container interface to the loopback-bound server, so `-p 127.0.0.1:8765:8765`
+  works without relaxing the loopback-only bind. Ships with `docker-compose.yml`
+  and `.env.example`.
+- **Programmatic MT5 login** for headless / container boots. New `[mt5] login`
+  and `[mt5] server` config keys, plus `MT5_LOGIN` / `MT5_PASSWORD` /
+  `MT5_SERVER` environment variables (env wins). The **password is env-only** —
+  it never enters a config file, a serialized `Config`, a log line, or an error
+  message. When both a login and password are present, `MT5Client` authenticates
+  via `initialize(login=, password=, server=)`; a login configured without a
+  password (the one-time-VNC-login path) bare-attaches instead. The first
+  connect gets a one-shot startup-wait retry window so the server tolerates a
+  terminal that is still coming up at container boot.
+- `doctor` now reports the configured login and broker server on the
+  programmatic-login path, so a headless operator can confirm the right account
+  without opening the terminal UI.
+- CI: `publish-image.yml` builds the headless image on `deploy/` pull requests
+  and pushes it to GHCR (`ghcr.io/vincentwongso/mt5-trading-mcp:headless`) on
+  `v*` tags.
+
+### Changed
+
+- Linux install guidance now recommends the all-in-one Docker image (agent talks
+  MCP over HTTP); the host-side RPyC bridge is documented as the alternative.
+  `README.md` is slimmed to a pointer, with the full per-platform steps in
+  `docs/installation.md`. The broken `mt5linux` launcher is dropped from the
+  deploy path.
+
 ## [1.2.0] - 2026-05-31
 
 Compatibility release. Extends official Python support to 3.13 and 3.14. No

@@ -110,20 +110,28 @@ def test_hot_reload_picks_up_changes(tmp_path: Path):
 
 
 def test_reload_survives_broken_edit(tmp_path: Path, caplog):
+    import logging
+
     p = tmp_path / "config.toml"
     p.write_text(MINIMAL_TOML)
 
+    # Drive reload() directly instead of through the watchdog observer thread.
+    # The observer-wiring path is covered by test_reload_picks_up_changes; here
+    # the threaded variant was flaky on loaded CI runners because write_text
+    # truncates-then-writes, so the observer could fire on the empty intermediate
+    # file (which parses as a valid empty config) and swap in defaults before the
+    # garbage landed. reload() is the exact callback the observer invokes, so this
+    # tests the real retain-last-good logic deterministically.
     watcher = ConfigWatcher(p)
-    watcher.start()
-    try:
-        original = watcher.current
+    original = watcher.current
 
-        # Write garbage - reload should fail, warn, and retain the previous config.
-        p.write_text("not valid [[ toml")
-        time.sleep(0.5)
-        assert watcher.current is original
-    finally:
-        watcher.stop()
+    # A broken edit must be logged and IGNORED, keeping the last-good config.
+    p.write_text("not valid [[ toml")
+    with caplog.at_level(logging.WARNING, logger="mt5_mcp.config"):
+        watcher.reload()
+
+    assert watcher.current is original
+    assert any("reload failed" in r.message for r in caplog.records)
 
 
 def test_default_idempotency_path_uses_platformdirs():

@@ -12,6 +12,10 @@ a logged-in MT5 terminal as a set of MCP tools an AI agent can call.
 
 <sub>A [Hermes](https://github.com/NousResearch) agent placing then closing a real 0.01-lot trade on a **demo** account, end-to-end over MCP on Linux.</sub>
 
+![The same round-trip in MetaTrader 5's History tab](demo/mt5-history.png)
+
+<sub>Not a mock-up — the same round-trip in MetaTrader 5's own History tab; the tickets and balance match the recording.</sub>
+
 > ⚠️ **This software places _real_ trades through your MetaTrader 5 terminal with
 > real orders and irreversible fills.** Read [DISCLAIMER.md](DISCLAIMER.md)
 > and [SECURITY.md](SECURITY.md) before connecting it to a live account. Always test

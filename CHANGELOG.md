@@ -4,6 +4,51 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [1.3.0] - 2026-06-02
+
+Publish-readiness hardening. **This release changes a default: the human-consent
+gate is now fail-closed.** See the upgrade note below before deploying.
+
+### Changed
+
+- **Behavior change: the consent gate is fail-closed by default.**
+  `policy.auto_approve_notional` now gates every mutating call whose notional is
+  at or above it, with no `> 0` exception. The default of `0` therefore means
+  **every** `place_order` / `close_position` returns an `ApprovalPreview` that a
+  human must confirm before it executes. Previously `0` disabled the gate and
+  orders auto-executed. To keep auto-execution, set `auto_approve_notional` above
+  the largest order you place.
+- The PyPI long-description now uses absolute image and link URLs, so the package
+  page renders the demo proof and the DISCLAIMER / SECURITY / LICENSE links
+  instead of broken images and dead links.
+- The audit log and idempotency DB are created owner-only (`0o600`) on POSIX so
+  trade activity is not group- or world-readable on a shared host.
+- README rework (tagline, a "Why mt5-mcp" section, the bundled Claude Code
+  skills, an inline Linux/Docker quickstart, stars/downloads badges) and a
+  cropped, legible History-tab proof screenshot. Em-dashes replaced with ASCII
+  throughout the repo.
+
+### Added
+
+- **`policy.max_orders_per_minute`** (default `0` = off): a sliding-window cap on
+  `place_order` executions, a brake on a runaway or looping agent that is
+  independent of the consent gate. Closes and cancels are never throttled.
+- A startup warning when the HTTP transport runs with an empty `auth_token`
+  (unauthenticated loopback access to the mutating tools).
+- PyPI `keywords`, extra classifiers, and Homepage / Documentation project URLs;
+  a 1280x640 social-preview card under `.github/`.
+
+### CI
+
+- The unit suite now runs on Linux (ubuntu-latest) as well as Windows, and
+  installs from the locked dependency set (`uv sync --locked`).
+
+### Upgrade note
+
+If you ran 1.2.x with the default config and relied on orders auto-executing, set
+`auto_approve_notional` above any order you place to preserve that behavior.
+Otherwise every mutating call will now require explicit human approval.
+
 ## [1.2.1] - 2026-06-02
 
 A first-class Linux deployment story plus programmatic broker login for headless

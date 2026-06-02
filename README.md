@@ -59,47 +59,17 @@ MCP over HTTP) and **wiring to an agent** are in
 
 ## For AI agents
 
-**If you are an AI agent and have been handed this repository to install and
-run, follow this procedure.**
-
-1. **Detect the platform and pick a backend.** Windows runs the `MetaTrader5`
-   library natively; Linux runs the terminal in an all-in-one Docker image (the
-   agent talks MCP over HTTP). Full per-platform steps:
-   **[docs/installation.md](docs/installation.md)**.
-2. **Install from this checkout:**
-   - **Windows:** `pip install .` (or `uv sync --extra dev`). Tell the human to
-     launch MetaTrader 5, log into their broker, and enable **AlgoTrading**.
-   - **Linux (recommended):** bring up the Docker image — creds in
-     `deploy/.env`, then `docker compose -f deploy/docker-compose.yml up -d`
-     (it uses the published image; add `--build` only for local `deploy/`
-     changes). The server runs in the container and serves MCP over HTTP; the
-     one-time VNC login + bridge alternative are in `docs/installation.md`.
-3. **Verify before doing anything else:** Windows → `python -m mt5_mcp doctor`
-   (expect the backend + `[PASS]` lines); Docker image → after the human's
-   one-time VNC login, your first `ping` returns `ok: true`. Do **not** proceed
-   if verification fails — report it to the human and stop.
-4. **Register / run the server:** Docker image → it's already serving; register
-   `http://127.0.0.1:8765/mcp`. Windows → `python -m mt5_mcp serve` (stdio) with
-   a config under [`examples/clients/`](examples/clients/) (e.g.
-   [`hermes.json`](examples/clients/hermes.json)) that scopes you to the
-   read-only tools by default.
-5. **Operate read-only unless explicitly asked to trade.** The read tools are
-   safe to call freely.
-6. **⚠️ Hard rule, if live account and using real money.** `place_order`, `modify_order`, and
-   `close_position` execute **real, irreversible trades**. When one returns an
-   `ApprovalPreview`, show it **verbatim** to the human and only retry with
-   `approval_confirmed=true` after they explicitly approve **that specific
-   order**. Never auto-confirm, never batch-approve, never trade on a demo
-   assumption — confirm it's a demo account first.
-
-Tool semantics and the full consent flow: **[docs/tools.md](docs/tools.md)**.
-Under Claude Code, the skills in `.claude/skills/` teach these directly.
+**If you've been handed this repository to install and run, follow the runbook
+in [docs/agents.md](docs/agents.md).** It covers platform detection, install,
+verification, registering the server, and the hard safety rules for trades —
+read it before calling any mutating tool.
 
 ## Documentation
 
 | Guide | What's in it |
 |---|---|
 | [Installation & setup](docs/installation.md) | Requirements, Windows + Linux/Docker setup, wiring to an agent. |
+| [For AI agents](docs/agents.md) | Step-by-step runbook for an agent installing and running the server. |
 | [Configuration](docs/configuration.md) | `config.toml` schema, storage paths, hot-reload. |
 | [Tools & resources](docs/tools.md) | Read tools, mutating tools + consent flow, subscribable resources. |
 | [MCP client setup](docs/clients.md) | Per-client config snippets and Claude Code usage. |
@@ -121,14 +91,41 @@ disclosure, see [SECURITY.md](SECURITY.md).
 
 ## Architecture
 
-`mt5-mcp` wraps the MetaTrader 5 Python library behind a FastMCP server. A
-single `MT5Client` (`src/mt5_mcp/adapter/`) owns the terminal connection,
-broker-timezone inference, and type conversions. On top of it: the MCP tools
-(`src/mt5_mcp/tools/`), subscribable resources (`src/mt5_mcp/resources/`), the
-consent / idempotency / audit layer (`src/mt5_mcp/policy/`), and the
-change-detection streaming subsystem (`src/mt5_mcp/streaming/`). The Pydantic
-models in `src/mt5_mcp/types.py` and `src/mt5_mcp/config.py` are the source of
-truth for the data and config schemas.
+`mt5-mcp` wraps the MetaTrader 5 Python library behind a FastMCP server. A single `MT5Client` (`src/mt5_mcp/adapter/`) owns the terminal connection, broker-timezone inference, and type conversions; everything else sits on top of it. The Pydantic models in `src/mt5_mcp/types.py` / `src/mt5_mcp/config.py` are the source of truth for the data and config schemas.
+
+```
+     Agent / MCP client  (Hermes, OpenClaw, Claude Code, Claude Desktop, …)
+                               │
+                               │   stdio  ·  loopback HTTP
+                               ▼
+ ┌──────────────────────────────────────────────────────────┐
+ │                      FastMCP server                      │
+ │                                                          │
+ │   tools/        resources/        policy/                │
+ │   read +        subscribable      consent · idempotency  │
+ │   mutating      account/quotes    · audit (JSONL)        │
+ │                                                          │
+ │   streaming/  — change-detection poller + dispatcher     │
+ │   types.py · config.py — Pydantic schemas: source of     │
+ │                          truth for data + config         │
+ │                                                          │
+ └──────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+ ┌──────────────────────────────────────────────────────────┐
+ │                                                          │
+ │   adapter/  MT5Client                                    │
+ │   one terminal connection · broker-TZ inference ·        │
+ │   type conversions · transparent reinit                  │
+ │                                                          │
+ └──────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+MetaTrader 5 Python library  →  broker terminal  →  broker server
+```
+
+The module paths shown (`tools/`, `resources/`, `policy/`, `streaming/`,
+`adapter/`, `types.py`, `config.py`) all live under `src/mt5_mcp/`.
 
 ## Contributing
 

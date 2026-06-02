@@ -115,5 +115,5 @@ User: "Buy 0.10 lots of EURUSD at market."
 ## See also
 
 - `mt5-market-data` skill — covers the read-only side. Use those tools to gather context (quotes, positions, account state) before mutating.
-- `CLAUDE.md` (project root) sections on the policy engine and consent flow for the full architectural picture.
+- [`docs/tools.md`](../../../docs/tools.md) (consent flow) and [`CONTRIBUTING.md`](../../../CONTRIBUTING.md) (policy-engine invariants) for the full architectural picture.
 - `audit.jsonl` (operator-side, default `~/.local/share/mt5-mcp/audit.jsonl`) records every mutating call. Useful for the user to verify what was done.

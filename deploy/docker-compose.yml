@@ -1,0 +1,35 @@
+# All-in-one headless mt5-trading-mcp (Linux). ONE image: the MT5 terminal
+# under Wine + KasmVNC + mt5-mcp serving MCP over HTTP. The only human inputs
+# are (a) MT5 credentials (deploy/.env) and (b) a one-time terminal login via
+# the VNC web UI — the login persists in the volume, so restarts are headless.
+#
+#   cp deploy/.env.example deploy/.env        # fill in your broker creds
+#   docker compose -f deploy/docker-compose.yml up -d --build
+#   # first boot installs MT5 + Wine-Python (a few minutes); then:
+#   #   - open http://127.0.0.1:3001 once to log the terminal into your broker
+#   #   - point your agent at http://127.0.0.1:8765/mcp
+services:
+  mt5-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Pull the published image (docker compose pull) or build locally (--build).
+    image: ghcr.io/vincentwongso/mt5-trading-mcp:headless
+    container_name: mt5-mcp
+    ports:
+      - "127.0.0.1:${MCP_PORT:-8765}:8765"   # MCP over HTTP — host loopback only
+      - "127.0.0.1:${VNC_PORT:-3001}:3000"   # KasmVNC web UI — one-time broker login
+    environment:
+      # Broker credentials for programmatic login (password is env-only).
+      - MT5_LOGIN=${MT5_LOGIN:-}
+      - MT5_PASSWORD=${MT5_PASSWORD:-}
+      - MT5_SERVER=${MT5_SERVER:-}
+      # KasmVNC web-UI auth (for the one-time login session).
+      - CUSTOM_USER=${VNC_USER:-mt5}
+      - PASSWORD=${VNC_PASSWORD:-change-me}
+    volumes:
+      - mt5-mcp-config:/config
+    restart: unless-stopped
+
+volumes:
+  mt5-mcp-config:

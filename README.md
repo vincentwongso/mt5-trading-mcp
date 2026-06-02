@@ -45,7 +45,8 @@ pip install mt5-trading-mcp
    `[INFO] backend: native` and `[PASS]` lines.
 3. Run it: `python -m mt5_mcp serve`.
 
-Linux (MT5 in Docker), the bridge backend, and wiring to an agent are in
+**Linux** (the MT5 terminal runs in an all-in-one Docker image; the agent talks
+MCP over HTTP) and **wiring to an agent** are in
 **[docs/installation.md](docs/installation.md)**.
 
 ## For AI agents
@@ -54,24 +55,25 @@ Linux (MT5 in Docker), the bridge backend, and wiring to an agent are in
 run, follow this procedure.**
 
 1. **Detect the platform and pick a backend.** Windows runs the `MetaTrader5`
-   library natively; Linux runs the terminal in Docker and connects over a
-   bridge.
+   library natively; Linux runs the terminal in an all-in-one Docker image (the
+   agent talks MCP over HTTP). Full per-platform steps:
+   **[docs/installation.md](docs/installation.md)**.
 2. **Install from this checkout:**
    - **Windows:** `pip install .` (or `uv sync --extra dev`). Tell the human to
      launch MetaTrader 5, log into their broker, and enable **AlgoTrading**.
-   - **Linux:** `pip install '.[bridge]'`, then
-     `docker compose -f examples/docker-compose.yml up -d`, have the human finish
-     the MT5 install + broker login via KasmVNC at `http://localhost:3000`, and
-     copy [`examples/config.toml.example`](examples/config.toml.example) to
-     `~/.config/mt5-mcp/config.toml` (keep the `[mt5.bridge]` block).
-3. **Verify before doing anything else:** run `python -m mt5_mcp doctor`. Do
-   **not** proceed unless it prints the active backend and `[PASS]` lines. If any
-   check is `[FAIL]`, report it to the human and stop.
-4. **Register / run the server:** `python -m mt5_mcp serve` (stdio). To wire it
-   into your own harness, use the matching config under
-   [`examples/clients/`](examples/clients/) e.g.
-   [`hermes.json`](examples/clients/hermes.json) or
-   [`openclaw.json`](examples/clients/openclaw.json) which scope you to the
+   - **Linux (recommended):** bring up the Docker image — creds in
+     `deploy/.env`, then `docker compose -f deploy/docker-compose.yml up -d`
+     (it uses the published image; add `--build` only for local `deploy/`
+     changes). The server runs in the container and serves MCP over HTTP; the
+     one-time VNC login + bridge alternative are in `docs/installation.md`.
+3. **Verify before doing anything else:** Windows → `python -m mt5_mcp doctor`
+   (expect the backend + `[PASS]` lines); Docker image → after the human's
+   one-time VNC login, your first `ping` returns `ok: true`. Do **not** proceed
+   if verification fails — report it to the human and stop.
+4. **Register / run the server:** Docker image → it's already serving; register
+   `http://127.0.0.1:8765/mcp`. Windows → `python -m mt5_mcp serve` (stdio) with
+   a config under [`examples/clients/`](examples/clients/) (e.g.
+   [`hermes.json`](examples/clients/hermes.json)) that scopes you to the
    read-only tools by default.
 5. **Operate read-only unless explicitly asked to trade.** The read tools are
    safe to call freely.

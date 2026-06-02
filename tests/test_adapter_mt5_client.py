@@ -413,3 +413,139 @@ def test_resolve_native_missing_lib_raises_terminal_not_connected(monkeypatch):
     with pytest.raises(MT5Error) as ei:
         mod.resolve_mt5_module(Config())
     assert ei.value.detail.code == "TERMINAL_NOT_CONNECTED"
+
+
+# --- programmatic login (Task 2) ----------------------------------------
+
+
+def test_connect_with_credentials_passes_login_password_server(fake_mt5, frozen_utc):
+    """When login is configured, connect() must authenticate programmatically:
+    initialize(login=, password=, server=) — the headless/container boot path."""
+    c = MT5Client(
+        mt5_module=fake_mt5,
+        login=7000592, password="s3cret", server="Fintrix-Live",
+    )
+    c.connect()
+    kwargs = fake_mt5.initialize_calls[-1]["kwargs"]
+    assert kwargs["login"] == 7000592
+    assert kwargs["password"] == "s3cret"
+    assert kwargs["server"] == "Fintrix-Live"
+
+
+def test_connect_without_credentials_uses_bare_initialize(fake_mt5, frozen_utc):
+    """No creds → pure attach to an already-logged-in terminal (the VNC-login
+    path). initialize() must carry no login/password/server."""
+    c = MT5Client(mt5_module=fake_mt5)
+    c.connect()
+    call = fake_mt5.initialize_calls[-1]
+    assert call["args"] == ()
+    assert call["kwargs"] == {}
+
+
+def test_connect_with_terminal_path_and_credentials(fake_mt5, frozen_utc):
+    """terminal_path stays the positional arg; creds ride alongside as kwargs."""
+    c = MT5Client(
+        mt5_module=fake_mt5, terminal_path="C:/mt5/terminal64.exe",
+        login=42, password="p", server="S",
+    )
+    c.connect()
+    call = fake_mt5.initialize_calls[-1]
+    assert call["args"] == ("C:/mt5/terminal64.exe",)
+    assert call["kwargs"]["login"] == 42
+
+
+def test_connect_with_login_but_no_password_bare_attaches(fake_mt5, frozen_utc):
+    """A partial credential set — login configured (e.g. for doctor diagnostics)
+    but no password, because the human logs in via VNC — must NOT pass login= to
+    initialize(). A partial set would make mt5lib reject/replace the existing
+    attach; bare-attach instead."""
+    c = MT5Client(mt5_module=fake_mt5, login=7000592, server="Fintrix-Live")
+    c.connect()
+    call = fake_mt5.initialize_calls[-1]
+    assert call["args"] == ()
+    assert call["kwargs"] == {}
+
+
+def test_connect_never_logs_password(fake_mt5, frozen_utc, caplog):
+    import logging
+    c = MT5Client(mt5_module=fake_mt5, login=1, password="SUPERSECRET", server="S")
+    with caplog.at_level(logging.DEBUG):
+        c.connect()
+    assert "SUPERSECRET" not in caplog.text
+    assert "SUPERSECRET" not in repr(c)
+
+
+def test_connect_failure_never_logs_or_echoes_password(fake_mt5, caplog):
+    import logging
+    fake_mt5._initialize = False
+    fake_mt5._last_error = (-6, "Authorization failed")
+    c = MT5Client(mt5_module=fake_mt5, login=1, password="SUPERSECRET", server="S")
+    with caplog.at_level(logging.DEBUG):
+        with pytest.raises(MT5Error) as ei:
+            c.connect()
+    assert "SUPERSECRET" not in caplog.text
+    assert "SUPERSECRET" not in ei.value.detail.message
+    # Belt-and-suspenders: the password must not leak via any detail field.
+    assert "SUPERSECRET" not in str(ei.value.detail)
+
+
+def test_connect_retries_until_terminal_ready(fake_mt5, frozen_utc, monkeypatch):
+    """Startup wait: the terminal may not be up when the MCP first connects
+    (container boot). connect() retries initialize() until it succeeds."""
+    attempts = {"n": 0}
+
+    def flaky(*a, **k):
+        attempts["n"] += 1
+        return attempts["n"] >= 3  # fail twice, then succeed
+
+    monkeypatch.setattr(fake_mt5, "initialize", flaky)
+    sleeps: list[float] = []
+    monkeypatch.setattr("mt5_mcp.adapter.mt5_client.time.sleep", lambda s: sleeps.append(s))
+
+    c = MT5Client(mt5_module=fake_mt5, connect_retries=5, connect_retry_delay_s=0.5)
+    c.connect()
+
+    assert attempts["n"] == 3
+    assert c._initialised
+    assert sleeps == [0.5, 0.5]  # slept before the 2nd and 3rd attempts
+
+
+def test_connect_retries_exhausted_raises(fake_mt5, monkeypatch):
+    fake_mt5._initialize = False
+    fake_mt5._last_error = (-10005, "IPC timeout")
+    monkeypatch.setattr("mt5_mcp.adapter.mt5_client.time.sleep", lambda s: None)
+
+    c = MT5Client(mt5_module=fake_mt5, connect_retries=3, connect_retry_delay_s=0.01)
+    with pytest.raises(MT5Error):
+        c.connect()
+    assert fake_mt5.calls["initialize"] == 4  # 1 initial + 3 retries
+
+
+def test_connect_default_does_not_retry(fake_mt5, monkeypatch):
+    """No retries configured (native/attach path) → single attempt, no sleep."""
+    fake_mt5._initialize = False
+    slept: list[float] = []
+    monkeypatch.setattr("mt5_mcp.adapter.mt5_client.time.sleep", lambda s: slept.append(s))
+
+    c = MT5Client(mt5_module=fake_mt5)  # default connect_retries=0
+    with pytest.raises(MT5Error):
+        c.connect()
+    assert fake_mt5.calls["initialize"] == 1
+    assert slept == []
+
+
+def test_startup_retry_is_one_shot_not_per_reinit(fake_mt5, frozen_utc, monkeypatch):
+    """The retry budget applies to the FIRST connect (boot wait) only. A later
+    mid-session reinit must fail fast, not burn the whole boot window again."""
+    monkeypatch.setattr("mt5_mcp.adapter.mt5_client.time.sleep", lambda s: None)
+    c = MT5Client(mt5_module=fake_mt5, connect_retries=5, connect_retry_delay_s=0.01)
+    c.connect()  # first connect succeeds immediately
+    assert c._initialised
+
+    # Simulate a mid-session drop and a terminal that won't come back.
+    c._initialised = False
+    fake_mt5._initialize = False
+    fake_mt5.calls["initialize"] = 0
+    with pytest.raises(MT5Error):
+        c.connect()
+    assert fake_mt5.calls["initialize"] == 1  # no retry on reinit

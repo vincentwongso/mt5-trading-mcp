@@ -1,0 +1,62 @@
+name: publish-image
+
+# Build the all-in-one headless Docker image (deploy/). Build-only on PRs that
+# touch deploy/, build + push to GHCR on release tags — mirrors publish.yml's
+# tag-gating so the image and the PyPI package release together.
+on:
+  push:
+    tags:
+      - "v*"
+  pull_request:
+    paths:
+      - "deploy/**"
+      - ".github/workflows/publish-image.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: Build (+ push on tags) the headless image
+    runs-on: ubuntu-latest
+    # The gmag11 base is multi-GB; allow time for the pull + build.
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write   # push to GHCR
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Only authenticate (and push) on a release tag — PRs build but don't push.
+      - name: Log in to GHCR
+        if: github.ref_type == 'tag'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=headless
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
+
+      - name: Build (and push on tags)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./deploy
+          file: ./deploy/Dockerfile
+          push: ${{ github.ref_type == 'tag' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

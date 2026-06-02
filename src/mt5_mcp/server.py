@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -89,6 +90,14 @@ class AppContext:
 _ctx_lock = threading.Lock()
 _ctx: AppContext | None = None
 
+# Startup wait applied to the FIRST connect when programmatic-login credentials
+# are present (the headless container boot path): the MT5 terminal can take a
+# while to come up after `docker run`. ~30 × 2s ≈ a 60s boot window. The native
+# attach path (no creds) gets no retries — a genuine failure should surface
+# immediately rather than hang.
+_BOOT_CONNECT_RETRIES = 30
+_BOOT_CONNECT_RETRY_DELAY_S = 2.0
+
 
 def build_context(
     *,
@@ -118,8 +127,26 @@ def build_context(
             if cfg.mt5.bridge is not None
             else "native"
         )
+        # Programmatic-login credentials: login/server come from the (already
+        # env-overlaid) config; the password is env-only and read here so it
+        # never enters a Config object that could be logged or serialized.
+        # When a login is configured we're booting (likely in the container), so
+        # give connect() a startup wait window for the terminal to come up.
+        #
+        # The password is only meaningful alongside a login — read it ONLY then,
+        # so a half-filled .env (MT5_PASSWORD set, MT5_LOGIN missing) neither
+        # retains an unusable secret on the client nor arms the boot retry window.
+        booting_with_login = cfg.mt5.login is not None
+        login_password = (
+            (os.environ.get("MT5_PASSWORD") or None) if booting_with_login else None
+        )
         client = MT5Client(
             terminal_path=cfg.mt5.terminal_path or None,
+            login=cfg.mt5.login,
+            password=login_password,
+            server=cfg.mt5.server,
+            connect_retries=(_BOOT_CONNECT_RETRIES if booting_with_login else 0),
+            connect_retry_delay_s=_BOOT_CONNECT_RETRY_DELAY_S,
             mt5_module=mt5_module,
             mt5_factory=(None if mt5_module is not None else lambda: resolve_mt5_module(cfg)),
             backend_label=backend_label,

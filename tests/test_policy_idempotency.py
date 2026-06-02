@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 import pytest
@@ -39,18 +38,30 @@ def test_same_key_different_hash_is_divergent(store: IdempotencyStore):
     assert hit == ("diverged", None)
 
 
-def test_lookup_evicts_expired_entries(tmp_path: Path):
+def test_lookup_evicts_expired_entries(tmp_path: Path, monkeypatch):
+    # Drive a deterministic clock instead of sleeping. Timestamps are stored as
+    # whole seconds and expiry is `expires_at <= now`, so a wall-clock sleep
+    # against a 1s TTL races the integer-second boundary — if a second ticks
+    # between a re-insert (expires=now+1) and the immediately following lookup,
+    # the fresh entry reads as already expired. That flaked under CI jitter
+    # (Windows / py3.13). A controlled clock removes the race while still
+    # exercising in-band eviction + re-insertion.
+    import types
+    import mt5_mcp.policy.idempotency as idem
+    clock = {"t": 1_000_000}
+    monkeypatch.setattr(idem, "time", types.SimpleNamespace(time=lambda: clock["t"]))
+
     s = IdempotencyStore(path=tmp_path / "idem.db", ttl_seconds=1)
     s.put(key="k1", action="place_order", request_hash="hash-1",
-          result_json='{"ticket":42}')
-    time.sleep(1.1)
+          result_json='{"ticket":42}')          # created 1_000_000, expires 1_000_001
+    clock["t"] += 2                              # advance well past expiry
     # Expired — lookup returns None and the row is deleted in-band.
     assert s.lookup(key="k1", action="place_order", request_hash="hash-1") is None
     # Re-inserting under the same key is allowed (the old row is gone).
     s.put(key="k1", action="place_order", request_hash="hash-2",
-          result_json='{"ticket":99}')
+          result_json='{"ticket":99}')          # created 1_000_002, expires 1_000_003
     assert s.lookup(key="k1", action="place_order", request_hash="hash-2") \
-           == ("hit", '{"ticket":99}')
+           == ("hit", '{"ticket":99}')          # 1_000_003 > 1_000_002 → hit
     s.close()
 
 

@@ -8,9 +8,15 @@
 Model Context Protocol server wrapping the MetaTrader 5 Python library: exposes
 a logged-in MT5 terminal as a set of MCP tools an AI agent can call.
 
-![mt5-mcp demo: an AI agent places and closes a live trade over MCP](demo/mt5-mcp-demo.gif)
+<p align="center">
+  <img src="demo/mt5-mcp-demo.gif" width="600" alt="mt5-mcp demo: an AI agent places and closes a live trade over MCP"><br>
+  <sub>A <a href="https://github.com/NousResearch">Hermes</a> agent placing then closing a real 0.01-lot trade on a <b>demo</b> account, end-to-end over MCP on Linux.</sub>
+</p>
 
-<sub>A [Hermes](https://github.com/NousResearch) agent placing then closing a real 0.01-lot trade on a **demo** account, end-to-end over MCP on Linux.</sub>
+<p align="center">
+  <img src="demo/mt5-history.png" width="600" alt="The same round-trip in MetaTrader 5's History tab"><br>
+  <sub>Not a mock-up — the same round-trip in MetaTrader 5's own History tab; the tickets and balance match the recording.</sub>
+</p>
 
 > ⚠️ **This software places _real_ trades through your MetaTrader 5 terminal with
 > real orders and irreversible fills.** Read [DISCLAIMER.md](DISCLAIMER.md)

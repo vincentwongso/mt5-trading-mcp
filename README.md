@@ -93,7 +93,9 @@ run, follow this procedure.**
    assumption — confirm it's a demo account first.
 
 Tool semantics and the full consent flow: **[docs/tools.md](docs/tools.md)**.
-Under Claude Code, the skills in `.claude/skills/` teach these directly.
+Under Claude Code, cloning this repo wires up the MCP server (`.mcp.json`) and
+auto-loads the `.claude/skills/` (market-data + trading) — see
+**[docs/clients.md](docs/clients.md)** for how that fits together.
 
 ## Documentation
 
@@ -121,14 +123,38 @@ disclosure, see [SECURITY.md](SECURITY.md).
 
 ## Architecture
 
-`mt5-mcp` wraps the MetaTrader 5 Python library behind a FastMCP server. A
-single `MT5Client` (`src/mt5_mcp/adapter/`) owns the terminal connection,
-broker-timezone inference, and type conversions. On top of it: the MCP tools
-(`src/mt5_mcp/tools/`), subscribable resources (`src/mt5_mcp/resources/`), the
-consent / idempotency / audit layer (`src/mt5_mcp/policy/`), and the
-change-detection streaming subsystem (`src/mt5_mcp/streaming/`). The Pydantic
-models in `src/mt5_mcp/types.py` and `src/mt5_mcp/config.py` are the source of
-truth for the data and config schemas.
+`mt5-mcp` wraps the MetaTrader 5 Python library behind a FastMCP server. A single `MT5Client` owns the terminal connection, broker-timezone inference, and type conversions; everything else sits on top of it. The Pydantic models in `types.py` / `config.py` are the source of truth for the data and config schemas.
+
+```
+     Agent / MCP client  (Claude Code, Claude Desktop, …)
+                               │
+                               │   stdio  ·  loopback HTTP
+                               ▼
+ ┌──────────────────────────────────────────────────────────┐
+ │                      FastMCP server                      │
+ │                                                          │
+ │   tools/        resources/        policy/                │
+ │   read +        subscribable      consent · idempotency  │
+ │   mutating      account/quotes    · audit (JSONL)        │
+ │                                                          │
+ │   streaming/  — change-detection poller + dispatcher     │
+ │   types.py · config.py — Pydantic schemas: source of     │
+ │                          truth for data + config         │
+ │                                                          │
+ └──────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+ ┌──────────────────────────────────────────────────────────┐
+ │                                                          │
+ │   adapter/  MT5Client                                    │
+ │   one terminal connection · broker-TZ inference ·        │
+ │   type conversions · transparent reinit                  │
+ │                                                          │
+ └──────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+MetaTrader 5 Python library  →  broker terminal  →  broker server
+```
 
 ## Contributing
 

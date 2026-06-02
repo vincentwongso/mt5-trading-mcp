@@ -1,0 +1,17 @@
+# Demo-recording policy override for the all-in-one container.
+#
+# ⚠️  DEMO ONLY — NOT a production template (see examples/config.toml.example).
+#
+# The shipped default is auto_approve_notional = "0", which makes the policy
+# engine return an ApprovalPreview and PAUSE for human confirmation on any
+# material order. That is the correct, safe default — but it stalls an
+# unattended recording. Setting it high lets the tiny 0.01-lot demo order
+# auto-execute in one pass so the agent completes the round-trip on camera.
+#
+# The recording setup writes this into the container's mt5-mcp config so the
+# in-container `mt5-mcp serve` reads it (see demo/README.md → "Re-record").
+# For real use, keep auto_approve_notional LOW so a human confirms every
+# material trade.
+
+[policy]
+auto_approve_notional = "1000000"

@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/vincentwongso/mt5-trading-mcp/main/demo/mt5-history.png" width="600" alt="The same round-trip in MetaTrader 5's History tab"><br>
+  <img src="https://raw.githubusercontent.com/vincentwongso/mt5-trading-mcp/main/demo/mt5-history.png" width="820" alt="The same round-trip in MetaTrader 5's History tab"><br>
   <sub>Not a mock-up — the same round-trip in MetaTrader 5's own History tab; the tickets and balance match the recording.</sub>
 </p>
 

@@ -21,6 +21,7 @@ auto_approve_notional = "0"
 max_notional_per_trade = "0"   # 0 = no local cap (the broker still enforces its own)
 # max_daily_loss = "0"                 # 0 = no daily realised-loss cap; set e.g. "200" to halt after $200/day
 # max_realised_loss_per_close = "0"    # 0 = no per-close cap
+# max_orders_per_minute = 0            # 0 = no cap; set e.g. 5 to throttle a runaway/looping agent
 
 # --- Restrict which instruments the agent may trade (empty = no restriction). ---
 # [symbols]
@@ -30,4 +31,5 @@ max_notional_per_trade = "0"   # 0 = no local cap (the broker still enforces its
 # --- Optional loopback HTTP transport (default is stdio). ---
 [transport.http]
 port = 8765
-auth_token = ""   # set a token to require Authorization: Bearer <token>
+auth_token = ""   # EMPTY = UNAUTHENTICATED — any local process can place trades.
+                  # Set a token to require Authorization: Bearer <token> over HTTP.

@@ -213,6 +213,43 @@ def test_idempotency_replay_returns_cached_with_replayed_flag(engine: PolicyEngi
         assert g.short_circuit["ticket"] == 77
 
 
+def test_velocity_cap_blocks_place_orders_beyond_limit(tmp_path: Path):
+    """max_orders_per_minute throttles place_order: with cap=2, the first two
+    executions in a 60s window succeed and the third is refused with
+    EXCEEDS_LOCAL_LIMIT; once the window clears, orders are allowed again."""
+    cfg = Config(policy=PolicySection(
+        auto_approve_notional=Decimal("100000"),  # don't gate; isolate velocity
+        max_notional_per_trade=Decimal("100000"),
+        max_orders_per_minute=2,
+    ))
+    clock = [1000.0]  # injected monotonic clock
+    e = PolicyEngine(config=cfg, idempotency_path=tmp_path / "idem.db",
+                     audit_path=tmp_path / "audit.jsonl", clock=lambda: clock[0])
+
+    def place(order: int):
+        req = OrderRequest(symbol="EURUSD", side="buy", type="market",
+                           volume=Decimal("0.1"))
+        with e.guard("place_order", req, requires_approval=False,
+                     preflight_inputs=PreflightInputs(notional=Decimal("100"))) as g:
+            if g.short_circuit is not None:
+                return g.short_circuit
+            g.execute(lambda: _raw_done(order=order))
+            return g.finalize(_raw_to_result, request_echo={"x": 1})
+
+    try:
+        assert place(1)["success"] is True
+        assert place(2)["success"] is True
+        blocked = place(3)
+        assert "error" in blocked
+        assert blocked["error"]["code"] == "EXCEEDS_LOCAL_LIMIT"
+        assert blocked["error"]["details"]["limit_name"] == "max_orders_per_minute"
+        # Advance past the 60s window → the cap resets.
+        clock[0] += 61.0
+        assert place(4)["success"] is True
+    finally:
+        e.close()
+
+
 def test_idempotency_diverged_when_same_key_different_request(engine: PolicyEngine):
     req1 = OrderRequest(symbol="EURUSD", side="buy", type="market",
                         volume=Decimal("0.1"), idempotency_key="k2")

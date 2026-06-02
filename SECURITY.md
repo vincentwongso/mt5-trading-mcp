@@ -49,6 +49,12 @@ one — it only sees a tool call. Mitigations live in how you **operate** it:
   *every* mutating call. Raising it auto-approves orders below that notional —
   raise it no higher than necessary, and never above the largest order you'd place
   (which disables the gate entirely).
+- **Cap the order rate.** Set `max_orders_per_minute` to bound a runaway or
+  looping agent even when the consent gate auto-approves small orders — it
+  throttles `place_order` independently of the notional gate.
+- **Authenticate the HTTP transport.** When serving over HTTP, set
+  `transport.http.auth_token`; an empty token leaves the loopback server open to
+  any local process (the server logs a warning at startup).
 - **Don't run unsupervised against untrusted input.** Avoid connecting these
   mutating tools to an agent that autonomously ingests web/email/social content
   with no human in the loop on trades.

@@ -63,8 +63,11 @@ class PolicySection(_Sub):
     max_notional_per_trade: Decimal = Decimal("0")
     max_realised_loss_per_close: Decimal = Decimal("0")
     max_daily_loss: Decimal = Decimal("0")
-    # Consent retry window; re-used by Phase 2.
+    # Consent retry window.
     approval_ttl_seconds: PositiveInt = 300
+    # Sliding-window cap on place_order executions per 60s (0 = no cap). A brake
+    # on a runaway/looping agent, independent of the consent gate.
+    max_orders_per_minute: int = Field(default=0, ge=0)
 
 
 class IdempotencySection(_Sub):

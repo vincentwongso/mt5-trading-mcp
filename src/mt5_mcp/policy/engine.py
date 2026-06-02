@@ -12,7 +12,9 @@ import contextlib
 import hashlib
 import json
 import logging
+import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -21,7 +23,11 @@ from typing import Any, Callable, Iterator, Literal
 from pydantic import BaseModel
 
 from mt5_mcp.config import Config
-from mt5_mcp.errors import idempotency_diverged_error, invalid_approval_error
+from mt5_mcp.errors import (
+    exceeds_local_limit_error,
+    idempotency_diverged_error,
+    invalid_approval_error,
+)
 from mt5_mcp.policy.audit import AuditLog
 from mt5_mcp.policy.consent import ApprovalStore, new_request_id, validate_retry
 from mt5_mcp.policy.idempotency import IdempotencyStore
@@ -77,6 +83,7 @@ class PolicyEngine:
         config: Config,
         idempotency_path: Path | str,
         audit_path: Path | str,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._config = config
         self._idempotency = IdempotencyStore(
@@ -85,6 +92,10 @@ class PolicyEngine:
         )
         self._audit = AuditLog(path=audit_path, max_bytes=config.audit.max_bytes)
         self._approvals = ApprovalStore()
+        # Velocity cap: monotonic timestamps of recent place_order executions.
+        self._clock = clock
+        self._order_times: deque[float] = deque()
+        self._order_lock = threading.Lock()
 
     @contextlib.contextmanager
     def guard(
@@ -209,6 +220,29 @@ class PolicyEngine:
             yield g
             return
 
+        # 5.5 Velocity cap — checked only on the executing path (we've passed
+        # consent + preflight and are about to run order_send). place_order adds
+        # exposure, so it's throttled; closes/cancels reduce exposure and aren't.
+        cap = self._config.policy.max_orders_per_minute
+        if action == "place_order" and cap > 0:
+            now = self._clock()
+            with self._order_lock:
+                cutoff = now - 60.0
+                while self._order_times and self._order_times[0] < cutoff:
+                    self._order_times.popleft()
+                count = len(self._order_times)
+            if count >= cap:
+                err = exceeds_local_limit_error(
+                    limit_name="max_orders_per_minute",
+                    configured=cap, attempted=count + 1,
+                )
+                self._audit.write({"tool": action, "action": "preflight_refused",
+                                   "request_hash": request_hash,
+                                   "limit_name": "max_orders_per_minute"})
+                g.short_circuit = {"error": err.model_dump(mode="json")}
+                yield g
+                return
+
         # 6. Yield to the tool body for execute() + finalize().
         try:
             yield g
@@ -253,6 +287,10 @@ class PolicyEngine:
                 request_hash=g.request_hash,
                 result_json=json.dumps(result_dict, separators=(",", ":")),
             )
+        # Record the execution for the velocity cap (place_order only).
+        if g.action == "place_order":
+            with self._order_lock:
+                self._order_times.append(self._clock())
         g._finalized = True
         return result_dict
 

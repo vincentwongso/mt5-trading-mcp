@@ -51,6 +51,12 @@ class AuditLog:
         # Line-buffered text mode so each write is flushed without an
         # explicit .flush() call. UTF-8 on every platform.
         self._fp = open(self._path, "a", encoding="utf-8", buffering=1)
+        # The log records intentional trade activity (tickets, fills) — keep it
+        # owner-only on POSIX. Best-effort; effectively a no-op on Windows.
+        try:
+            os.chmod(self._path, 0o600)
+        except OSError:
+            pass
 
     def _close_handle(self) -> None:
         if self._fp is not None:

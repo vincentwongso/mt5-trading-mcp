@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import stat
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,6 +16,16 @@ def store(tmp_path: Path) -> IdempotencyStore:
     s = IdempotencyStore(path=tmp_path / "idem.db", ttl_seconds=3600)
     yield s
     s.close()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX file modes only")
+def test_idempotency_db_created_with_owner_only_perms(tmp_path: Path):
+    """The idempotency DB caches mutating-tool results (tickets, fills); on a
+    shared POSIX host it must not be group/world-readable."""
+    store = IdempotencyStore(path=tmp_path / "idem.db", ttl_seconds=3600)
+    store.close()
+    mode = stat.S_IMODE((tmp_path / "idem.db").stat().st_mode)
+    assert mode == 0o600
 
 
 def test_no_key_no_cache(store: IdempotencyStore):

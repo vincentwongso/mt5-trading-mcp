@@ -27,7 +27,10 @@ Constraints in v1.0:
   below for the secure alternative.
 - **Optional bearer-token authentication** via `transport.http.auth_token` in
   `config.toml`. When set, every request must carry
-  `Authorization: Bearer <token>`. Comparison is constant-time.
+  `Authorization: Bearer <token>`. Comparison is constant-time. **Leaving it
+  empty means the (loopback) server is unauthenticated — any local process can
+  place real trades; the server logs a warning at startup.** Set a token whenever
+  the HTTP transport is reachable beyond a single trusted user.
 - Uses the `streamable-http` FastMCP transport under the hood, which supports
   both request/response and SSE streaming on a single endpoint.
 

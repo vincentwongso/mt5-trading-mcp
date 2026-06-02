@@ -5,8 +5,10 @@
 ## Requirements
 
 - **Windows** (native) — the `MetaTrader5` library runs in-process; or
-- **Linux** — the MT5 terminal runs in Docker (Wine) and `mt5-trading-mcp`
-  connects to it over RPyC (see [Linux](#linux-mt5-in-docker-bridge-backend)).
+- **Linux** — an all-in-one Docker image runs the MT5 terminal **and** the
+  server, reachable over HTTP (see
+  [Linux](#linux--all-in-one-docker-image-recommended)). A host-side RPyC bridge
+  remains available as an alternative.
 - Python 3.10 or newer.
 - A running MetaTrader 5 terminal logged into a broker (native on Windows, or
   in the container on Linux).
@@ -59,7 +61,49 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full development workflow.
    Expect `[INFO] backend: native` and `[PASS]` lines. Then run
    `python -m mt5_mcp serve`.
 
-### Linux (MT5 in Docker, bridge backend)
+### Linux — all-in-one Docker image (recommended)
+
+One image runs the MT5 terminal under Wine, a KasmVNC web UI for a one-time
+login, and `mt5-mcp` serving MCP over HTTP. No host Python, no bridge, no
+`rpyc` version-matching.
+
+1. **Credentials.** Copy [`deploy/.env.example`](../deploy/.env.example) to
+   `deploy/.env` and fill in `MT5_LOGIN`, `MT5_PASSWORD`, `MT5_SERVER`. The
+   password is read **only** from the environment — it is never written to a
+   config file or logged. To keep it out of a file entirely, inject it at
+   runtime instead, e.g. with 1Password:
+   ```
+   op run -- docker compose -f deploy/docker-compose.yml up -d --build
+   ```
+2. **Start it:**
+   ```
+   docker compose -f deploy/docker-compose.yml up -d --build
+   ```
+   First boot installs MetaTrader 5 + 64-bit Wine-Python into the container's
+   volume — a few minutes. (If MT5's installer fails with `socket: Function not
+   implemented`, restart the container.)
+3. **Log the terminal in once.** Open `http://127.0.0.1:3001` (KasmVNC; web auth
+   is `VNC_USER`/`VNC_PASSWORD` from `.env`) and choose **File → Login to Trade
+   Account**. The login persists in the `mt5-mcp-config` volume, so every
+   restart afterward is headless.
+   > A cold programmatic login isn't reliable under Wine, so this one-time VNC
+   > login is required. After it, the server attaches on its own (using the
+   > credentials) and re-attaches automatically on restart.
+4. **Connect your agent** to `http://127.0.0.1:8765/mcp` (loopback only).
+   Health-check with `docker logs mt5-mcp` (look for `Uvicorn running` and a
+   successful connect); your agent's first `ping` returns `ok: true`.
+
+Ports are overridable via `MCP_PORT` (default `8765`) and `VNC_PORT` (default
+`3001`). The published image is
+`ghcr.io/vincentwongso/mt5-trading-mcp:headless` — `docker compose pull` fetches
+it instead of building locally.
+
+> **Symbol names are broker-specific.** Some brokers suffix instruments — e.g.
+> `EURUSD.z`, `XAUUSD.z` (crypto such as `BTCUSD` is often unsuffixed). Always
+> use the exact name returned by `get_symbols`; a bare `EURUSD` may come back
+> `SYMBOL_NOT_FOUND`.
+
+### Linux — host-side bridge (alternative)
 
 The MT5 terminal runs in a Wine container; the server connects over RPyC.
 
@@ -93,11 +137,15 @@ The MT5 terminal runs in a Wine container; the server connects over RPyC.
 
 ### Wire it to an agent
 
-Register the server with your agent harness.
+Register the server with your agent harness. **Transport depends on the setup:**
+the all-in-one Docker image already serves MCP over **HTTP** — point the harness
+at `http://127.0.0.1:8765/mcp`. Windows-native and the bridge backend run over
+**stdio** (`python -m mt5_mcp serve`).
+
 [`examples/clients/hermes.json`](../examples/clients/hermes.json) shows a Hermes
 `mcp_servers` block scoped to the **read-only** tools via `include` (so the
 agent can't trade until you widen it). Claude Code, Codex, OpenClaw, Claude
-Desktop, and Cursor have configs under
+Desktop (HTTP + stdio), and Cursor have configs under
 [`examples/clients/`](../examples/clients/); see
 [MCP client setup](clients.md) for the per-client details.
 

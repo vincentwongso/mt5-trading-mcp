@@ -61,6 +61,20 @@ def run(mcp: Any, *, transport: str, config: Config) -> None:
     the server starts so the operator sees the failure on the same
     terminal that ran the command.
     """
+    # Make the fail-open consent posture loud at startup. When the gate is off
+    # (auto_approve_notional <= 0) every mutating call auto-executes with no
+    # approval step - intended for a trusted/unattended agent, but worth saying
+    # out loud. Mirrors the empty-auth_token warning below; fires on both
+    # transports (placed before the stdio early-return).
+    if config.policy.auto_approve_notional <= 0:
+        logger.warning(
+            "policy.auto_approve_notional is %s: the human-consent gate is OFF - "
+            "every place_order / close_position / stop-widening modify "
+            "auto-executes with NO approval step (full-open mode, for a trusted "
+            "or unattended agent). Set policy.auto_approve_notional > 0 to require "
+            "human approval on orders at or above that notional.",
+            config.policy.auto_approve_notional,
+        )
     if transport == "stdio":
         mcp.run()
         return

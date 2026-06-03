@@ -12,11 +12,13 @@
 # port = 8001
 
 # --- Consent / pre-flight guardrails (apply on every platform). ---
+# Every guardrail here is opt-in: at its default each one is OFF (no approval,
+# no local limit, no symbol filter). Set a value to turn that guardrail on.
 [policy]
-# Approval gate (fail-closed). 0 (the default) requires human approval for EVERY
-# mutating call. Raise it to auto-approve orders whose notional is below it; orders
-# at or above it return an ApprovalPreview a human must confirm. Set it above any
-# order you'll place to disable the gate entirely.
+# Approval gate. 0 (the default) leaves it OFF: mutating calls auto-execute
+# (full-open, for a trusted/unattended agent). Set it > 0 to arm the gate -
+# orders whose notional is at or above it return an ApprovalPreview a human must
+# confirm (orders below it still auto-approve), and widening a stop also gates.
 auto_approve_notional = "0"
 max_notional_per_trade = "0"   # 0 = no local cap (the broker still enforces its own)
 # max_daily_loss = "0"                 # 0 = no daily realised-loss cap; set e.g. "200" to halt after $200/day

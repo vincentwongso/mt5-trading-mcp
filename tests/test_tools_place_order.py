@@ -90,9 +90,10 @@ def test_approval_confirmed_retry_executes(server_and_mt5):
     assert out["ticket"] == 12345
 
 
-def test_default_config_is_fail_closed(tmp_path, frozen_utc):
-    """Fail-closed default: with no auto_approve_notional configured (default 0),
-    even a tiny order requires human approval instead of auto-executing."""
+def test_default_config_is_full_open(tmp_path, frozen_utc):
+    """Full-open default: with no auto_approve_notional configured (default 0),
+    the consent gate is OFF and the order auto-executes with no approval preview.
+    Arm the gate (auto_approve_notional > 0) to require approval."""
     fake = FakeMT5()
     fake._terminal_info = FakeTerminalInfo(
         time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
@@ -105,7 +106,7 @@ def test_default_config_is_fail_closed(tmp_path, frozen_utc):
                                             volume=0.10, price=1.0824)
     cfg = tmp_path / "config.toml"
     cfg.write_text(
-        # No [policy] block → auto_approve_notional defaults to 0 (fail-closed).
+        # No [policy] block → auto_approve_notional defaults to 0 (gate off).
         f'[idempotency]\npath = "{(tmp_path / "i.db").as_posix()}"\n'
         f'[audit]\npath = "{(tmp_path / "a.jsonl").as_posix()}"\n'
     )
@@ -113,10 +114,11 @@ def test_default_config_is_fail_closed(tmp_path, frozen_utc):
     out = server._tool_manager.get_tool("place_order").fn(
         symbol="EURUSD", side="buy", type="market", volume="0.10",
     )
-    # Did NOT execute; returned an approval preview instead.
-    assert len(fake.order_send_calls) == 0
-    assert out.get("action") == "place_order"
-    assert "request_id" in out
+    # Auto-executed; no approval preview.
+    assert "request_id" not in out
+    assert out["success"] is True
+    assert out["ticket"] == 12345
+    assert len(fake.order_send_calls) == 1
 
 
 def test_above_max_notional_rejected_even_with_approval(tmp_path):
@@ -149,6 +151,32 @@ def test_above_max_notional_rejected_even_with_approval(tmp_path):
     assert "error" in out
     assert out["error"]["code"] == "EXCEEDS_LOCAL_LIMIT"
     assert out["error"]["details"]["limit_name"] == "max_notional_per_trade"
+    assert len(fake.order_send_calls) == 0
+
+
+def test_pending_order_armed_no_quote_refuses_gracefully(tmp_path, frozen_utc):
+    """Armed gate + priced (pending) order + quote outage: refuse with
+    SYMBOL_NOT_ENABLED instead of crashing while building the approval preview
+    (no live tick to embed). Copilot PR #17 finding - market orders already fail
+    earlier on a missing tick; the priced/pending path did not."""
+    fake = FakeMT5()
+    fake._terminal_info = FakeTerminalInfo(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
+    )
+    fake._account_info = FakeAccountInfo(currency="USD", leverage=100)
+    fake._symbol_info = {"EURUSD": FakeSymbolInfo(name="EURUSD", visible=True)}
+    fake._symbol_info_tick = {"EURUSD": None}  # quote outage
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[policy]\nauto_approve_notional = "1"\n\n'  # armed; gates the order
+        f'[idempotency]\npath = "{(tmp_path / "i.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "a.jsonl").as_posix()}"\n'
+    )
+    server = build_server(mt5_module=fake, config_path=cfg)
+    out = server._tool_manager.get_tool("place_order").fn(
+        symbol="EURUSD", side="buy", type="limit", volume="1.0", price="1.0700",
+    )
+    assert out["error"]["code"] == "SYMBOL_NOT_ENABLED"
     assert len(fake.order_send_calls) == 0
 
 

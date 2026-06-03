@@ -50,9 +50,9 @@ Full catalogue and the consent flow: **[docs/tools.md](https://github.com/vincen
 ## Why mt5-mcp
 
 - **A safety layer, not just an API wrapper.** Every mutating call routes through
-  preflight checks → a fail-closed human-consent gate (every order needs approval
-  by default) → idempotency → an append-only audit log, so an agent can't quietly
-  fire-and-forget irreversible orders.
+  preflight checks → an opt-in human-consent gate (arm it to require approval) →
+  idempotency → an append-only audit log, so you can put a human in the loop on
+  trades and always keep a replayable record of what the agent did.
 - **An honest threat model.** It treats an LLM wired to `place_order` as a live
   attack surface and says so plainly - the MCP is explicitly *not* the security
   boundary (see [SECURITY.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/SECURITY.md)).
@@ -115,12 +115,14 @@ the hard limits (margin, max-lot, symbol permissions). Pre-flight checks in the
 policy engine are UX guardrails to catch agent mistakes early, not security
 controls.
 
-The human-consent gate is **fail-closed by default**: `auto_approve_notional`
-defaults to `0`, so **every mutating call requires explicit human approval** (an
-`ApprovalPreview` you confirm) before it executes. Raise the threshold to
-auto-approve orders below a notional you trust; orders that widen stops always
-require approval. Every mutating call is recorded in an append-only audit JSONL
-log regardless. For vulnerability disclosure, see
+The human-consent gate is **opt-in and off by default**: `auto_approve_notional`
+defaults to `0`, so mutating calls auto-execute (full-open) - intended for trusted
+or unattended agents. **Arm the gate by setting `auto_approve_notional` > 0**:
+orders/closes whose notional is at or above it then return an `ApprovalPreview`
+you must confirm, and modifying a stop to widen or remove it also requires
+approval. The pre-flight limits (`max_*`) and symbol allow/deny lists are likewise
+opt-in (`0` / empty = off). Every mutating call is recorded in an append-only audit
+JSONL log regardless. For vulnerability disclosure, see
 [SECURITY.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/SECURITY.md).
 
 ## Architecture

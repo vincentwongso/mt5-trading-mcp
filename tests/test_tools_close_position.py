@@ -104,9 +104,10 @@ def test_close_blocked_by_max_realised_loss_per_close(tmp_path):
     assert out["error"]["details"]["limit_name"] == "max_realised_loss_per_close"
 
 
-def test_default_config_is_fail_closed_for_close(tmp_path, frozen_utc):
-    """Fail-closed default: with no auto_approve_notional configured (default 0),
-    even a small close requires human approval instead of auto-executing."""
+def test_default_config_is_full_open_for_close(tmp_path, frozen_utc):
+    """Full-open default: with no auto_approve_notional configured (default 0),
+    the consent gate is OFF and the close auto-executes with no approval
+    preview. Arm the gate (auto_approve_notional > 0) to require approval."""
     fake = FakeMT5()
     fake._terminal_info = FakeTerminalInfo(
         time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
@@ -124,16 +125,16 @@ def test_default_config_is_fail_closed_for_close(tmp_path, frozen_utc):
                                             volume=0.5, price=1.0823)
     cfg = tmp_path / "config.toml"
     cfg.write_text(
-        # No [policy] block → auto_approve_notional defaults to 0 (fail-closed).
+        # No [policy] block → auto_approve_notional defaults to 0 (gate off).
         f'[idempotency]\npath = "{(tmp_path / "i.db").as_posix()}"\n'
         f'[audit]\npath = "{(tmp_path / "a.jsonl").as_posix()}"\n'
     )
     server = build_server(mt5_module=fake, config_path=cfg)
     out = server._tool_manager.get_tool("close_position").fn(ticket=42)
-    # Did NOT execute; returned an approval preview instead.
-    assert len(fake.order_send_calls) == 0
-    assert out.get("action") == "close_position"
-    assert "request_id" in out
+    # Auto-executed; no approval preview.
+    assert "request_id" not in out
+    assert out["success"] is True
+    assert len(fake.order_send_calls) == 1
 
 
 def test_close_sell_position_uses_ask_and_buy_order(server_and_mt5):

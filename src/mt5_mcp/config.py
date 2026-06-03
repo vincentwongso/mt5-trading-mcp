@@ -59,6 +59,12 @@ class MT5Section(_Sub):
 
 class PolicySection(_Sub):
     # All Decimals - the architecture insists no floats on money amounts.
+    # Consent gate master switch. 0 (the default) = OFF: mutating calls
+    # auto-execute (full-open, intended for trusted/unattended agents). Set it
+    # > 0 to arm the gate: place_order / close_position then require human
+    # approval when notional is at or above it, and modify_order requires
+    # approval to widen/remove a stop. Every limit below is likewise opt-in
+    # (0 / empty = off).
     auto_approve_notional: Decimal = Decimal("0")
     max_notional_per_trade: Decimal = Decimal("0")
     max_realised_loss_per_close: Decimal = Decimal("0")

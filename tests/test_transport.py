@@ -4,7 +4,9 @@ from dataclasses import dataclass
 
 import pytest
 
-from mt5_mcp.config import Config, StreamingSection, TransportHTTPSection, TransportSection
+from mt5_mcp.config import (
+    Config, PolicySection, StreamingSection, TransportHTTPSection, TransportSection,
+)
 from mt5_mcp.transport import _is_loopback, run
 
 
@@ -66,8 +68,10 @@ class _StubFastMCP:
         self.last_args = kwargs
 
 
-def _cfg(host="127.0.0.1", port=8765, token="", trusted_hosts=None, trusted_origins=None):
+def _cfg(host="127.0.0.1", port=8765, token="", trusted_hosts=None,
+         trusted_origins=None, auto_approve="0"):
     return Config(
+        policy=PolicySection(auto_approve_notional=auto_approve),
         transport=TransportSection(
             http=TransportHTTPSection(
                 host=host, port=port, auth_token=token,
@@ -123,6 +127,27 @@ def test_run_http_with_token_emits_no_unauthenticated_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="mt5_mcp.transport"):
         run(mcp, transport="http", config=_cfg(token="s3cr3t"))
     assert not any("unauthenticated" in r.message.lower() for r in caplog.records)
+
+
+def test_run_warns_when_consent_gate_off(caplog):
+    """Full-open default (auto_approve_notional=0) means mutating calls
+    auto-execute with no approval step - the operator must be told at startup.
+    Fires on stdio too (before the early return), not just HTTP."""
+    import logging
+    mcp = _StubFastMCP()
+    with caplog.at_level(logging.WARNING, logger="mt5_mcp.transport"):
+        run(mcp, transport="stdio", config=_cfg(auto_approve="0"))
+    assert any("consent gate is off" in r.message.lower() for r in caplog.records)
+
+
+def test_run_no_gate_warning_when_armed(caplog):
+    """With the gate armed (auto_approve_notional > 0) the startup warning is
+    silent - the operator opted into approvals."""
+    import logging
+    mcp = _StubFastMCP()
+    with caplog.at_level(logging.WARNING, logger="mt5_mcp.transport"):
+        run(mcp, transport="stdio", config=_cfg(auto_approve="1000"))
+    assert not any("consent gate is off" in r.message.lower() for r in caplog.records)
 
 
 def test_run_http_non_loopback_raises_config_error():

@@ -25,15 +25,15 @@ subscribable resources.
 
 | Tool | Purpose | Gate |
 |---|---|---|
-| `place_order` | Market or pending order with optional SL/TP/deviation. | Notional ≥ `auto_approve_notional` → `ApprovalPreview`. |
-| `modify_order` | Change SL/TP/expiry on a position or pending order. | Widening or removing SL/TP on a position → `ApprovalPreview`. Tightening auto-approves. |
-| `close_position` | Close a position by ticket, in full or part. | Notional ≥ `auto_approve_notional` → `ApprovalPreview`. |
+| `place_order` | Market or pending order with optional SL/TP/deviation. | When armed: notional ≥ `auto_approve_notional` → `ApprovalPreview`. |
+| `modify_order` | Change SL/TP/expiry on a position or pending order. | When armed: widening or removing SL/TP on a position → `ApprovalPreview`. Tightening auto-approves. |
+| `close_position` | Close a position by ticket, in full or part. | When armed: notional ≥ `auto_approve_notional` → `ApprovalPreview`. |
 | `cancel_order` | Cancel a pending order by ticket. | Never gates (reduces exposure). |
 
-> **The gate is fail-closed by default.** `auto_approve_notional` defaults to
-> `0`, so *every* mutating call requires human approval. Raise it (see
-> [Configuration](configuration.md)) to auto-approve orders below that notional;
-> set it above any order you'll place to disable the gate.
+> **The gate is opt-in and off by default.** `auto_approve_notional` defaults to
+> `0`, so out of the box mutating calls auto-execute (full-open). Set it > 0 (see
+> [Configuration](configuration.md)) to arm the gate: orders/closes at or above
+> that notional then require human approval, and widening a stop does too.
 
 ### Consent flow
 

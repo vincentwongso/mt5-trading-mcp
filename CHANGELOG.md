@@ -18,6 +18,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   expected orders to execute. The pre-flight limits (`max_*`) and symbol
   allow/deny lists remain opt-in (`0` / empty = off), as before.
 
+### Added
+
+- A startup `WARNING` (both transports) when the consent gate is off
+  (`auto_approve_notional` <= 0), so the fail-open posture is visible in the logs.
+  Mirrors the existing empty-`auth_token` warning.
+
 ### Upgrade note
 
 If you relied on 1.3.0's fail-closed default to force approval on every trade,

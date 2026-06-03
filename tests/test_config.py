@@ -116,7 +116,7 @@ def test_reload_survives_broken_edit(tmp_path: Path, caplog):
     p.write_text(MINIMAL_TOML)
 
     # Drive reload() directly instead of through the watchdog observer thread.
-    # The observer-wiring path is covered by test_reload_picks_up_changes; here
+    # The observer-wiring path is covered by test_hot_reload_picks_up_changes; here
     # the threaded variant was flaky on loaded CI runners because write_text
     # truncates-then-writes, so the observer could fire on the empty intermediate
     # file (which parses as a valid empty config) and swap in defaults before the

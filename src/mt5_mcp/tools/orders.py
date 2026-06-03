@@ -132,8 +132,25 @@ def register(mcp: FastMCP) -> None:
         leverage = Decimal(str(account.leverage)) if account else Decimal("1")
         currency = account.currency if account else "USD"
 
+        # Resolve a live tick for the approval preview the human will see. Market
+        # orders already hold `tick` (and fail above if it's missing); priced /
+        # pending orders start with tick=None, so fetch one here. If quotes are
+        # out we can't render a preview - refuse gracefully instead of letting
+        # build_preview dereference a None tick (turning it into INTERNAL_ERROR).
+        preview_tick = tick
+        if requires_approval and preview_tick is None:
+            preview_tick = ctx.client.call(lambda m: m.symbol_info_tick(symbol))
+            if preview_tick is None:
+                raise MT5Error(ErrorDetail(
+                    code="SYMBOL_NOT_ENABLED",
+                    message=(f"No tick data for {symbol}; cannot present approval "
+                             f"preview for this order. Retry when quotes resume."),
+                    retryable=True, requires_human=False,
+                    details={"symbol": symbol},
+                ))
+
         def build_preview() -> ApprovalPreview:
-            t = tick or ctx.client.call(lambda m: m.symbol_info_tick(symbol))
+            t = preview_tick
             return ApprovalPreview(
                 request_id=new_request_id(),
                 expires_at=datetime.now(timezone.utc)
@@ -226,7 +243,13 @@ def register(mcp: FastMCP) -> None:
         info = ctx.symbols.get(symbol)
 
         tick = ctx.client.call(lambda m: m.symbol_info_tick(symbol))
-        current_price = Decimal(str(tick.bid)) if tick else Decimal("0")
+        if tick is not None:
+            current_price = Decimal(str(tick.bid))
+        else:
+            # Quote outage: fall back to the target's last-known broker price so
+            # widening detection and notional aren't computed against zero.
+            fallback = getattr(target, "price_current", None) or getattr(target, "price_open", 0)
+            current_price = Decimal(str(fallback or 0))
 
         # Gate logic: only when widening / removing SL or TP on a position.
         old_sl = Decimal(str(getattr(target, "sl", 0) or 0))
@@ -252,6 +275,17 @@ def register(mcp: FastMCP) -> None:
         requires_approval = (
             cfg.policy.auto_approve_notional > 0 and is_position and widening
         )
+        # A widening change that needs approval requires a fresh quote for the
+        # preview the human sees; refuse gracefully if quotes are out rather than
+        # dereferencing a None tick in build_preview (mirrors close_position).
+        if requires_approval and tick is None:
+            raise MT5Error(ErrorDetail(
+                code="SYMBOL_NOT_ENABLED",
+                message=(f"No tick data for {symbol}; cannot present approval "
+                         f"preview for the SL/TP change. Retry when quotes resume."),
+                retryable=True, requires_human=False,
+                details={"symbol": symbol},
+            ))
 
         volume = Decimal(str(getattr(target, "volume", getattr(target, "volume_current", 0))))
         notional = volume * current_price

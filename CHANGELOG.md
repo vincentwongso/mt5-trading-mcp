@@ -24,6 +24,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   (`auto_approve_notional` <= 0), so the fail-open posture is visible in the logs.
   Mirrors the existing empty-`auth_token` warning.
 
+### Fixed
+
+- `place_order` (priced / pending orders) and `modify_order` (widening or removing
+  a stop) no longer turn a quote outage into an `INTERNAL_ERROR` when the consent
+  gate is armed. If approval is required but no live tick is available to render
+  the preview, they now refuse gracefully with `SYMBOL_NOT_ENABLED` (mirroring
+  `close_position`); `modify_order` also falls back to the position's last-known
+  price for widening detection during the outage.
+- Corrected the `doctor --smoke-trade` hint when the gate is armed: to run the
+  smoke order you raise `auto_approve_notional` above it (or set `0`), not lower it.
+
 ### Upgrade note
 
 If you relied on 1.3.0's fail-closed default to force approval on every trade,

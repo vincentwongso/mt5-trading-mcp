@@ -55,6 +55,16 @@ class MT5Section(_Sub):
     # Presence of this block selects the RPyC bridge backend; omit it for the
     # native (Windows-native or Wine-prefix Python) in-process backend.
     bridge: BridgeConfig | None = None
+    # Connect to MT5 at server startup (on the main thread, before the stdio/HTTP
+    # loop) instead of lazily on the first tool call. FastMCP runs sync tool
+    # handlers inline on the asyncio event-loop thread, where the MetaTrader5
+    # C-extension's first import + initialize() can take minutes - long enough to
+    # trip stdio-client timeouts (Claude Desktop / Claude Code). The same connect
+    # runs in well under a second on the main thread, so doing it eagerly at
+    # startup keeps the first tool call fast. If the startup connect fails (e.g.
+    # the terminal isn't up yet) the server still starts and falls back to the
+    # lazy connect on first use. Equivalent to `serve --eager-connect`.
+    eager_connect: bool = False
 
 
 class PolicySection(_Sub):

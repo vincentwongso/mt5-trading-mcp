@@ -75,6 +75,24 @@ def run(mcp: Any, *, transport: str, config: Config) -> None:
             "human approval on orders at or above that notional.",
             config.policy.auto_approve_notional,
         )
+    # Eager connect (opt-in): establish the MT5 link now, on this (main) thread,
+    # before entering the transport loop. Lazy connect otherwise runs on the
+    # asyncio event-loop thread inside the first tool call, where the MetaTrader5
+    # C-extension's first import + initialize() can take minutes and time out
+    # stdio clients. Doing it here keeps the first tool call fast. Non-fatal:
+    # if the terminal isn't up yet, log and fall back to the lazy path.
+    if config.mt5.eager_connect:
+        from mt5_mcp.server import get_context
+
+        try:
+            get_context().client.connect()
+            logger.info("eager-connect: MT5 connection established at startup")
+        except Exception as exc:  # noqa: BLE001 - any failure must not block startup
+            logger.warning(
+                "eager-connect: startup connect failed (%s); falling back to lazy "
+                "connect on the first tool call",
+                exc,
+            )
     if transport == "stdio":
         mcp.run()
         return

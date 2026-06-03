@@ -205,3 +205,66 @@ def test_run_http_trusted_hosts_independent_of_trusted_origins():
     assert mcp.settings.transport_security.allowed_origins == [
         "http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*",
     ]
+
+
+def test_run_eager_connect_calls_connect_before_serving(monkeypatch):
+    """With mt5.eager_connect set, run() establishes the MT5 link on the calling
+    (main) thread BEFORE handing off to mcp.run(). The lazy connect otherwise runs
+    on the asyncio loop thread inside the first tool call, where it can stall for
+    minutes and time out stdio clients."""
+    order = []
+
+    class _FakeClient:
+        def connect(self):
+            order.append("connect")
+
+    class _FakeCtx:
+        client = _FakeClient()
+
+    monkeypatch.setattr("mt5_mcp.server.get_context", lambda: _FakeCtx())
+    mcp = _StubFastMCP()
+    real_run = mcp.run
+
+    def _record_run(**kw):
+        order.append("run")
+        return real_run(**kw)
+
+    mcp.run = _record_run
+    cfg = _cfg()
+    cfg.mt5.eager_connect = True
+    run(mcp, transport="stdio", config=cfg)
+    assert order == ["connect", "run"]
+
+
+def test_run_eager_connect_off_by_default_skips_context(monkeypatch):
+    """Default (eager_connect False) must not touch the connection at startup, so
+    the server still starts when MT5 is offline (lazy path preserved)."""
+    def _boom():
+        raise AssertionError("get_context must not be called when eager_connect is off")
+
+    monkeypatch.setattr("mt5_mcp.server.get_context", _boom)
+    mcp = _StubFastMCP()
+    run(mcp, transport="stdio", config=_cfg())  # eager_connect defaults False
+    assert mcp.last_args is not None  # server still started
+
+
+def test_run_eager_connect_failure_is_non_fatal(monkeypatch, caplog):
+    """A failed startup connect (e.g. terminal not up yet) must NOT stop the
+    server - it logs a warning and falls back to the lazy connect."""
+    import logging
+
+    class _FailClient:
+        def connect(self):
+            raise RuntimeError("terminal not running")
+
+    class _FakeCtx:
+        client = _FailClient()
+
+    monkeypatch.setattr("mt5_mcp.server.get_context", lambda: _FakeCtx())
+    mcp = _StubFastMCP()
+    cfg = _cfg()
+    cfg.mt5.eager_connect = True
+    with caplog.at_level(logging.WARNING, logger="mt5_mcp.transport"):
+        run(mcp, transport="stdio", config=cfg)  # must not raise
+    assert mcp.last_args is not None
+    assert any("eager-connect" in r.message.lower() for r in caplog.records)

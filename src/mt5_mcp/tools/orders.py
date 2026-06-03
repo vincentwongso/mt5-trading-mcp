@@ -71,9 +71,10 @@ def register(mcp: FastMCP) -> None:
     ) -> dict:
         """Place a market or pending order. Optional SL / TP / deviation.
 
-        At or above `policy.auto_approve_notional` (which defaults to 0 - so
-        every order by default), returns an ApprovalPreview; retry with
-        approval_confirmed=true and the same request fields to proceed. Pass
+        When `policy.auto_approve_notional` is set > 0, orders whose notional is
+        at or above it return an ApprovalPreview; retry with
+        approval_confirmed=true and the same request fields to proceed. At the
+        default of 0 the gate is off and orders auto-execute. Pass
         `idempotency_key` (UUIDv4 recommended) to dedupe retries within
         `idempotency.ttl_seconds`.
         """
@@ -118,10 +119,14 @@ def register(mcp: FastMCP) -> None:
         notional = req.volume * ref_price
 
         cfg = ctx.config
-        # Fail-closed: at the default auto_approve_notional=0 every order gates
-        # (notional >= 0 is always true). Raise the threshold to auto-approve
-        # orders below it; set it above any order you'll place to disable the gate.
-        requires_approval = notional >= cfg.policy.auto_approve_notional
+        # Opt-in consent gate. The default auto_approve_notional=0 disables it
+        # (full-open: orders auto-execute). Set it > 0 to require approval on
+        # orders whose notional is at or above the threshold; orders below it
+        # still auto-approve.
+        requires_approval = (
+            cfg.policy.auto_approve_notional > 0
+            and notional >= cfg.policy.auto_approve_notional
+        )
 
         account = ctx.client.call(lambda m: m.account_info())
         leverage = Decimal(str(account.leverage)) if account else Decimal("1")
@@ -186,8 +191,10 @@ def register(mcp: FastMCP) -> None:
     ) -> dict:
         """Modify SL/TP on a position or price/expiration on a pending order.
 
-        Widening or removing an existing SL/TP requires approval; tightening
-        auto-approves regardless of notional.
+        When the consent gate is armed (`policy.auto_approve_notional` > 0),
+        widening or removing an existing SL/TP requires approval; tightening
+        always auto-approves. At the default of 0 the gate is off and every
+        modify auto-executes.
         """
         from datetime import datetime as _dt
         from mt5_mcp.types import ModifyOrderRequest
@@ -238,11 +245,16 @@ def register(mcp: FastMCP) -> None:
             (req.sl is not None and _is_widening(old_sl, req.sl))
             or (req.tp is not None and _is_widening(old_tp, req.tp))
         )
-        requires_approval = is_position and widening
+        cfg = ctx.config
+        # Opt-in consent gate (master switch = auto_approve_notional > 0). With
+        # the gate off (default 0, full-open) a widening/removing SL-TP change
+        # auto-approves; set auto_approve_notional > 0 to require approval for it.
+        requires_approval = (
+            cfg.policy.auto_approve_notional > 0 and is_position and widening
+        )
 
         volume = Decimal(str(getattr(target, "volume", getattr(target, "volume_current", 0))))
         notional = volume * current_price
-        cfg = ctx.config
         account = ctx.client.call(lambda m: m.account_info())
         leverage = Decimal(str(account.leverage)) if account else Decimal("1")
         currency = account.currency if account else "USD"

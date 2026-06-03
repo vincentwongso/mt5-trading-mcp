@@ -11,7 +11,7 @@ This skill covers the four mutating tools the `mt5-mcp` server exposes. **Every 
 
 **`place_order(symbol, side, type, volume, price?, stop_limit_price?, sl?, tp?, deviation=10, comment?, idempotency_key?, approval_confirmed=false, approval_request_id?)`** - open a new market or pending order. `side` is `"buy"` or `"sell"`. `type` is `"market"`, `"limit"`, `"stop"`, or `"stop_limit"`. `volume` is in lots, as a string (e.g. `"0.10"`).
 
-**`modify_order(ticket, sl?, tp?, price?, expiration?, idempotency_key?, approval_confirmed=false, approval_request_id?)`** - adjust a position's SL/TP (positions only), or a pending order's price / expiration / SL / TP. **Widening or removing an existing SL/TP on a position requires approval; tightening auto-approves.** Pass `expiration` only for pending orders, as ISO 8601 UTC.
+**`modify_order(ticket, sl?, tp?, price?, expiration?, idempotency_key?, approval_confirmed=false, approval_request_id?)`** - adjust a position's SL/TP (positions only), or a pending order's price / expiration / SL / TP. **When the consent gate is armed (`auto_approve_notional` > 0), widening or removing an existing SL/TP on a position requires approval and tightening auto-approves; with the gate off (the default) every modify auto-executes.** Pass `expiration` only for pending orders, as ISO 8601 UTC.
 
 **`cancel_order(ticket, idempotency_key?)`** - remove a pending order. Never gates for approval (cancelling reduces exposure).
 
@@ -21,7 +21,7 @@ All mutating tools return a result envelope on success: `{retcode, deal, order, 
 
 ## The two-call approval flow
 
-For `place_order`, `modify_order` (when widening), and `close_position`, the policy engine compares the trade's notional value against `policy.auto_approve_notional`. **This gate is fail-closed: it defaults to `0`, so EVERY mutating call requires human approval. The operator raises the threshold to auto-approve orders below it.** An order whose notional is at or above the threshold (so: every order at the default `0`) returns an `ApprovalPreview` envelope on the **first** call instead of executing:
+For `place_order`, `modify_order` (when widening), and `close_position`, the policy engine compares the trade's notional value against `policy.auto_approve_notional`. **This gate is opt-in and OFF by default: it defaults to `0`, so out of the box every mutating call auto-executes with no approval step. The operator arms it by setting `auto_approve_notional` > 0.** When the gate is armed, an order whose notional is at or above the threshold returns an `ApprovalPreview` envelope on the **first** call instead of executing:
 
 ```
 {
@@ -93,7 +93,7 @@ User: "Buy 0.10 lots of EURUSD at market."
    ```
    place_order(symbol="EURUSD", side="buy", type="market", volume="0.10")
    ```
-3. **If the server returns** `approval_required: true` (the default - the notional 1.0851 × 0.10 × 100,000 ≈ 10,851 USD is at or above the configured `auto_approve_notional` threshold; at the default `0` every order is), present this to the user verbatim:
+3. **If the server returns** `approval_required: true` (only when the operator has armed the gate - the notional 1.0851 × 0.10 × 100,000 ≈ 10,851 USD is at or above the configured `auto_approve_notional` threshold), present this to the user verbatim:
    > "About to BUY 0.10 EURUSD at market - roughly 10,851 USD notional, ~10.85 USD margin at your leverage. Confirm?"
    Wait for an explicit yes. Don't infer consent from the user's earlier "buy 0.10 lots" - that's the original request, not a confirmation of the preview.
 4. **Second call** (only after explicit yes):
@@ -102,7 +102,7 @@ User: "Buy 0.10 lots of EURUSD at market."
                approval_confirmed=true, approval_request_id="<the request_id from preview>")
    ```
 5. **On success**, the result envelope carries `deal`, `order`, `price`, `volume`. Tell the user: "Filled at 1.08516 - 0.10 lots EURUSD long. Position ticket 12345678."
-6. **If `approval_required: false`** on the first call (small enough trade), the result is the fill directly - same final report.
+6. **If `approval_required` is absent or false** on the first call (the gate is off - the default - or the trade is below the armed threshold), the result is the fill directly - same final report.
 
 ## Workflow rules
 

@@ -169,8 +169,8 @@ def run_doctor(
             elif "request_id" in place:
                 print(
                     f"[SKIP] place_order returned approval preview "
-                    f"(consent gate is fail-closed by default; raise "
-                    f"auto_approve_notional above the smoke order to run it)"
+                    f"(consent gate is armed: auto_approve_notional is set at or "
+                    f"below the smoke order's notional; lower it or set 0 to run it)"
                 )
                 # Treat skip as neither pass nor fail; don't flip the rc.
             else:

@@ -79,6 +79,37 @@ def test_remove_sl_requires_approval(server_and_mt5):
     assert "request_id" in out
 
 
+def test_widen_sl_auto_executes_when_gate_off(frozen_utc, tmp_path: Path):
+    """With the consent gate off (default auto_approve_notional=0, full-open),
+    even widening a stop auto-executes - no approval preview. The widening gate
+    only arms when auto_approve_notional > 0."""
+    fake = FakeMT5()
+    fake._terminal_info = FakeTerminalInfo(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
+    )
+    fake._account_info = FakeAccountInfo()
+    fake._symbol_info = {"EURUSD": FakeSymbolInfo(name="EURUSD", visible=True)}
+    fake._symbol_info_tick = {"EURUSD": FakeTick(time=1, bid=1.0823, ask=1.0824)}
+    fake._positions_get = (
+        FakePosition(ticket=42, symbol="EURUSD", type=POSITION_TYPE_BUY,
+                     volume=0.5, price_open=1.0800, price_current=1.0824,
+                     sl=1.0750, tp=1.0900),
+    )
+    fake._order_send = FakeOrderSendResult(retcode=TRADE_RETCODE_DONE,
+                                            order=42, deal=0, volume=0.5, price=1.0824)
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        # No [policy] block → auto_approve_notional defaults to 0 (gate off).
+        f'[idempotency]\npath = "{(tmp_path / "i.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "a.jsonl").as_posix()}"\n'
+    )
+    server = build_server(mt5_module=fake, config_path=cfg)
+    out = _call(server, "modify_order", ticket=42, sl="1.0700")  # widening
+    assert "request_id" not in out
+    assert out["success"] is True
+    assert len(fake.order_send_calls) == 1
+
+
 def test_modify_pending_order_price(server_and_mt5):
     """Edit the limit price of a pending buy_limit order."""
     server, fake = server_and_mt5

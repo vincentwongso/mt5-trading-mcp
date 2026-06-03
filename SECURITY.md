@@ -44,11 +44,12 @@ trading surface, and untrusted text can try to steer it:
 There is no way for this server to tell an agent's "real" intent from an injected
 one - it only sees a tool call. Mitigations live in how you **operate** it:
 
-- **Keep the consent gate armed.** `auto_approve_notional` is the primary control
-  and ships **fail-closed**: the default `0` requires explicit human approval for
-  *every* mutating call. Raising it auto-approves orders below that notional -
-  raise it no higher than necessary, and never above the largest order you'd place
-  (which disables the gate entirely).
+- **Arm the consent gate for any untrusted or unattended setup.** `auto_approve_notional`
+  is the primary control, and it ships **off** (default `0`): out of the box
+  mutating calls auto-execute (full-open), which is intended only for trusted or
+  testing use. To require a human in the loop, set `auto_approve_notional` > 0 -
+  orders at or above that notional then need explicit approval, and widening a stop
+  does too. Set it no higher than the largest order you are willing to auto-approve.
 - **Cap the order rate.** Set `max_orders_per_minute` to bound a runaway or
   looping agent even when the consent gate auto-approves small orders - it
   throttles `place_order` independently of the notional gate.
@@ -63,10 +64,11 @@ one - it only sees a tool call. Mitigations live in how you **operate** it:
   none of the mutating ones (see the `include` scoping in the example configs).
 - **Use a demo account** until you trust the setup (see [DISCLAIMER.md](DISCLAIMER.md)).
 
-A report demonstrating that the consent gate can be **bypassed** (an order above
-`auto_approve_notional` executing without a valid, matching approval) is in scope
-below. "An agent can be talked into a trade under the configured limit" is
-expected behaviour, not a vulnerability - that is what the limit is for.
+When the gate is armed (`auto_approve_notional` > 0), a report demonstrating that
+it can be **bypassed** (an order at or above the threshold executing without a
+valid, matching approval) is in scope below. "An agent can be talked into a trade
+under the configured limit" - or any trade at all when the gate is left off - is
+expected behaviour, not a vulnerability; that is what arming the gate is for.
 
 ## What we consider in scope
 

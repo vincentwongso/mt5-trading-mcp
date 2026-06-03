@@ -4,6 +4,26 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [Unreleased]
+
+### Changed
+
+- **Behavior change: the consent gate is opt-in and off by default again.**
+  `policy.auto_approve_notional` reverts to its pre-1.3.0 semantics - the default
+  `0` now **disables** the gate, so `place_order` / `close_position` /
+  `modify_order` auto-execute (full-open) with no approval step. Set
+  `auto_approve_notional` > 0 to arm the gate: orders/closes at or above that
+  notional then require human approval, and widening or removing a stop does too.
+  This reverses the 1.3.0 fail-closed default, which broke unattended agents that
+  expected orders to execute. The pre-flight limits (`max_*`) and symbol
+  allow/deny lists remain opt-in (`0` / empty = off), as before.
+
+### Upgrade note
+
+If you relied on 1.3.0's fail-closed default to force approval on every trade,
+you must now set `auto_approve_notional` > 0 explicitly to keep that behavior;
+otherwise mutating calls execute without an approval step.
+
 ## [1.3.0] - 2026-06-02
 
 Publish-readiness hardening. **This release changes a default: the human-consent

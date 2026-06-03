@@ -23,7 +23,7 @@ The full config schema is defined by the Pydantic models in
 terminal_path = "C:\\Program Files\\MetaTrader 5\\terminal64.exe"
 
 [policy]
-auto_approve_notional = "1000.00"      # at or above this, place_order returns an ApprovalPreview (0 = default = every order needs approval)
+auto_approve_notional = "1000.00"      # arm the consent gate: at or above this, place_order returns an ApprovalPreview (0 = default = gate off, orders auto-execute)
 max_notional_per_trade = "10000.00"    # hard cap; no approval can override
 max_realised_loss_per_close = "500.00" # close_position refuses if it would realise more
 max_daily_loss = "2000.00"             # place_order refuses once daily realised loss hits this
@@ -47,12 +47,14 @@ account_poll_interval_ms = 1000    # how often account://current is checked
 positions_poll_interval_ms = 1000  # how often positions://current is checked
 ```
 
-> **Defaults differ from this example.** `auto_approve_notional` defaults to `0`,
-> which is **fail-closed** - out of the box *every* mutating call requires human
-> approval. The `max_*` limits default to `0`, which for them means **off** (no
-> local cap; the broker still enforces its own). The values above are a suggested
-> configuration; raise `auto_approve_notional` to auto-approve orders below that
-> notional.
+> **Defaults differ from this example.** Every guardrail above is **opt-in and
+> off by default.** `auto_approve_notional` defaults to `0`, which means the
+> consent gate is **off** - out of the box mutating calls auto-execute (full-open,
+> for trusted/unattended agents). The `max_*` limits default to `0` and the symbol
+> lists default to empty, which for them also means **off** (no local cap; the
+> broker still enforces its own). The values above are a suggested hardened
+> configuration; set `auto_approve_notional` > 0 to require human approval on
+> orders at or above that notional.
 
 ## Hot reload
 

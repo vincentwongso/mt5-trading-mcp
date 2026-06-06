@@ -23,6 +23,13 @@ def _run_serve(argv: list[str]) -> int:
         "--config", default=None,
         help="Path to config TOML (default: per-OS user config dir).",
     )
+    parser.add_argument(
+        "--eager-connect", action="store_true",
+        help="Connect to MT5 at startup (main thread) instead of lazily on the "
+             "first tool call. Recommended for stdio clients (Claude Desktop / "
+             "Claude Code) to avoid a slow first call; falls back to lazy connect "
+             "if the terminal isn't up yet. Same as [mt5] eager_connect = true.",
+    )
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
@@ -36,6 +43,8 @@ def _run_serve(argv: list[str]) -> int:
     config_path = Path(args.config) if args.config else None
     server = build_server(config_path=config_path)
     cfg = load_config(config_path)
+    if args.eager_connect:
+        cfg.mt5.eager_connect = True
     try:
         run(server, transport=args.transport, config=cfg)
     except TransportConfigError as exc:

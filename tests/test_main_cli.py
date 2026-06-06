@@ -33,3 +33,25 @@ def test_serve_invalid_transport_returns_nonzero(tmp_path, monkeypatch):
     monkeypatch.setenv("APPDATA", str(tmp_path))
     rc = main(["serve", "--transport", "ftp"])
     assert rc != 0
+
+
+def test_serve_eager_connect_flag_sets_config(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    captured = {}
+    def fake_run(mcp, *, transport, config):
+        captured["eager"] = config.mt5.eager_connect
+    with patch("mt5_mcp.transport.run", side_effect=fake_run):
+        rc = main(["serve", "--eager-connect"])
+    assert rc == 0
+    assert captured["eager"] is True
+
+
+def test_serve_without_eager_connect_flag_defaults_false(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    captured = {}
+    def fake_run(mcp, *, transport, config):
+        captured["eager"] = config.mt5.eager_connect
+    with patch("mt5_mcp.transport.run", side_effect=fake_run):
+        rc = main(["serve"])
+    assert rc == 0
+    assert captured["eager"] is False

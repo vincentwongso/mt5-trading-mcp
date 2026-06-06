@@ -4,6 +4,19 @@ All notable changes to `mt5-mcp` are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) starting at `1.0.0`.
 
+## [Unreleased]
+
+### Added
+
+- `serve --eager-connect` flag and `[mt5] eager_connect` config option: connect to
+  MT5 at startup on the main thread, before entering the transport loop, instead of
+  lazily on the first tool call. The lazy connect runs inside the first tool call on
+  FastMCP's asyncio event-loop thread, where the `MetaTrader5` C-extension's first
+  import + `initialize()` can take minutes - long enough to time out stdio clients
+  (Claude Desktop / Claude Code) on their very first request. The same connect runs
+  in well under a second on the main thread. The startup connect is non-fatal: if the
+  terminal isn't up yet the server still starts and falls back to the lazy path.
+
 ## [1.3.1] - 2026-06-03
 
 ### Changed

@@ -81,6 +81,14 @@ def run(mcp: Any, *, transport: str, config: Config) -> None:
     # C-extension's first import + initialize() can take minutes and time out
     # stdio clients. Doing it here keeps the first tool call fast. Non-fatal:
     # if the terminal isn't up yet, log and fall back to the lazy path.
+    if transport not in {"stdio", "http"}:
+        raise TransportConfigError(f"unknown transport: {transport!r}")
+    if transport == "http" and not _is_loopback(config.transport.http.host):
+        host = config.transport.http.host
+        raise TransportConfigError(
+            f"transport.http.host must be a loopback address "
+            f"(got {host!r}); set 127.0.0.1, ::1, or localhost"
+        )
     if config.mt5.eager_connect:
         from mt5_mcp.server import get_context
 
@@ -92,6 +100,7 @@ def run(mcp: Any, *, transport: str, config: Config) -> None:
                 "eager-connect: startup connect failed (%s); falling back to lazy "
                 "connect on the first tool call",
                 exc,
+                exc_info=True,
             )
     if transport == "stdio":
         mcp.run()

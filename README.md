@@ -73,6 +73,12 @@ pip install mt5-trading-mcp
    `[INFO] backend: native` and `[PASS]` lines.
 3. Run it: `python -m mt5_mcp serve`.
 
+Wire it to OpenClaw in one command (registers the `mcp.servers` entry):
+
+```bash
+openclaw mcp set mt5-mcp '{"command":"python","args":["-m","mt5_mcp","serve"]}'
+```
+
 ## Quickstart (Linux, Docker)
 
 The MT5 terminal + the MCP run headless in an all-in-one image; your agent talks
@@ -85,7 +91,13 @@ docker compose -f deploy/docker-compose.yml up -d
 
 Log the terminal in once via the KasmVNC web UI at `http://127.0.0.1:3001`
 (**File → Login to Trade Account**; persists across restarts), then point your
-agent at `http://127.0.0.1:8765/mcp`. Full walkthrough:
+agent at `http://127.0.0.1:8765/mcp`. Wire it to OpenClaw in one command:
+
+```bash
+openclaw mcp set mt5-mcp '{"url":"http://127.0.0.1:8765/mcp","transport":"streamable-http"}'
+```
+
+Full walkthrough:
 **[docs/installation.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/docs/installation.md)**.
 
 ## For AI agents

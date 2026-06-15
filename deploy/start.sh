@@ -21,7 +21,7 @@
 # Credentials (MT5_LOGIN / MT5_PASSWORD / MT5_SERVER) are read by mt5-mcp from
 # the environment (see config.py / server.py). Two ways the terminal ends up
 # logged in:
-#   * Programmatic: creds present → mt5-mcp calls initialize(login=,password=,
+#   * Programmatic: creds present -> mt5-mcp calls initialize(login=,password=,
 #     server=). Fully headless if the broker/terminal allow it.
 #   * One-time VNC login: open the KasmVNC web UI once, log the terminal in;
 #     the session persists in /config. mt5-mcp's connect retry loop then

@@ -80,8 +80,10 @@ def resolve_mt5_module(config) -> Any:
             raise MT5Error(
                 terminal_not_connected_error(
                     why="the MetaTrader5 package is not installed. On Windows: "
-                        "pip install mt5-trading-mcp. On Linux: run MT5 in Docker "
-                        "and configure [mt5.bridge] (see the README Linux setup).",
+                        "pip install mt5-trading-mcp. On Linux: run the all-in-one "
+                        "headless Docker image (deploy/docker-compose.yml) and "
+                        "connect over HTTP, or configure a host-side [mt5.bridge] "
+                        "as an alternative - see docs/installation.md.",
                 )
             ) from exc
     try:
@@ -151,12 +153,12 @@ class MT5Client:
     def _initialize_terminal(self) -> bool:
         """Call the backend's ``initialize`` with the right shape.
 
-        - No credentials → bare ``initialize()`` (attach to a terminal already
+        - No credentials -> bare ``initialize()`` (attach to a terminal already
           logged in, e.g. via a one-time VNC login).
-        - ``login`` AND ``password`` set → ``initialize(login=, password=,
+        - ``login`` AND ``password`` set -> ``initialize(login=, password=,
           server=)`` to authenticate programmatically (headless container boot).
         - A partial set (``login`` configured for diagnostics but no
-          ``password``, because the human logs in via VNC) → bare ``initialize()``.
+          ``password``, because the human logs in via VNC) -> bare ``initialize()``.
           Passing ``login=`` without a password would make mt5lib reject or
           replace the existing attach instead of joining it.
         - ``terminal_path`` is always the leading positional arg when present.
@@ -316,10 +318,10 @@ class MT5Client:
         per-source diagnostics via the ``via`` field, which is more
         useful in practice.
 
-        1. ``terminal_info()`` non-None → ``via="terminal_info"``
-        2. ``account_info()`` with populated ``login`` → ``via="account_info"``
+        1. ``terminal_info()`` non-None -> ``via="terminal_info"``
+        2. ``account_info()`` with populated ``login`` -> ``via="account_info"``
         3. Fresh tick (<``_FRESH_TICK_SECONDS``) on any
-           ``_BROKER_TIME_PROBE_SYMBOLS`` symbol → ``via="tick_probe"``
+           ``_BROKER_TIME_PROBE_SYMBOLS`` symbol -> ``via="tick_probe"``
 
         Returns ``(ok, latency_ms, via)``; ``via`` is ``None`` on failure.
         """

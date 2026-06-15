@@ -118,7 +118,7 @@ def run_doctor(
         print(f"[PASS] ping ({via}, {ms}ms)")
         results.append(True)
     else:
-        print(f"[FAIL] ping: terminal unreachable (ok=false)")
+        print("[FAIL] ping: terminal unreachable (ok=false)")
         results.append(False)
     results.append(_check("get_terminal_info", lambda: call("get_terminal_info")))
     results.append(_check("get_account_info", lambda: call("get_account_info")))
@@ -168,10 +168,10 @@ def run_doctor(
                 results.append(False)
             elif "request_id" in place:
                 print(
-                    f"[SKIP] place_order returned approval preview "
-                    f"(consent gate is armed: auto_approve_notional is > 0 and at "
-                    f"or below the smoke order's notional; raise it above the order "
-                    f"or set it to 0 to disable the gate, then re-run)"
+                    "[SKIP] place_order returned approval preview "
+                    "(consent gate is armed: auto_approve_notional is > 0 and at "
+                    "or below the smoke order's notional; raise it above the order "
+                    "or set it to 0 to disable the gate, then re-run)"
                 )
                 # Treat skip as neither pass nor fail; don't flip the rc.
             else:

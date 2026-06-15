@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
 
 from mt5_mcp.__main__ import main
 
@@ -46,12 +45,23 @@ def test_serve_eager_connect_flag_sets_config(tmp_path, monkeypatch):
     assert captured["eager"] is True
 
 
-def test_serve_without_eager_connect_flag_defaults_false(tmp_path, monkeypatch):
+def test_serve_without_eager_connect_flag_defaults_true(tmp_path, monkeypatch):
     monkeypatch.setenv("APPDATA", str(tmp_path))
     captured = {}
     def fake_run(mcp, *, transport, config):
         captured["eager"] = config.mt5.eager_connect
     with patch("mt5_mcp.transport.run", side_effect=fake_run):
         rc = main(["serve"])
+    assert rc == 0
+    assert captured["eager"] is True
+
+
+def test_serve_no_eager_connect_flag_sets_false(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    captured = {}
+    def fake_run(mcp, *, transport, config):
+        captured["eager"] = config.mt5.eager_connect
+    with patch("mt5_mcp.transport.run", side_effect=fake_run):
+        rc = main(["serve", "--no-eager-connect"])
     assert rc == 0
     assert captured["eager"] is False

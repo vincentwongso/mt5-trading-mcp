@@ -209,7 +209,7 @@ def test_subscribe_twice_same_uri_same_session_does_not_orphan(server_and_ctx):
     """If a client double-subscribes the same URI from the same session,
     the older handle must be unsubscribed so the dispatcher doesn't accumulate.
 
-    This test simulates the _on_subscribe fixed flow (subscribe → atomic swap →
+    This test simulates the _on_subscribe fixed flow (subscribe -> atomic swap ->
     unsubscribe old) directly against the dispatcher so we don't need a live
     asyncio request context.
     """

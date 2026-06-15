@@ -1,4 +1,4 @@
-"""Type marshalling + broker-TZ→UTC conversion."""
+"""Type marshalling + broker-TZ->UTC conversion."""
 
 from __future__ import annotations
 
@@ -69,8 +69,8 @@ def test_position_from_raw_converts_decimals_and_time():
     assert pos.type == "buy"
     assert pos.volume == Decimal("0.1")
     assert pos.time_open == datetime(2026, 4, 21, 10, 0, tzinfo=timezone.utc)
-    assert pos.sl is None and pos.tp is None  # 0.0 → None
-    assert pos.comment is None  # "" → None
+    assert pos.sl is None and pos.tp is None  # 0.0 -> None
+    assert pos.comment is None  # "" -> None
 
 
 def test_position_sell_type():
@@ -123,7 +123,7 @@ def test_symbol_info_calc_mode_mapping():
     assert symbol_info_from_raw(FakeSymbolInfo(trade_calc_mode=4)).calc_mode == "cfd_leverage"
     assert symbol_info_from_raw(FakeSymbolInfo(trade_calc_mode=32)).calc_mode == "exch_stocks"
     assert symbol_info_from_raw(FakeSymbolInfo(trade_calc_mode=64)).calc_mode == "serv_collateral"
-    # Out-of-band → "unknown" (defensive).
+    # Out-of-band -> "unknown" (defensive).
     assert symbol_info_from_raw(FakeSymbolInfo(trade_calc_mode=999)).calc_mode == "unknown"
 
 

@@ -1,13 +1,13 @@
 # Installation & setup
 
-[← Back to README](../README.md)
+[<- Back to README](../README.md)
 
 ## Requirements
 
 - **Windows** (native) - the `MetaTrader5` library runs in-process; or
 - **Linux** - an all-in-one Docker image runs the MT5 terminal **and** the
   server, reachable over HTTP (see
-  [Linux](#linux--all-in-one-docker-image-recommended)). A host-side RPyC bridge
+  [Linux](#linux---all-in-one-docker-image-recommended)). A host-side RPyC bridge
   remains available as an alternative.
 - Python 3.10 or newer.
 - A running MetaTrader 5 terminal logged into a broker (native on Windows, or
@@ -83,7 +83,7 @@ login, and `mt5-mcp` serving MCP over HTTP. No host Python, no bridge, no
    volume - a few minutes. (If MT5's installer fails with `socket: Function not
    implemented`, restart the container.)
 3. **Log the terminal in once.** Open `http://127.0.0.1:3001` (KasmVNC; web auth
-   is `VNC_USER`/`VNC_PASSWORD` from `.env`) and choose **File → Login to Trade
+   is `VNC_USER`/`VNC_PASSWORD` from `.env`) and choose **File -> Login to Trade
    Account**. The login persists in the `mt5-mcp-config` volume, so every
    restart afterward is headless.
    > A cold programmatic login isn't reliable under Wine, so this one-time VNC
@@ -106,7 +106,11 @@ it. The commands above use it as-is; add `--build` only when you've modified
 
 ### Linux - host-side bridge (alternative)
 
-The MT5 terminal runs in a Wine container; the server connects over RPyC.
+The MT5 terminal runs in a Wine container; the server connects over RPyC. This
+path is **best-effort / unsupported**: it depends on a third-party image and on
+`mt5linux`/`rpyc` versions that drift, so it can need manual version-matching
+(see the bridge version note below). The recommended Linux path is the
+[all-in-one image](#linux---all-in-one-docker-image-recommended) above.
 
 1. Start the terminal container (compose file in
    [`examples/docker-compose.yml`](../examples/docker-compose.yml)):
@@ -128,7 +132,7 @@ The MT5 terminal runs in a Wine container; the server connects over RPyC.
    ```
    python -m mt5_mcp doctor
    ```
-   Expect `[INFO] backend: bridge → 127.0.0.1:8001` and `[PASS]` lines.
+   Expect `[INFO] backend: bridge -> 127.0.0.1:8001` and `[PASS]` lines.
 
    **Bridge version note:** the host's `mt5linux`/`rpyc` must be
    protocol-compatible with the container's RPyC server. The stock image ships

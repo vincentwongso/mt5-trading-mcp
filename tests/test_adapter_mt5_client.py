@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
@@ -20,7 +19,7 @@ def client(fake_mt5: FakeMT5, frozen_utc):
 
 
 def test_connect_initialises_and_caches_offset(client: MT5Client, fake_mt5: FakeMT5, frozen_utc):
-    # Broker says 13:00 when real UTC is 10:00 → +180 min.
+    # Broker says 13:00 when real UTC is 10:00 -> +180 min.
     fake_mt5._terminal_info = FakeTerminalInfo(
         time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
     )
@@ -220,7 +219,7 @@ def test_connect_falls_back_when_terminal_info_lacks_time(fake_mt5: FakeMT5, fro
         # no `time` field - this is what some real MT5 builds omit
 
     fake_mt5._terminal_info = _BrokenTerminalInfo()
-    # No `_symbol_info_tick` entries → every probe call returns None.
+    # No `_symbol_info_tick` entries -> every probe call returns None.
     client = MT5Client(mt5_module=fake_mt5)
 
     import logging
@@ -259,7 +258,7 @@ def test_connect_derives_offset_from_tick_when_terminal_info_lacks_time(
 
     fake_mt5._terminal_info = _BrokenTerminalInfo()
     # Broker says 13:00 (broker-local-treated-as-UTC) when real UTC
-    # is 10:00 → +180 min. The frozen_utc fixture pins real now
+    # is 10:00 -> +180 min. The frozen_utc fixture pins real now
     # to 2026-04-21T10:00:00Z.
     fake_mt5._symbol_info_tick["BTCUSD"] = FakeTick(
         time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
@@ -364,7 +363,8 @@ def test_resolve_native_when_no_bridge(monkeypatch):
 
 
 def test_resolve_bridge_constructs_client_with_host_port(monkeypatch):
-    import sys, types
+    import sys
+    import types
     from mt5_mcp.adapter import mt5_client as mod
     from mt5_mcp.config import Config
 
@@ -423,17 +423,17 @@ def test_connect_with_credentials_passes_login_password_server(fake_mt5, frozen_
     initialize(login=, password=, server=) - the headless/container boot path."""
     c = MT5Client(
         mt5_module=fake_mt5,
-        login=7000592, password="s3cret", server="Fintrix-Live",
+        login=12345678, password="s3cret", server="MetaQuotes-Demo",
     )
     c.connect()
     kwargs = fake_mt5.initialize_calls[-1]["kwargs"]
-    assert kwargs["login"] == 7000592
+    assert kwargs["login"] == 12345678
     assert kwargs["password"] == "s3cret"
-    assert kwargs["server"] == "Fintrix-Live"
+    assert kwargs["server"] == "MetaQuotes-Demo"
 
 
 def test_connect_without_credentials_uses_bare_initialize(fake_mt5, frozen_utc):
-    """No creds → pure attach to an already-logged-in terminal (the VNC-login
+    """No creds -> pure attach to an already-logged-in terminal (the VNC-login
     path). initialize() must carry no login/password/server."""
     c = MT5Client(mt5_module=fake_mt5)
     c.connect()
@@ -459,7 +459,7 @@ def test_connect_with_login_but_no_password_bare_attaches(fake_mt5, frozen_utc):
     but no password, because the human logs in via VNC - must NOT pass login= to
     initialize(). A partial set would make mt5lib reject/replace the existing
     attach; bare-attach instead."""
-    c = MT5Client(mt5_module=fake_mt5, login=7000592, server="Fintrix-Live")
+    c = MT5Client(mt5_module=fake_mt5, login=12345678, server="MetaQuotes-Demo")
     c.connect()
     call = fake_mt5.initialize_calls[-1]
     assert call["args"] == ()
@@ -522,7 +522,7 @@ def test_connect_retries_exhausted_raises(fake_mt5, monkeypatch):
 
 
 def test_connect_default_does_not_retry(fake_mt5, monkeypatch):
-    """No retries configured (native/attach path) → single attempt, no sleep."""
+    """No retries configured (native/attach path) -> single attempt, no sleep."""
     fake_mt5._initialize = False
     slept: list[float] = []
     monkeypatch.setattr("mt5_mcp.adapter.mt5_client.time.sleep", lambda s: slept.append(s))

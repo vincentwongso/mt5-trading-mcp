@@ -160,7 +160,9 @@ def register(mcp: FastMCP) -> None:
         currency.
         """
         ctx = get_context()
-        info = ctx.symbols.get(symbol)
+        # Select the symbol into Market Watch and surface SYMBOL_NOT_FOUND for
+        # unknown symbols; the returned info is not needed here.
+        ctx.symbols.get(symbol)
         # Resolve price from current tick when not supplied.
         if price is None:
             tick = ctx.client.call(lambda m: m.symbol_info_tick(symbol))

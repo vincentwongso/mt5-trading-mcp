@@ -1,6 +1,6 @@
 # Transports & deployment
 
-[← Back to README](../README.md)
+[<- Back to README](../README.md)
 
 ## Transports
 
@@ -19,11 +19,11 @@ subprocess:
 python -m mt5_mcp serve --transport http
 ```
 
-Constraints in v1.0:
+Constraints (current release):
 
 - **Loopback-only** (`127.0.0.1`, `::1`, `localhost`). Binding to any other
   address raises a startup error. Direct LAN/internet exposure is intentionally
-  not supported in v1.0; see [Deploying to a Windows VPS](#deploying-to-a-windows-vps)
+  not supported; see [Deploying to a Windows VPS](#deploying-to-a-windows-vps)
   below for the secure alternative.
 - **Optional bearer-token authentication** via `transport.http.auth_token` in
   `config.toml`. When set, every request must carry
@@ -88,7 +88,7 @@ without ever exposing the HTTP port to the public internet. Use the
 example to register it with Claude Desktop.
 
 This is the secure default for remote MT5 terminals. Direct non-loopback HTTP
-binding is intentionally **not** supported in v1.0 - it would require a TLS
+binding is intentionally **not** supported - it would require a TLS
 termination story and tighter auth than a single bearer token. If you need it
 for a real deployment, please open an issue describing the use case.
 

@@ -4,16 +4,13 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-import pytest
 
 from mt5_mcp.adapter.mt5_client import MT5Client
 from mt5_mcp.config import StreamingSection
 from mt5_mcp.errors import MT5Error, terminal_not_connected_error
-from mt5_mcp.streaming.dispatcher import Dispatcher
 from mt5_mcp.streaming.poller import Poller
 from mt5_mcp.streaming.snapshots import (
     AccountSnapshot,
-    PositionSnapshot,
     TickSnapshot,
 )
 from tests.fakes import FakeAccountInfo, FakeMT5, FakePosition, FakeTick
@@ -192,8 +189,10 @@ def test_account_error_dispatch_fires_after_three_failures():
     p = Poller(client=_FakeFailingClient(n_failures=10), dispatcher=disp,
                config=_streaming_cfg(account_poll_interval_ms=100))
     p.poll_once()
-    time.sleep(0.20); p.poll_once()
-    time.sleep(0.20); p.poll_once()
+    time.sleep(0.20)
+    p.poll_once()
+    time.sleep(0.20)
+    p.poll_once()
     assert disp.account_errors == 1
 
 
@@ -202,8 +201,10 @@ def test_positions_error_dispatch_fires_after_three_failures():
     p = Poller(client=_FakeFailingClient(n_failures=10), dispatcher=disp,
                config=_streaming_cfg(positions_poll_interval_ms=100))
     p.poll_once()
-    time.sleep(0.20); p.poll_once()
-    time.sleep(0.20); p.poll_once()
+    time.sleep(0.20)
+    p.poll_once()
+    time.sleep(0.20)
+    p.poll_once()
     assert disp.positions_errors == 1
 
 
@@ -226,8 +227,9 @@ def test_recovery_resets_failure_counter():
         return real_call(fn)
 
     client.call = flaky_call  # type: ignore[assignment]
-    p.poll_once(); p.poll_once()
-    # Third call succeeds → counter resets, no error fired.
+    p.poll_once()
+    p.poll_once()
+    # Third call succeeds -> counter resets, no error fired.
     p.poll_once()
     assert disp.quote_errors == []
     # And the success delivered a tick.

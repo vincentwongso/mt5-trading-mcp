@@ -150,7 +150,7 @@ def test_get_rates_unknown_symbol(server_and_mt5):
 def test_get_rates_no_history(server_and_mt5):
     server, fake = server_and_mt5
     fake._symbol_info["EURUSD"] = FakeSymbolInfo(name="EURUSD")
-    # No rows configured for (EURUSD, D1) → fake returns None.
+    # No rows configured for (EURUSD, D1) -> fake returns None.
     fake._copy_rates_from_pos[("EURUSD", TIMEFRAME_D1)] = None  # type: ignore[assignment]
     out = _call(server, "get_rates", symbol="EURUSD", timeframe="D1", count=10)
     assert out["error"]["code"] == "NO_RATES_AVAILABLE"

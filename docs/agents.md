@@ -15,12 +15,12 @@ run, follow this procedure.**
      (it uses the published image; add `--build` only for local `deploy/`
      changes). The server runs in the container and serves MCP over HTTP; the
      one-time VNC login + bridge alternative are in `docs/installation.md`.
-3. **Verify before doing anything else:** Windows → `python -m mt5_mcp doctor`
-   (expect the backend + `[PASS]` lines); Docker image → after the human's
+3. **Verify before doing anything else:** Windows -> `python -m mt5_mcp doctor`
+   (expect the backend + `[PASS]` lines); Docker image -> after the human's
    one-time VNC login, your first `ping` returns `ok: true`. Do **not** proceed
    if verification fails - report it to the human and stop.
-4. **Register / run the server:** Docker image → it's already serving; register
-   `http://127.0.0.1:8765/mcp`. Windows → `python -m mt5_mcp serve` (stdio) with
+4. **Register / run the server:** Docker image -> it's already serving; register
+   `http://127.0.0.1:8765/mcp`. Windows -> `python -m mt5_mcp serve` (stdio) with
    a config under [`examples/clients/`](../examples/clients/) (e.g.
    [`hermes.json`](../examples/clients/hermes.json)) that scopes you to the
    read-only tools by default.
@@ -34,6 +34,7 @@ run, follow this procedure.**
    on a demo assumption - confirm it's a demo account first.
 
 Tool semantics and the full consent flow: **[docs/tools.md](tools.md)**.
-Under Claude Code, cloning this repo wires up the MCP server (`.mcp.json`) and
-auto-loads the `.claude/skills/` (market-data + trading) - see
-**[docs/clients.md](clients.md)** for how that fits together.
+Under Claude Code, cloning this repo auto-loads the `.claude/skills/`
+(market-data + trading); you register the MCP server yourself (one
+`claude mcp add` command) - see **[docs/clients.md](clients.md)** for how that
+fits together.

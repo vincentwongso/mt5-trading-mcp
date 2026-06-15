@@ -63,8 +63,9 @@ class MT5Section(_Sub):
     # runs in well under a second on the main thread, so doing it eagerly at
     # startup keeps the first tool call fast. If the startup connect fails (e.g.
     # the terminal isn't up yet) the server still starts and falls back to the
-    # lazy connect on first use. Equivalent to `serve --eager-connect`.
-    eager_connect: bool = False
+    # lazy connect on first use. On by default; disable with
+    # `serve --no-eager-connect` or `[mt5] eager_connect = false`.
+    eager_connect: bool = True
 
 
 class PolicySection(_Sub):

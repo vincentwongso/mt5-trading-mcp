@@ -1,6 +1,6 @@
 # Tools & resources
 
-[← Back to README](../README.md)
+[<- Back to README](../README.md)
 
 `mt5-mcp` exposes the MetaTrader 5 terminal as a set of MCP tools and
 subscribable resources.
@@ -25,9 +25,9 @@ subscribable resources.
 
 | Tool | Purpose | Gate |
 |---|---|---|
-| `place_order` | Market or pending order with optional SL/TP/deviation. | When armed: notional ≥ `auto_approve_notional` → `ApprovalPreview`. |
-| `modify_order` | Change SL/TP/expiry on a position or pending order. | When armed: widening or removing SL/TP on a position → `ApprovalPreview`. Tightening auto-approves. |
-| `close_position` | Close a position by ticket, in full or part. | When armed: notional ≥ `auto_approve_notional` → `ApprovalPreview`. |
+| `place_order` | Market or pending order with optional SL/TP/deviation. | When armed: notional ≥ `auto_approve_notional` -> `ApprovalPreview`. |
+| `modify_order` | Change SL/TP/expiry on a position or pending order. | When armed: widening or removing SL/TP on a position -> `ApprovalPreview`. Tightening auto-approves. |
+| `close_position` | Close a position by ticket, in full or part. | When armed: notional ≥ `auto_approve_notional` -> `ApprovalPreview`. |
 | `cancel_order` | Cancel a pending order by ticket. | Never gates (reduces exposure). |
 
 > **The gate is opt-in and off by default.** `auto_approve_notional` defaults to

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -106,7 +105,7 @@ def test_default_config_is_full_open(tmp_path, frozen_utc):
                                             volume=0.10, price=1.0824)
     cfg = tmp_path / "config.toml"
     cfg.write_text(
-        # No [policy] block → auto_approve_notional defaults to 0 (gate off).
+        # No [policy] block -> auto_approve_notional defaults to 0 (gate off).
         f'[idempotency]\npath = "{(tmp_path / "i.db").as_posix()}"\n'
         f'[audit]\npath = "{(tmp_path / "a.jsonl").as_posix()}"\n'
     )

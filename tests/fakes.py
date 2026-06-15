@@ -280,10 +280,10 @@ class FakeMT5:
     _orders_get: tuple[FakeOrder, ...] = field(default_factory=tuple)
     _history_deals_get: tuple[FakeDeal, ...] = field(default_factory=tuple)
     _order_send: FakeOrderSendResult | None = field(default_factory=FakeOrderSendResult)
-    # Keyed by (symbol, timeframe) → tuple of FakeRate. Missing key → empty tuple.
+    # Keyed by (symbol, timeframe) -> tuple of FakeRate. Missing key -> empty tuple.
     _copy_rates_from_pos: dict[tuple[str, int], tuple[FakeRate, ...]] = field(default_factory=dict)
     # Keyed by (symbol, action) where action is ORDER_TYPE_BUY (0) or
-    # ORDER_TYPE_SELL (1). Missing key → 0.0; explicitly setting None means
+    # ORDER_TYPE_SELL (1). Missing key -> 0.0; explicitly setting None means
     # "broker error" and the adapter raises in that case.
     _order_calc_margin: dict[tuple[str, int], float | None] = field(default_factory=dict)
     # `order_send_calls` records the request dict passed to each order_send

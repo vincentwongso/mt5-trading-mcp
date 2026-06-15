@@ -50,8 +50,8 @@ Full catalogue and the consent flow: **[docs/tools.md](https://github.com/vincen
 ## Why mt5-mcp
 
 - **A safety layer, not just an API wrapper.** Every mutating call routes through
-  preflight checks → an opt-in human-consent gate (arm it to require approval) →
-  idempotency → an append-only audit log, so you can put a human in the loop on
+  preflight checks -> an opt-in human-consent gate (arm it to require approval) ->
+  idempotency -> an append-only audit log, so you can put a human in the loop on
   trades and always keep a replayable record of what the agent did.
 - **An honest threat model.** It treats an LLM wired to `place_order` as a live
   attack surface and says so plainly - the MCP is explicitly *not* the security
@@ -90,7 +90,7 @@ docker compose -f deploy/docker-compose.yml up -d
 ```
 
 Log the terminal in once via the KasmVNC web UI at `http://127.0.0.1:3001`
-(**File → Login to Trade Account**; persists across restarts), then point your
+(**File -> Login to Trade Account**; persists across restarts), then point your
 agent at `http://127.0.0.1:8765/mcp`. Wire it to OpenClaw in one command:
 
 ```bash
@@ -169,7 +169,7 @@ JSONL log regardless. For vulnerability disclosure, see
  └──────────────────────────────────────────────────────────┘
                                │
                                ▼
-MetaTrader 5 Python library  →  broker terminal  →  broker server
+MetaTrader 5 Python library  ->  broker terminal  ->  broker server
 ```
 
 The module paths shown (`tools/`, `resources/`, `policy/`, `streaming/`,

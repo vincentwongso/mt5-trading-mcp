@@ -83,7 +83,7 @@ def test_load_default_location(monkeypatch, tmp_path: Path):
     Config populated with defaults."""
     monkeypatch.setenv("APPDATA", str(tmp_path))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    cfg = load_config()  # no argument; no file on disk → defaults
+    cfg = load_config()  # no argument; no file on disk -> defaults
     assert isinstance(cfg, Config)
     assert cfg.policy.auto_approve_notional == Decimal("0")  # default
 
@@ -254,10 +254,10 @@ def test_mt5_login_server_from_config_when_no_env(tmp_path, monkeypatch):
     monkeypatch.delenv("MT5_LOGIN", raising=False)
     monkeypatch.delenv("MT5_SERVER", raising=False)
     cfg_file = tmp_path / "config.toml"
-    cfg_file.write_text('[mt5]\nlogin = 7000592\nserver = "Fintrix-Live"\n', encoding="utf-8")
+    cfg_file.write_text('[mt5]\nlogin = 12345678\nserver = "MetaQuotes-Demo"\n', encoding="utf-8")
     cfg = load_config(cfg_file)
-    assert cfg.mt5.login == 7000592
-    assert cfg.mt5.server == "Fintrix-Live"
+    assert cfg.mt5.login == 12345678
+    assert cfg.mt5.server == "MetaQuotes-Demo"
 
 
 def test_mt5_login_server_env_overrides_config(tmp_path, monkeypatch):
@@ -272,13 +272,13 @@ def test_mt5_login_server_env_overrides_config(tmp_path, monkeypatch):
 
 def test_mt5_login_server_from_env_when_no_config_keys(tmp_path, monkeypatch):
     """The container path: creds arrive purely via env, no [mt5] keys."""
-    monkeypatch.setenv("MT5_LOGIN", "7000592")
-    monkeypatch.setenv("MT5_SERVER", "Fintrix-Live")
+    monkeypatch.setenv("MT5_LOGIN", "12345678")
+    monkeypatch.setenv("MT5_SERVER", "MetaQuotes-Demo")
     cfg_file = tmp_path / "config.toml"
     cfg_file.write_text("", encoding="utf-8")
     cfg = load_config(cfg_file)
-    assert cfg.mt5.login == 7000592
-    assert cfg.mt5.server == "Fintrix-Live"
+    assert cfg.mt5.login == 12345678
+    assert cfg.mt5.server == "MetaQuotes-Demo"
 
 
 def test_mt5_login_defaults_none_without_env_or_config(tmp_path, monkeypatch):
@@ -309,7 +309,7 @@ def test_mt5_password_field_rejected_in_config(tmp_path):
 
 def test_mt5_password_env_not_loaded_into_config(tmp_path, monkeypatch):
     monkeypatch.setenv("MT5_PASSWORD", "topsecret")
-    monkeypatch.setenv("MT5_LOGIN", "7000592")
+    monkeypatch.setenv("MT5_LOGIN", "12345678")
     cfg_file = tmp_path / "config.toml"
     cfg_file.write_text("", encoding="utf-8")
     cfg = load_config(cfg_file)

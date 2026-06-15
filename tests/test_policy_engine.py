@@ -62,7 +62,7 @@ def test_under_threshold_executes_directly(engine: PolicyEngine, tmp_path):
     with engine.guard("place_order", req,
                       requires_approval=False, preflight_inputs=inputs) as g:
         assert g.short_circuit is None
-        raw = g.execute(lambda: _raw_done(order=42))
+        g.execute(lambda: _raw_done(order=42))
         out = g.finalize(_raw_to_result, request_echo={"symbol": "EURUSD"})
 
     assert out["success"] is True
@@ -138,7 +138,7 @@ def test_approval_confirmed_executes_when_retry_matches(tmp_path: Path):
                      symbol_point=Decimal("0.00001"),
                      preflight_inputs=PreflightInputs(notional=Decimal("54000"))) as g:
             assert g.short_circuit is None
-            raw = g.execute(lambda: _raw_done(order=99))
+            g.execute(lambda: _raw_done(order=99))
             out = g.finalize(_raw_to_result, request_echo={"symbol": "EURUSD"})
         assert out["success"] is True and out["ticket"] == 99
     finally:
@@ -243,7 +243,7 @@ def test_velocity_cap_blocks_place_orders_beyond_limit(tmp_path: Path):
         assert "error" in blocked
         assert blocked["error"]["code"] == "EXCEEDS_LOCAL_LIMIT"
         assert blocked["error"]["details"]["limit_name"] == "max_orders_per_minute"
-        # Advance past the 60s window → the cap resets.
+        # Advance past the 60s window -> the cap resets.
         clock[0] += 61.0
         assert place(4)["success"] is True
     finally:

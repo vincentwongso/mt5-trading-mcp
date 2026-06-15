@@ -1,4 +1,4 @@
-"""Convert raw MetaTrader5 types → our Pydantic models.
+"""Convert raw MetaTrader5 types -> our Pydantic models.
 
 The `MetaTrader5` library returns naive epoch ints in broker-server time
 (most retail brokers = EET). We subtract the broker offset to land on UTC.
@@ -16,6 +16,8 @@ from mt5_mcp.types import (
     CalcMarginResult,
     Deal,
     Order,
+    OrderRequest,
+    OrderResult,
     Position,
     Quote,
     SymbolInfo,
@@ -434,7 +436,7 @@ def order_result_from_mt5_response(
     Tests may omit it; details just won't include last_error.
     """
     from mt5_mcp.errors import error_for_retcode
-    from mt5_mcp.types import ErrorDetail, OrderResult
+    from mt5_mcp.types import ErrorDetail
 
     if raw is None:
         # mt5lib's order_send returns None when it rejects the request before

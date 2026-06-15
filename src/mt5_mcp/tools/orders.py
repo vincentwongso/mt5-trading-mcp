@@ -12,6 +12,13 @@ from mt5_mcp.adapter.conversions import (
     order_from_raw,
 )
 from mt5_mcp.errors import MT5Error, invalid_request_error
+from mt5_mcp.policy.consent import new_request_id
+from mt5_mcp.policy.preflight import PreflightInputs
+from mt5_mcp.server import get_context
+from mt5_mcp.tools._common import error_envelope
+from mt5_mcp.types import (
+    ApprovalPreview, ErrorDetail, Order, OrderRequest, Quote,
+)
 
 
 def _to_decimal(value: str, *, field: str) -> Decimal:
@@ -27,13 +34,6 @@ def _to_decimal(value: str, *, field: str) -> Decimal:
         raise MT5Error(invalid_request_error(
             field=field, value=value, reason=f"not a valid decimal ({exc})",
         )) from exc
-from mt5_mcp.policy.consent import new_request_id
-from mt5_mcp.policy.preflight import PreflightInputs
-from mt5_mcp.server import get_context
-from mt5_mcp.tools._common import error_envelope
-from mt5_mcp.types import (
-    ApprovalPreview, ErrorDetail, Order, OrderRequest, Quote,
-)
 
 
 def register(mcp: FastMCP) -> None:

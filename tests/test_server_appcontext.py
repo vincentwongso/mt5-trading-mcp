@@ -2,9 +2,8 @@
 
 from pathlib import Path
 
-import pytest
 
-from mt5_mcp.server import build_context, build_server, reset_context_for_tests
+from mt5_mcp.server import build_context, reset_context_for_tests
 from mt5_mcp.streaming.dispatcher import Dispatcher
 from mt5_mcp.streaming.poller import Poller
 from tests.fakes import FakeMT5

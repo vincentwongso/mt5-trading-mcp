@@ -16,7 +16,6 @@ from typing import Protocol
 
 from mt5_mcp.streaming.snapshots import (
     AccountSnapshot,
-    PositionSnapshot,
     TickSnapshot,
 )
 

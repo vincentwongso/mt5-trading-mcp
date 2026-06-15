@@ -11,15 +11,15 @@ The `mt5-mcp` MCP server exposes eleven read-only tools and three resources that
 
 Each tool name below is the MCP tool name (Claude Code surfaces them as `mcp__mt5-mcp__<tool>`).
 
-**`ping`** → `{ok: bool, latency_ms: int}` - health check. Cheap; call this first if anything looks wrong (especially if a previous call returned `TERMINAL_NOT_CONNECTED`).
+**`ping`** -> `{ok: bool, latency_ms: int}` - health check. Cheap; call this first if anything looks wrong (especially if a previous call returned `TERMINAL_NOT_CONNECTED`).
 
-**`get_terminal_info`** → broker server name, login, latency, broker timezone offset. Use when the user asks "what broker am I connected to" or you need to confirm the terminal is healthy before a sequence of reads.
+**`get_terminal_info`** -> broker server name, login, latency, broker timezone offset. Use when the user asks "what broker am I connected to" or you need to confirm the terminal is healthy before a sequence of reads.
 
-**`get_account_info`** → balance, equity, margin, free margin, leverage, currency, margin mode. Use for any question about account state, P&L (equity − balance ≈ floating P&L), or buying power.
+**`get_account_info`** -> balance, equity, margin, free margin, leverage, currency, margin mode. Use for any question about account state, P&L (equity − balance ≈ floating P&L), or buying power.
 
-**`get_quote(symbol)`** → current `bid`, `ask`, `time` for one symbol. Use when the user asks about the current price, spread, or last tick. Symbols are auto-prepared in Market Watch on first use.
+**`get_quote(symbol)`** -> current `bid`, `ask`, `time` for one symbol. Use when the user asks about the current price, spread, or last tick. Symbols are auto-prepared in Market Watch on first use.
 
-**`get_symbols(category=None)`** → list of tradeable instruments with metadata. Each entry exposes:
+**`get_symbols(category=None)`** -> list of tradeable instruments with metadata. Each entry exposes:
 
 - Identity: `name`, `description`, `category`, `digits`, `is_tradeable`, `filling_modes`
 - Pricing: `tick_size` (price increment), `tick_value` / `tick_value_profit` / `tick_value_loss` (cash value of one tick in deposit currency), `contract_size`
@@ -32,17 +32,17 @@ Each tool name below is the MCP tool name (Claude Code surfaces them as `mcp__mt
 
 Optionally filter by category like `"Forex"` or `"Metals"`. Use when the user wants to discover what they can trade, needs symbol metadata before placing an order, or needs swap rates / margin parameters / minimum SL distance.
 
-**`get_rates(symbol, timeframe, count)`** → list of OHLC bars, most recent first. `timeframe` is one of `M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`, `W1`, `MN1`. `count` is clamped to `[1, 5000]`. Each bar carries `time` (UTC), `open`, `high`, `low`, `close`, `tick_volume`, `real_volume`, `spread`. Use for indicator computation (ATR, RSI, EMA), volatility ranking, overbought/oversold detection - anything that needs price history rather than a single quote.
+**`get_rates(symbol, timeframe, count)`** -> list of OHLC bars, most recent first. `timeframe` is one of `M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`, `W1`, `MN1`. `count` is clamped to `[1, 5000]`. Each bar carries `time` (UTC), `open`, `high`, `low`, `close`, `tick_volume`, `real_volume`, `spread`. Use for indicator computation (ATR, RSI, EMA), volatility ranking, overbought/oversold detection - anything that needs price history rather than a single quote.
 
-**`calc_margin(symbol, side, volume, price=None)`** → broker-authoritative margin for a hypothetical order. Returns `{symbol, side, volume, price, margin, currency}` where `margin` is in deposit currency. If `price` is omitted, uses the current ask (buy) / bid (sell). Use this whenever the user asks "what would it cost to open X" - the broker's own answer is more reliable than any local formula because per-broker margin tables, hedged-position discounts, and exotic calc modes all factor in. Errors with `MARGIN_CALC_FAILED` if the broker refuses (e.g. invalid volume step, market closed, calc mode requires extra parameters).
+**`calc_margin(symbol, side, volume, price=None)`** -> broker-authoritative margin for a hypothetical order. Returns `{symbol, side, volume, price, margin, currency}` where `margin` is in deposit currency. If `price` is omitted, uses the current ask (buy) / bid (sell). Use this whenever the user asks "what would it cost to open X" - the broker's own answer is more reliable than any local formula because per-broker margin tables, hedged-position discounts, and exotic calc modes all factor in. Errors with `MARGIN_CALC_FAILED` if the broker refuses (e.g. invalid volume step, market closed, calc mode requires extra parameters).
 
-**`get_market_hours(symbol)`** → `{symbol, is_open, next_open, next_close}`. **v1 limitation: `next_open` and `next_close` are always `None`.** Only `is_open` (derived from broker `trade_mode`) is reliable. If the user wants precise session boundaries, point them at their broker's published schedule.
+**`get_market_hours(symbol)`** -> `{symbol, is_open, next_open, next_close}`. **v1 limitation: `next_open` and `next_close` are always `None`.** Only `is_open` (derived from broker `trade_mode`) is reliable. If the user wants precise session boundaries, point them at their broker's published schedule.
 
-**`get_positions(symbol=None)`** → list of open positions. Each carries ticket, symbol, side, volume, open price, current price, SL, TP, swap, profit, and open time. Use for "show me my positions" / "what am I holding" / "P&L per trade".
+**`get_positions(symbol=None)`** -> list of open positions. Each carries ticket, symbol, side, volume, open price, current price, SL, TP, swap, profit, and open time. Use for "show me my positions" / "what am I holding" / "P&L per trade".
 
-**`get_orders(symbol=None)`** → list of pending orders (limit / stop / stop-limit). Distinct from positions - these haven't filled yet.
+**`get_orders(symbol=None)`** -> list of pending orders (limit / stop / stop-limit). Distinct from positions - these haven't filled yet.
 
-**`get_history(from_ts, to_ts, symbol=None)`** → closed deals in the given UTC ISO 8601 range. Both timestamps must include a timezone (`Z` or `+00:00`); naive timestamps are rejected with `INVALID_TIMESTAMP`. Use for "what trades did I do yesterday / last week / since X".
+**`get_history(from_ts, to_ts, symbol=None)`** -> closed deals in the given UTC ISO 8601 range. Both timestamps must include a timezone (`Z` or `+00:00`); naive timestamps are rejected with `INVALID_TIMESTAMP`. Use for "what trades did I do yesterday / last week / since X".
 
 ## Resources
 
@@ -76,7 +76,7 @@ Tool failures arrive as MCP errors carrying a structured envelope: `{code, messa
 
 ## Workflow tips
 
-1. **Diagnostic posture.** When the user reports something off ("why is my equity wrong?"), start with `ping` → `get_terminal_info` → `get_account_info` to confirm the connection and account state before drilling into specific symbols.
+1. **Diagnostic posture.** When the user reports something off ("why is my equity wrong?"), start with `ping` -> `get_terminal_info` -> `get_account_info` to confirm the connection and account state before drilling into specific symbols.
 2. **One symbol vs all.** `get_positions(symbol="EURUSD")` is much cheaper than fetching all and filtering client-side. Use the optional symbol filter when you have one in hand.
 3. **Prefer tools over resources for one-shot questions.** Resources shine for "watch this" requests; for "what's the price right now", `get_quote` is the right call.
 4. **Don't compose your own broker schedules.** If the user wants "when does FX open Sunday night", consult their broker's website - `get_market_hours` only tells you whether it's open *now*.

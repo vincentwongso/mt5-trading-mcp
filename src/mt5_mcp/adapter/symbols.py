@@ -124,7 +124,7 @@ class SymbolPrep:
     def quantise_price(self, symbol: str, price: Decimal) -> Decimal:
         info = self.get(symbol)
         digits = int(info.digits)
-        q = Decimal(1).scaleb(-digits)  # e.g. digits=5 → 0.00001
+        q = Decimal(1).scaleb(-digits)  # e.g. digits=5 -> 0.00001
         return price.quantize(q, rounding=ROUND_HALF_UP)
 
     def pick_filling_mode(

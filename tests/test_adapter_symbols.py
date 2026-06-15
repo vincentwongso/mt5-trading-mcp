@@ -9,7 +9,7 @@ import pytest
 from mt5_mcp.adapter.mt5_client import MT5Client
 from mt5_mcp.adapter.symbols import SymbolPrep
 from mt5_mcp.errors import MT5Error
-from tests.fakes import FakeMT5, FakeSymbolInfo, FakeTerminalInfo
+from tests.fakes import FakeMT5, FakeSymbolInfo
 
 
 @pytest.fixture

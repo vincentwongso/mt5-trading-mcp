@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import pytest
 
 from mt5_mcp.config import (
-    Config, PolicySection, StreamingSection, TransportHTTPSection, TransportSection,
+    Config, PolicySection, TransportHTTPSection, TransportSection,
 )
 from mt5_mcp.transport import _is_loopback, run
 
@@ -70,7 +70,7 @@ class _StubFastMCP:
 
 def _cfg(host="127.0.0.1", port=8765, token="", trusted_hosts=None,
          trusted_origins=None, auto_approve="0"):
-    return Config(
+    cfg = Config(
         policy=PolicySection(auto_approve_notional=auto_approve),
         transport=TransportSection(
             http=TransportHTTPSection(
@@ -80,6 +80,10 @@ def _cfg(host="127.0.0.1", port=8765, token="", trusted_hosts=None,
             ),
         ),
     )
+    # Transport tests are not about eager-connect; keep it off so run() does not
+    # incidentally touch get_context(). The eager-connect tests opt in explicitly.
+    cfg.mt5.eager_connect = False
+    return cfg
 
 
 def test_run_stdio_calls_run_without_transport_kwargs():
@@ -100,7 +104,6 @@ def test_run_http_loopback_no_token_does_not_install_middleware():
 
 
 def test_run_http_with_token_installs_bearer_middleware():
-    from mt5_mcp.transport import BearerAuthMiddleware
     mcp = _StubFastMCP()
     run(mcp, transport="http", config=_cfg(token="s3cr3t"))
     assert len(mcp.middlewares) == 1
@@ -164,7 +167,7 @@ def test_run_unknown_transport_raises():
 
 
 def test_run_http_no_trusted_hosts_leaves_security_defaults_intact():
-    """Empty trusted_hosts/trusted_origins → FastMCP's localhost defaults are preserved as-is."""
+    """Empty trusted_hosts/trusted_origins -> FastMCP's localhost defaults are preserved as-is."""
     mcp = _StubFastMCP()
     run(mcp, transport="http", config=_cfg())
     assert mcp.settings.transport_security.allowed_hosts == ["127.0.0.1:*", "localhost:*", "[::1]:*"]
@@ -236,15 +239,15 @@ def test_run_eager_connect_calls_connect_before_serving(monkeypatch):
     assert order == ["connect", "run"]
 
 
-def test_run_eager_connect_off_by_default_skips_context(monkeypatch):
-    """Default (eager_connect False) must not touch the connection at startup, so
+def test_run_eager_connect_off_skips_context(monkeypatch):
+    """With eager_connect off, run() must not touch the connection at startup, so
     the server still starts when MT5 is offline (lazy path preserved)."""
     def _boom():
         raise AssertionError("get_context must not be called when eager_connect is off")
 
     monkeypatch.setattr("mt5_mcp.server.get_context", _boom)
     mcp = _StubFastMCP()
-    run(mcp, transport="stdio", config=_cfg())  # eager_connect defaults False
+    run(mcp, transport="stdio", config=_cfg())  # _cfg() pins eager_connect False
     assert mcp.last_args is not None  # server still started
 
 

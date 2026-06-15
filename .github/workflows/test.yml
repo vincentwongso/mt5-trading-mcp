@@ -7,6 +7,18 @@ on:
     branches: [main]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.1.0
+
+      - name: Ruff lint
+        run: uvx ruff@0.15.17 check .
+
   test:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15

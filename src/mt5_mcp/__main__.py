@@ -24,11 +24,12 @@ def _run_serve(argv: list[str]) -> int:
         help="Path to config TOML (default: per-OS user config dir).",
     )
     parser.add_argument(
-        "--eager-connect", action="store_true",
+        "--eager-connect", action=argparse.BooleanOptionalAction, default=None,
         help="Connect to MT5 at startup (main thread) instead of lazily on the "
-             "first tool call. Recommended for stdio clients (Claude Desktop / "
-             "Claude Code) to avoid a slow first call; falls back to lazy connect "
-             "if the terminal isn't up yet. Same as [mt5] eager_connect = true.",
+             "first tool call, so stdio clients (Claude Desktop / Claude Code) "
+             "don't hit a slow first call; falls back to lazy connect if the "
+             "terminal isn't up yet. On by default - use --no-eager-connect to "
+             "defer to lazy connect. Overrides [mt5] eager_connect.",
     )
     try:
         args = parser.parse_args(argv)
@@ -43,8 +44,8 @@ def _run_serve(argv: list[str]) -> int:
     config_path = Path(args.config) if args.config else None
     server = build_server(config_path=config_path)
     cfg = load_config(config_path)
-    if args.eager_connect:
-        cfg.mt5.eager_connect = True
+    if args.eager_connect is not None:
+        cfg.mt5.eager_connect = args.eager_connect
     try:
         run(server, transport=args.transport, config=cfg)
     except TransportConfigError as exc:

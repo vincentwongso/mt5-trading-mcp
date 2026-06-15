@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -11,8 +10,7 @@ import pytest
 from mt5_mcp.server import build_server
 from tests.fakes import (
     FakeAccountInfo, FakeMT5, FakeOrderSendResult, FakePosition, FakeSymbolInfo,
-    FakeTerminalInfo, FakeTick, POSITION_TYPE_BUY, POSITION_TYPE_SELL,
-    TRADE_RETCODE_DONE,
+    FakeTerminalInfo, FakeTick, POSITION_TYPE_BUY, TRADE_RETCODE_DONE,
 )
 
 
@@ -84,7 +82,7 @@ def test_close_blocked_by_max_realised_loss_per_close(tmp_path):
     fake._account_info = FakeAccountInfo()
     fake._symbol_info = {"EURUSD": FakeSymbolInfo(name="EURUSD", visible=True)}
     fake._symbol_info_tick = {"EURUSD": FakeTick(time=1, bid=1.05, ask=1.0501)}
-    # Buy at 1.10, current 1.05 → realising a loss of (1.10-1.05)*1.0 = 0.05 on volume=1.0.
+    # Buy at 1.10, current 1.05 -> realising a loss of (1.10-1.05)*1.0 = 0.05 on volume=1.0.
     fake._positions_get = (
         FakePosition(ticket=42, symbol="EURUSD", type=POSITION_TYPE_BUY,
                      volume=1.0, price_open=1.10, price_current=1.05,
@@ -125,7 +123,7 @@ def test_default_config_is_full_open_for_close(tmp_path, frozen_utc):
                                             volume=0.5, price=1.0823)
     cfg = tmp_path / "config.toml"
     cfg.write_text(
-        # No [policy] block → auto_approve_notional defaults to 0 (gate off).
+        # No [policy] block -> auto_approve_notional defaults to 0 (gate off).
         f'[idempotency]\npath = "{(tmp_path / "i.db").as_posix()}"\n'
         f'[audit]\npath = "{(tmp_path / "a.jsonl").as_posix()}"\n'
     )
@@ -166,7 +164,7 @@ def test_close_falls_back_to_price_current_when_tick_missing(server_and_mt5):
     out = _call(server, "close_position", ticket=42)
     assert out["success"] is True
     sent = fake.order_send_calls[0]
-    # Buy position close → SELL deal at price_current (1.0824 from fixture).
+    # Buy position close -> SELL deal at price_current (1.0824 from fixture).
     assert sent["type"] == fake.ORDER_TYPE_SELL
     assert sent["price"] == 1.0824
 

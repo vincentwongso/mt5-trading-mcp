@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-import pytest
 
 from mt5_mcp.policy.consent import ApprovalStore, validate_retry
 from mt5_mcp.types import ApprovalPreview, OrderRequest, Quote
@@ -43,7 +42,7 @@ def test_store_evicts_expired_on_pop():
     s = ApprovalStore()
     p = _preview(request_id="01HX0000000000000000000002", expires_in_seconds=-1)
     s.put(p)
-    assert s.pop("01HX0000000000000000000002") is None  # expired → treated as missing
+    assert s.pop("01HX0000000000000000000002") is None  # expired -> treated as missing
 
 
 def test_validate_retry_accepts_matching_request():
@@ -81,7 +80,7 @@ def test_validate_retry_rejects_price_drift_beyond_tolerance():
 
 
 def test_validate_retry_allows_drift_within_deviation_when_pct_tighter():
-    # ref_ask = 0.5; 0.5% of 0.5 = 0.0025; deviation=100 points × point=0.001 → 0.1.
+    # ref_ask = 0.5; 0.5% of 0.5 = 0.0025; deviation=100 points × point=0.001 -> 0.1.
     # Tolerance = max(0.0025, 0.1) = 0.1. Drift 0.05 is within.
     p = _preview(request_id="01HX0000000000000000000006",
                  symbol="X", deviation=100,

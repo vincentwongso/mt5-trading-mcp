@@ -2,7 +2,7 @@
 
 Schema: one row per (key, action) pair. Lookups are scoped by action so
 the same key can be re-used across different tool kinds without colliding.
-Same-key-same-hash → replay; same-key-different-hash → divergent (caller bug).
+Same-key-same-hash -> replay; same-key-different-hash -> divergent (caller bug).
 """
 
 from __future__ import annotations

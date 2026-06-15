@@ -36,7 +36,7 @@ def _annotation_mentions_decimal(ann: Any) -> bool:
 
 class _Base(BaseModel):
     model_config = ConfigDict(
-        # Reject silent float→Decimal coercion; callers must pass Decimal or
+        # Reject silent float->Decimal coercion; callers must pass Decimal or
         # numeric strings.
         strict=False,
     )

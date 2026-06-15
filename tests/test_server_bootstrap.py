@@ -66,19 +66,19 @@ def _sandbox_cfg(tmp_path) -> "object":
 
 
 def test_build_context_wires_credentials_from_env(monkeypatch, tmp_path):
-    """The container path: MT5_LOGIN/PASSWORD/SERVER env → MT5Client. Password
+    """The container path: MT5_LOGIN/PASSWORD/SERVER env -> MT5Client. Password
     reaches the client but is never stored on the Config object."""
     from mt5_mcp.server import build_context, get_context, reset_context_for_tests
 
-    monkeypatch.setenv("MT5_LOGIN", "7000592")
+    monkeypatch.setenv("MT5_LOGIN", "12345678")
     monkeypatch.setenv("MT5_PASSWORD", "hunter2")
-    monkeypatch.setenv("MT5_SERVER", "Fintrix-Live")
+    monkeypatch.setenv("MT5_SERVER", "MetaQuotes-Demo")
     reset_context_for_tests()
     build_context(mt5_module=FakeMT5(), config_path=_sandbox_cfg(tmp_path))
     try:
         client = get_context().client
-        assert client.login == 7000592
-        assert client.server == "Fintrix-Live"
+        assert client.login == 12345678
+        assert client.server == "MetaQuotes-Demo"
         assert client._password == "hunter2"
     finally:
         reset_context_for_tests()
@@ -102,10 +102,10 @@ def test_build_context_no_credentials_leaves_client_attaching(monkeypatch, tmp_p
 
 
 def test_build_context_enables_startup_retries_with_credentials(monkeypatch, tmp_path):
-    """Container boot (creds present) → connect() gets a startup wait window."""
+    """Container boot (creds present) -> connect() gets a startup wait window."""
     from mt5_mcp.server import build_context, get_context, reset_context_for_tests
 
-    monkeypatch.setenv("MT5_LOGIN", "7000592")
+    monkeypatch.setenv("MT5_LOGIN", "12345678")
     monkeypatch.setenv("MT5_PASSWORD", "pw")
     monkeypatch.setenv("MT5_SERVER", "S")
     reset_context_for_tests()
@@ -117,7 +117,7 @@ def test_build_context_enables_startup_retries_with_credentials(monkeypatch, tmp
 
 
 def test_build_context_no_startup_retries_when_attaching(monkeypatch, tmp_path):
-    """Native/attach path (no creds) → single connect attempt, fast-fail."""
+    """Native/attach path (no creds) -> single connect attempt, fast-fail."""
     from mt5_mcp.server import build_context, get_context, reset_context_for_tests
 
     monkeypatch.delenv("MT5_LOGIN", raising=False)

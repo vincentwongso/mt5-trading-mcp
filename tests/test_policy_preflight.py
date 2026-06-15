@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-import pytest
 
 from mt5_mcp.config import Config, PolicySection, SymbolsSection
 from mt5_mcp.policy.preflight import PreflightInputs, check_preflight_limits

@@ -53,7 +53,7 @@ If `approval_confirmed=true` but no preview was ever issued, or the `request_id`
 Always send an `idempotency_key` on **retries**, and always make it a UUIDv4 (or any unique string the user gives you). The engine remembers the result of the first call keyed by request hash; any subsequent call with the same key and the same request body returns the cached result instead of placing a duplicate trade. Two important rules:
 
 - **The hash excludes `approval_confirmed` and `approval_request_id`.** A preview-then-confirm pair counts as one logical request - the second call returns the cached approval-required envelope unless the user has confirmed.
-- **Same key, different body → `IDEMPOTENCY_DIVERGED`.** That's an agent bug. Use a fresh key for distinct requests; reuse a key only when retrying *the same* trade.
+- **Same key, different body -> `IDEMPOTENCY_DIVERGED`.** That's an agent bug. Use a fresh key for distinct requests; reuse a key only when retrying *the same* trade.
 
 For a fresh trade, omitting `idempotency_key` is fine - the engine generates one. Only set it explicitly when you're retrying after a network blip, ambiguous error, or a deliberate "make sure this is the same trade" flow.
 
@@ -88,7 +88,7 @@ If the user's account is a demo, the money is fake but **the execution is real**
 
 User: "Buy 0.10 lots of EURUSD at market."
 
-1. **Quote first** so the user has context: `get_quote(symbol="EURUSD")` → bid 1.08510, ask 1.08515.
+1. **Quote first** so the user has context: `get_quote(symbol="EURUSD")` -> bid 1.08510, ask 1.08515.
 2. **First call**:
    ```
    place_order(symbol="EURUSD", side="buy", type="market", volume="0.10")

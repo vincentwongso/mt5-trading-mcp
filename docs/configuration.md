@@ -1,6 +1,6 @@
 # Configuration
 
-[← Back to README](../README.md)
+[<- Back to README](../README.md)
 
 Configuration is optional - the server starts with built-in defaults if the
 file is absent.
@@ -37,7 +37,7 @@ denylist = []   # symbols here are always refused
 ttl_seconds = 86400  # 24h replay window for mutating tools that pass an idempotency_key
 
 [transport.http]
-# Only relevant when using --transport http. Loopback-only in v1.0.
+# Only relevant when using --transport http. Loopback-only.
 port = 8765
 auth_token = ""  # bearer token; EMPTY = unauthenticated (any local process can trade) - set one for HTTP
 

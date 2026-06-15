@@ -36,8 +36,8 @@ cd mt5-trading-mcp
 uv sync --extra dev
 ```
 
-(See [docs/installation.md](docs/installation.md) for the Linux/Docker bridge
-setup if you need a live terminal.)
+(See [docs/installation.md](docs/installation.md) for the Linux/Docker setup
+if you need a live terminal.)
 
 ## Running tests
 
@@ -103,8 +103,8 @@ Please keep these in mind - PRs that violate them will be sent back.
 
 - Every mutating tool computes its own `requires_approval` and routes through
   `ctx.policy.guard(...)`; the engine owns idempotency, consent, and audit. The
-  stage order is load-bearing - idempotency → confirmed-consent → pre-flight →
-  first-pass-consent → execute - so a bait-and-switch on a confirmed approval
+  stage order is load-bearing - idempotency -> confirmed-consent -> pre-flight ->
+  first-pass-consent -> execute - so a bait-and-switch on a confirmed approval
   surfaces as `INVALID_APPROVAL`, not `EXCEEDS_LOCAL_LIMIT`.
 - `request_hash` **excludes** the `approval_*` fields, so a retry with the same
   idempotency key replays the cached result regardless of approval token.
@@ -119,7 +119,7 @@ Please keep these in mind - PRs that violate them will be sent back.
   `epoch_to_utc(epoch, broker_offset_minutes)` is the single producer - don't
   add another timestamp source.
 - The broker-timezone offset is derived at connect time with a three-layer
-  fallback (`terminal_info().time` → freshest probe-symbol tick → `0`). Preserve
+  fallback (`terminal_info().time` -> freshest probe-symbol tick -> `0`). Preserve
   all three - brokers on EET (UTC+3) get every timestamp wrong if it silently
   degrades to `0`.
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -110,7 +109,7 @@ def test_widen_sl_auto_executes_when_gate_off(frozen_utc, tmp_path: Path):
                                             order=42, deal=0, volume=0.5, price=1.0824)
     cfg = tmp_path / "config.toml"
     cfg.write_text(
-        # No [policy] block → auto_approve_notional defaults to 0 (gate off).
+        # No [policy] block -> auto_approve_notional defaults to 0 (gate off).
         f'[idempotency]\npath = "{(tmp_path / "i.db").as_posix()}"\n'
         f'[audit]\npath = "{(tmp_path / "a.jsonl").as_posix()}"\n'
     )
@@ -140,7 +139,7 @@ def test_widen_with_no_quote_auto_executes_when_gate_off(frozen_utc, tmp_path: P
                                             order=42, deal=0, volume=0.5, price=1.0824)
     cfg = tmp_path / "config.toml"
     cfg.write_text(
-        # No [policy] block → auto_approve_notional defaults to 0 (gate off).
+        # No [policy] block -> auto_approve_notional defaults to 0 (gate off).
         f'[idempotency]\npath = "{(tmp_path / "i.db").as_posix()}"\n'
         f'[audit]\npath = "{(tmp_path / "a.jsonl").as_posix()}"\n'
     )
@@ -190,7 +189,7 @@ def test_modify_pending_order_with_expiration_uses_specified_time(server_and_mt5
 def test_widen_tp_on_sell_position_requires_approval(server_and_mt5):
     """SELL position: entered short at 1.0850, TP currently 1.0700 (below
     current 1.0823, taking profit on a drop). Moving TP to 1.0500 widens
-    the distance from current price → trips the approval gate.
+    the distance from current price -> trips the approval gate.
 
     Companion to test_widen_sl_on_position_requires_approval, which only
     covered BUY+SL. This pins both the SELL leg and the TP axis."""
@@ -228,14 +227,14 @@ def test_widen_tp_on_sell_position_round_trips_through_mt5_dict(server_and_mt5):
     assert sent["action"] == fake.TRADE_ACTION_SLTP
     assert sent["position"] == 43
     assert sent["tp"] == 1.0500
-    # SL was not requested → preserved from the original position.
+    # SL was not requested -> preserved from the original position.
     assert sent["sl"] == 1.0900
 
 
 def test_modify_unparseable_sl_returns_invalid_request(server_and_mt5):
     """Regression: a malformed SL string used to escape as INTERNAL_ERROR
     via `decimal.InvalidOperation`, losing which field broke. A caller's
-    'SL-modify failed → close the position' branch could then unwind a clean
+    'SL-modify failed -> close the position' branch could then unwind a clean
     fill. Now surfaces as INVALID_REQUEST with the offending field+value so
     callers can correct the next call."""
     server, fake = server_and_mt5

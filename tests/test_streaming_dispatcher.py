@@ -1,18 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
-import pytest
 
 from mt5_mcp.streaming.dispatcher import (
     Dispatcher,
-    Subscriber,
     SubscriptionHandle,
 )
 from mt5_mcp.streaming.snapshots import (
     AccountSnapshot,
-    PositionSnapshot,
     TickSnapshot,
 )
 

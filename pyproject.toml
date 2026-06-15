@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
 name = "mt5-trading-mcp"
-version = "1.3.1"
+version = "1.3.2"
 description = "MCP server for MetaTrader 5: let an AI agent read market data, watch trades, and place real trades - behind a consent/audit safety layer. Windows + Linux (Docker)."
 readme = "README.md"
 keywords = [
@@ -20,14 +20,14 @@ keywords = [
   "llm",
   "fastmcp",
 ]
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Vincent Wongso Saputro", email = "vincent.wongso.saputro@gmail.com" }]
 requires-python = ">=3.10"
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
   "Intended Audience :: Financial and Insurance Industry",
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -56,9 +56,11 @@ dev = [
   "freezegun>=1.4",
   "httpx>=0.27",
 ]
-# Linux: connect to an MT5 terminal running in the gmag11/metatrader5_vnc
-# Docker container over RPyC. The client's rpyc must be protocol-compatible
-# with the container's server; see the README Linux setup for version notes.
+# Linux ALTERNATIVE (host-side bridge): connect to an MT5 terminal running in
+# the gmag11/metatrader5_vnc Docker container over RPyC. The recommended Linux
+# path is the all-in-one image (no bridge); see docs/installation.md. The
+# client's rpyc must be protocol-compatible with the container's server, which
+# can need manual version-matching (see the bridge version note in the docs).
 bridge = [
   "mt5linux",
 ]
@@ -75,6 +77,18 @@ Changelog = "https://github.com/vincentwongso/mt5-trading-mcp/blob/main/CHANGELO
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mt5_mcp"]
+
+[tool.hatch.build.targets.sdist]
+# Keep the published source distribution lean: the wheel only needs src/, and
+# the demo media / social card / CI + editor configs are GitHub-only assets.
+exclude = [
+  "demo",
+  ".github",
+  ".claude",
+]
+
+[tool.ruff]
+target-version = "py310"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

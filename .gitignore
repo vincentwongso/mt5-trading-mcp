@@ -26,6 +26,7 @@ tmp_symbols.csv
 
 # Tooling caches / user-local
 .rtk/
+.mcp.json
 .claude/settings.json
 .claude/settings.local.json
 

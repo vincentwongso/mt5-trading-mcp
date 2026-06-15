@@ -6,16 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-06-15
+
+### Changed
+
+- **Eager-connect is now the default.** The server connects to MT5 at startup on
+  the main thread, before entering the transport loop, instead of lazily on the
+  first tool call - so stdio clients (Claude Desktop / Claude Code) and HTTP
+  agents no longer hit a multi-minute first call while the `MetaTrader5`
+  C-extension initialises on FastMCP's asyncio event-loop thread. The startup
+  connect is non-fatal: if the terminal isn't up yet the server still starts and
+  falls back to the lazy path. Disable with `serve --no-eager-connect` or
+  `[mt5] eager_connect = false`; the `serve --eager-connect` flag still works.
+- **`.mcp.json` is no longer committed.** It is per-user Claude Code install
+  config; register the server yourself with `claude mcp add --transport stdio
+  --scope project mt5-mcp -- python -m mt5_mcp serve` (see docs/clients.md).
+  Cloning the repo still auto-loads the `.claude/skills/`.
+
+### Packaging
+
+- License metadata now uses the SPDX expression `license = "MIT"` (PEP 639)
+  instead of the deprecated table form plus license classifier.
+- The published source distribution is leaner: demo media, CI workflows, and
+  editor/agent config are excluded from the sdist (the wheel was already clean).
+
 ### Added
 
-- `serve --eager-connect` flag and `[mt5] eager_connect` config option: connect to
-  MT5 at startup on the main thread, before entering the transport loop, instead of
-  lazily on the first tool call. The lazy connect runs inside the first tool call on
-  FastMCP's asyncio event-loop thread, where the `MetaTrader5` C-extension's first
-  import + `initialize()` can take minutes - long enough to time out stdio clients
-  (Claude Desktop / Claude Code) on their very first request. The same connect runs
-  in well under a second on the main thread. The startup connect is non-fatal: if the
-  terminal isn't up yet the server still starts and falls back to the lazy path.
+- CI runs `ruff check` as a lint gate.
+
+### Documentation
+
+- Clarified the Linux host-side bridge as a best-effort / unsupported alternative
+  to the recommended all-in-one Docker image; fixed broken setup-doc anchors and
+  stale version references; switched repo text to ASCII.
 
 ## [1.3.1] - 2026-06-03
 
@@ -286,7 +309,7 @@ was absent, producing the rejection.
   `ORDER_FILLING_RETURN` unconditionally for `order_type` in
   `{limit, stop, stop_limit}`, regardless of the symbol's advertised
   filling mask. Market orders still consult the mask
-  (IOC → FOK fallback).
+  (IOC -> FOK fallback).
 - New regression test
   `test_pick_filling_mode_pending_returns_RETURN_even_without_BOC_bit`
   pins the new behavior against the IOC-only mask=2 case.
@@ -306,7 +329,7 @@ terminal immediately after upgrading to 1.0.10.
 ### Fixed
 
 - `MT5Client.ping()` now routes each layer through `self.call(...)`,
-  picking up the same transparent NOT_INITIALIZED → reinit → retry
+  picking up the same transparent NOT_INITIALIZED -> reinit -> retry
   behavior every other read tool has. The earlier "ping bypasses
   retry" rule is dropped - the layered `via` field already supplies
   the per-source diagnostic that probe-vs-recovered consumers would
@@ -360,7 +383,7 @@ the tool body raised `decimal.InvalidOperation: ConversionSyntax`, which
 `@error_envelope` swallowed as a generic `INTERNAL_ERROR` with no
 field-or-value detail. A caller unable to distinguish a caller-side parse
 bug from an actual broker fault could treat it as a broker fault and run a
-"SL-modify failed → close position" branch, unwinding a clean position.
+"SL-modify failed -> close position" branch, unwinding a clean position.
 Same class of trap exists in `place_order` for any of `volume`, `price`,
 `stop_limit_price`, `sl`, `tp`.
 
@@ -493,7 +516,7 @@ Surface enrichment to support downstream reasoning skills (CFD trading skills co
 
 ### Changed
 
-- **PyPI distribution renamed `mt5-mcp` → `mt5-trading-mcp`.** The short name `mt5-mcp` was already taken on PyPI by an unrelated project (versions 0.4.0-0.5.2), which had quietly blocked every prior publish attempt. `1.0.3` is the first version actually published to PyPI; the `1.0.0`-`1.0.2` tags exist only as Git tags. Install command is now `pip install mt5-trading-mcp`. The CLI command (`mt5-mcp`), Python module (`mt5_mcp`), brand, repo URL, and storage paths are all unchanged - only the name on PyPI moves.
+- **PyPI distribution renamed `mt5-mcp` -> `mt5-trading-mcp`.** The short name `mt5-mcp` was already taken on PyPI by an unrelated project (versions 0.4.0-0.5.2), which had quietly blocked every prior publish attempt. `1.0.3` is the first version actually published to PyPI; the `1.0.0`-`1.0.2` tags exist only as Git tags. Install command is now `pip install mt5-trading-mcp`. The CLI command (`mt5-mcp`), Python module (`mt5_mcp`), brand, repo URL, and storage paths are all unchanged - only the name on PyPI moves.
 - `FakeSymbolInfo` extended with the broker-side fields above (sane defaults so existing tests are unaffected). `FakeMT5` gains `_copy_rates_from_pos`, `_order_calc_margin` slots and `TIMEFRAME_*` constants. New `FakeRate` dataclass.
 - `mt5-market-data` skill SKILL.md updated to document the two new tools and the enriched `SymbolInfo`.
 
@@ -534,7 +557,7 @@ First public release on PyPI. The underlying feature set is the cumulative outpu
 
 ### Changed
 
-- Bumped version `0.1.0` → `1.0.0`.
+- Bumped version `0.1.0` -> `1.0.0`.
 - README rewritten for first-time PyPI users; install instructions now lead with `pip install mt5-trading-mcp`. Repo URL updated to `vincentwongso/mt5-trading-mcp`.
 - `pyproject.toml` author and security contact updated to a personal identity.
 

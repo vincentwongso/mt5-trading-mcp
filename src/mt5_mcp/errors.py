@@ -1,4 +1,4 @@
-"""Error codes and MT5 retcode → ErrorDetail mapping."""
+"""Error codes and MT5 retcode -> ErrorDetail mapping."""
 
 from __future__ import annotations
 

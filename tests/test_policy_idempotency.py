@@ -73,7 +73,7 @@ def test_lookup_evicts_expired_entries(tmp_path: Path, monkeypatch):
     s.put(key="k1", action="place_order", request_hash="hash-2",
           result_json='{"ticket":99}')          # created 1_000_002, expires 1_000_003
     assert s.lookup(key="k1", action="place_order", request_hash="hash-2") \
-           == ("hit", '{"ticket":99}')          # 1_000_003 > 1_000_002 → hit
+           == ("hit", '{"ticket":99}')          # 1_000_003 > 1_000_002 -> hit
     s.close()
 
 

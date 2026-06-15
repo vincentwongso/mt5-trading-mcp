@@ -123,7 +123,7 @@ def build_context(
         # the server constructs even on a host without MetaTrader5 installed.
         from mt5_mcp.adapter.mt5_client import resolve_mt5_module
         backend_label = (
-            f"bridge → {cfg.mt5.bridge.host}:{cfg.mt5.bridge.port}"
+            f"bridge -> {cfg.mt5.bridge.host}:{cfg.mt5.bridge.port}"
             if cfg.mt5.bridge is not None
             else "native"
         )

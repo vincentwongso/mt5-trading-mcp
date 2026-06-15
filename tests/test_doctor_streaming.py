@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
-import pytest
 
 from mt5_mcp.cli.doctor import run_doctor
 from tests.fakes import FakeMT5, FakeSymbolInfo, FakeTerminalInfo, FakeTick

@@ -9,8 +9,7 @@ Drop-in config snippets are in
   a direct `mcp_servers` block with the read-only tools `include`-scoped (the
   launch/demo agent). See [Installation -> Wire it to an agent](installation.md#wire-it-to-an-agent).
 - **Claude Code:** [`claude-code.json`](../examples/clients/claude-code.json) -
-  register the server with `claude mcp add --scope project mt5-mcp -- python -m
-  mt5_mcp serve` (or save the snippet as `.mcp.json` in your project), then
+  register the server with `claude mcp add --scope project mt5-mcp -- python -m mt5_mcp serve` (or save the snippet as `.mcp.json` in your project), then
   read-only-scope it by allowlisting the eleven read tools in
   `.claude/settings.json` (`mcp__mt5-mcp__<tool>`). Cloning this repo auto-loads
   the project-scoped skills under `.claude/skills/`; you register the server and

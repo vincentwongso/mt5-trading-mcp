@@ -3,11 +3,13 @@
 **Let an AI agent manage your MetaTrader 5 account over [Model Context Protocol](https://modelcontextprotocol.io) - with configurable human approval gate.**
 
 [![PyPI version](https://img.shields.io/pypi/v/mt5-trading-mcp.svg)](https://pypi.org/project/mt5-trading-mcp/)
-[![PyPI downloads](https://img.shields.io/pypi/dm/mt5-trading-mcp.svg)](https://pypi.org/project/mt5-trading-mcp/)
+[![PyPI downloads](https://static.pepy.tech/badge/mt5-trading-mcp/month)](https://pepy.tech/project/mt5-trading-mcp)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://pypi.org/project/mt5-trading-mcp/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/LICENSE)
 [![Tests](https://img.shields.io/github/actions/workflow/status/vincentwongso/mt5-trading-mcp/test.yml?branch=main&label=tests)](https://github.com/vincentwongso/mt5-trading-mcp/actions/workflows/test.yml)
 [![GitHub stars](https://img.shields.io/github/stars/vincentwongso/mt5-trading-mcp?style=flat&label=stars)](https://github.com/vincentwongso/mt5-trading-mcp/stargazers)
+[![MCP](https://img.shields.io/badge/MCP-server-blue.svg)](https://modelcontextprotocol.io)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/vincentwongso/mt5-trading-mcp/main/demo/mt5-mcp-demo.gif" width="600" alt="mt5-mcp demo: an AI agent places and closes a live trade over MCP"><br>

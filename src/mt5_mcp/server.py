@@ -228,6 +228,15 @@ def build_server(
     ctx = build_context(config_path=config_path, mt5_module=mt5_module)
     cfg = ctx.config
     level = (log_level or cfg.logging.level).upper()
+    # The CLI flag, the [logging] level Literal, and the MT5_MCP_LOG_LEVEL env
+    # override all validate upstream; this guards the remaining path - a direct
+    # programmatic build_server(log_level=...) - so a bad value fails here with
+    # an actionable message instead of deep inside FastMCP/uvicorn.
+    valid = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+    if level not in valid:
+        raise ValueError(
+            f"log_level must be one of {sorted(valid)}, got {(log_level or cfg.logging.level)!r}"
+        )
     stateless = cfg.transport.http.stateless if stateless_http is None else stateless_http
     # FastMCP's constructor calls configure_logging(level) -> logging.basicConfig,
     # which sets the root level and installs a handler. uvicorn also reads this

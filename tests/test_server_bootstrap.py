@@ -1,5 +1,7 @@
 """Server scaffolding only - real tool behaviour tested in tests/test_tools_*.py."""
 
+import pytest
+
 from mt5_mcp.server import build_server, reset_context_for_tests
 from tests.fakes import FakeMT5
 
@@ -66,6 +68,22 @@ def test_build_server_explicit_args_override_config(tmp_path):
     try:
         assert server.settings.stateless_http is False
         assert server.settings.log_level == "INFO"
+    finally:
+        reset_context_for_tests()
+
+
+def test_build_server_rejects_invalid_log_level(tmp_path):
+    """A bad programmatic log_level fails deterministically here, not deep in
+    FastMCP/uvicorn."""
+    reset_context_for_tests()
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+    try:
+        with pytest.raises(ValueError, match="log_level"):
+            build_server(mt5_module=FakeMT5(), config_path=cfg, log_level="warn")
     finally:
         reset_context_for_tests()
 

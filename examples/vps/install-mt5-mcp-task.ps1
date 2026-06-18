@@ -126,8 +126,11 @@ Write-Host "Registered scheduled task '$TaskName'." -ForegroundColor Green
 # the restart even when an instance is already running; a duplicate trigger
 # would just be ignored while the server is up.
 if (-not $NoDailyRestart) {
-    if ($DailyRestartAt -notmatch '^\d{2}:\d{2}$') {
-        throw "DailyRestartAt must be 'HH:mm' (24h), got '$DailyRestartAt'."
+    # Validate a real 24h time (00-23:00-59), not just the HH:mm shape, so a
+    # bogus value like "99:99" fails here with a clear message instead of
+    # surfacing later as a confusing New-ScheduledTaskTrigger error.
+    if ($DailyRestartAt -notmatch '^([01][0-9]|2[0-3]):[0-5][0-9]$') {
+        throw "DailyRestartAt must be a 24h time 'HH:mm' (00:00-23:59), got '$DailyRestartAt'."
     }
     # powershell.exe -Command runs in the user's interactive session (same
     # principal as the server task), so the restarted server lands back in the

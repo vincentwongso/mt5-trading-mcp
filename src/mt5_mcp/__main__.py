@@ -31,6 +31,22 @@ def _run_serve(argv: list[str]) -> int:
              "terminal isn't up yet. On by default - use --no-eager-connect to "
              "defer to lazy connect. Overrides [mt5] eager_connect.",
     )
+    parser.add_argument(
+        "--log-level", default=None,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        help="Root log level. Default (WARNING, via [logging] level) keeps an "
+             "unattended HTTP server quiet - no per-request access log or "
+             "transport chatter. Overrides MT5_MCP_LOG_LEVEL and [logging] level.",
+    )
+    parser.add_argument(
+        "--stateless", action=argparse.BooleanOptionalAction, default=None,
+        help="HTTP only: handle each request with a fresh, immediately torn-down "
+             "transport instead of one persistent transport per MCP session. On "
+             "by default - it prevents the per-session memory growth seen with "
+             "polling clients. Use --no-stateless to keep persistent sessions "
+             "(needed only if a client subscribes for live resource updates). "
+             "Overrides [transport.http] stateless.",
+    )
     try:
         args = parser.parse_args(argv)
     except SystemExit as exc:
@@ -42,7 +58,11 @@ def _run_serve(argv: list[str]) -> int:
     from mt5_mcp.transport import TransportConfigError, run
 
     config_path = Path(args.config) if args.config else None
-    server = build_server(config_path=config_path)
+    server = build_server(
+        config_path=config_path,
+        log_level=args.log_level,
+        stateless_http=args.stateless,
+    )
     cfg = load_config(config_path)
     if args.eager_connect is not None:
         cfg.mt5.eager_connect = args.eager_connect

@@ -77,6 +77,49 @@ def test_load_missing_file_raises(tmp_path: Path):
         load_config(tmp_path / "nope.toml")
 
 
+def test_http_stateless_defaults_on(tmp_path: Path):
+    """Stateless HTTP is the default - it's what prevents the per-session
+    transport accumulation (the VPS memory leak)."""
+    p = tmp_path / "config.toml"
+    p.write_text(MINIMAL_TOML)
+    assert load_config(p).transport.http.stateless is True
+    assert Config().transport.http.stateless is True
+
+
+def test_http_stateless_can_be_disabled(tmp_path: Path):
+    p = tmp_path / "config.toml"
+    p.write_text(
+        MINIMAL_TOML.replace(
+            '[transport.http]\nauth_token = ""',
+            '[transport.http]\nauth_token = ""\nstateless = false',
+        )
+    )
+    assert load_config(p).transport.http.stateless is False
+
+
+def test_log_level_defaults_to_warning(tmp_path: Path):
+    p = tmp_path / "config.toml"
+    p.write_text(MINIMAL_TOML)
+    assert load_config(p).logging.level == "WARNING"
+    assert Config().logging.level == "WARNING"
+
+
+def test_log_level_env_override_wins_and_normalises(monkeypatch, tmp_path: Path):
+    """MT5_MCP_LOG_LEVEL overrides the file and is upper-cased."""
+    p = tmp_path / "config.toml"
+    p.write_text(MINIMAL_TOML + '\n[logging]\nlevel = "INFO"\n')
+    monkeypatch.setenv("MT5_MCP_LOG_LEVEL", "debug")
+    assert load_config(p).logging.level == "DEBUG"
+
+
+def test_log_level_env_invalid_raises(monkeypatch, tmp_path: Path):
+    p = tmp_path / "config.toml"
+    p.write_text(MINIMAL_TOML)
+    monkeypatch.setenv("MT5_MCP_LOG_LEVEL", "LOUD")
+    with pytest.raises(ValueError):
+        load_config(p)
+
+
 def test_load_default_location(monkeypatch, tmp_path: Path):
     """When no path is given, falls back to `%APPDATA%\\mt5-mcp\\config.toml`
     (or the XDG equivalent). If that file doesn't exist either, returns a

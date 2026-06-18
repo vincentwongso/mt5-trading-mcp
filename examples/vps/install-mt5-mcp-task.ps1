@@ -31,8 +31,17 @@
     How long to wait after logon before starting the MCP, so the MT5 terminal
     has time to come up first. Defaults to 60.
 
+.PARAMETER DailyRestartAt
+    Time of day (24h "HH:mm") to restart the MCP server once a day, as a safety
+    net against slow memory growth in long-running HTTP deployments. Installs a
+    companion task "<TaskName>-restart" that stops and restarts the server task.
+    Defaults to "03:30". Pass -NoDailyRestart to skip it.
+
+.PARAMETER NoDailyRestart
+    Do not install the daily-restart companion task.
+
 .PARAMETER Uninstall
-    Remove the task instead of installing it.
+    Remove the task (and its daily-restart companion) instead of installing it.
 
 .EXAMPLE
     .\install-mt5-mcp-task.ps1
@@ -57,17 +66,23 @@ param(
     [string] $TaskName          = "mt5-mcp-server",
     [string] $User              = $env:USERNAME,
     [int]    $DelaySeconds      = 60,
+    [string] $DailyRestartAt    = "03:30",
+    [switch] $NoDailyRestart,
     [switch] $Uninstall
 )
 
 $ErrorActionPreference = "Stop"
 
+$restartTaskName = "$TaskName-restart"
+
 if ($Uninstall) {
-    if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
-        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
-        Write-Host "Removed scheduled task '$TaskName'." -ForegroundColor Green
-    } else {
-        Write-Host "Scheduled task '$TaskName' was not registered. Nothing to remove." -ForegroundColor Yellow
+    foreach ($name in @($restartTaskName, $TaskName)) {
+        if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) {
+            Unregister-ScheduledTask -TaskName $name -Confirm:$false
+            Write-Host "Removed scheduled task '$name'." -ForegroundColor Green
+        } else {
+            Write-Host "Scheduled task '$name' was not registered. Nothing to remove." -ForegroundColor Yellow
+        }
     }
     return
 }
@@ -103,10 +118,47 @@ Register-ScheduledTask `
     -Force | Out-Null
 
 Write-Host "Registered scheduled task '$TaskName'." -ForegroundColor Green
+
+# --- Daily-restart companion task ---------------------------------------
+# Long-running HTTP deployments creep up in memory over a day (polling MCP
+# clients). A once-a-day stop+start reclaims it. We use a separate task rather
+# than a second trigger on the server task because Stop-then-Start guarantees
+# the restart even when an instance is already running; a duplicate trigger
+# would just be ignored while the server is up.
+if (-not $NoDailyRestart) {
+    if ($DailyRestartAt -notmatch '^\d{2}:\d{2}$') {
+        throw "DailyRestartAt must be 'HH:mm' (24h), got '$DailyRestartAt'."
+    }
+    # powershell.exe -Command runs in the user's interactive session (same
+    # principal as the server task), so the restarted server lands back in the
+    # session MT5's terminal lives in.
+    $restartCmd = "Stop-ScheduledTask -TaskName '$TaskName'; Start-Sleep -Seconds 5; Start-ScheduledTask -TaskName '$TaskName'"
+    $restartAction = New-ScheduledTaskAction `
+        -Execute "powershell.exe" `
+        -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -Command `"$restartCmd`""
+
+    $restartTrigger  = New-ScheduledTaskTrigger -Daily -At $DailyRestartAt
+    $restartSettings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable
+    $restartPrincipal = New-ScheduledTaskPrincipal `
+        -UserId $User -LogonType Interactive -RunLevel Limited
+
+    Register-ScheduledTask `
+        -TaskName $restartTaskName `
+        -Action $restartAction -Trigger $restartTrigger -Settings $restartSettings -Principal $restartPrincipal `
+        -Description "Restart $TaskName daily at $DailyRestartAt to reclaim memory" `
+        -Force | Out-Null
+
+    Write-Host "Registered scheduled task '$restartTaskName' (daily at $DailyRestartAt)." -ForegroundColor Green
+}
 Write-Host "  Command:           $python -m mt5_mcp serve --transport http"
 Write-Host "  Working directory: $WorkingDirectory"
 Write-Host "  Runs as user:      $User (interactive session)"
 Write-Host "  Logon delay:       ${DelaySeconds}s"
+if (-not $NoDailyRestart) {
+    Write-Host "  Daily restart:     ${DailyRestartAt} (task '$restartTaskName')"
+}
 Write-Host ""
 Write-Host "Verify without rebooting:" -ForegroundColor Cyan
 Write-Host "  Start-ScheduledTask -TaskName $TaskName"

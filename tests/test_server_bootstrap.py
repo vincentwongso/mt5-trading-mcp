@@ -35,6 +35,41 @@ def test_build_server_registers_tools(tmp_path):
     assert names == expected, f"missing or extra tools: {names ^ expected}"
 
 
+def test_build_server_applies_stateless_and_log_level_from_config(tmp_path):
+    """The leak fix + quiet default must reach FastMCP's settings."""
+    reset_context_for_tests()
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+    server = build_server(mt5_module=FakeMT5(), config_path=cfg)
+    try:
+        assert server.settings.stateless_http is True
+        assert server.settings.log_level == "WARNING"
+    finally:
+        reset_context_for_tests()
+
+
+def test_build_server_explicit_args_override_config(tmp_path):
+    """serve --no-stateless / --log-level beat the config file."""
+    reset_context_for_tests()
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+    server = build_server(
+        mt5_module=FakeMT5(), config_path=cfg,
+        log_level="INFO", stateless_http=False,
+    )
+    try:
+        assert server.settings.stateless_http is False
+        assert server.settings.log_level == "INFO"
+    finally:
+        reset_context_for_tests()
+
+
 def test_app_context_includes_policy_engine(tmp_path):
     """build_context() instantiates a PolicyEngine wired to per-OS paths."""
     from mt5_mcp.policy import PolicyEngine

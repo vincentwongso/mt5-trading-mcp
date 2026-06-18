@@ -188,14 +188,54 @@ def reset_context_for_tests() -> None:
         _ctx = None
 
 
+# SDK/uvicorn loggers that emit one line per request. At INFO they flood an
+# unattended HTTP deployment (see the README/operations notes); we never want
+# that noise unless the operator explicitly asked for DEBUG.
+_NOISY_REQUEST_LOGGERS = (
+    "uvicorn.access",
+    "mcp.server.lowlevel.server",
+    "mcp.server.streamable_http_manager",
+)
+
+
+def _quiet_noisy_loggers(level: str) -> None:
+    """Pin the per-request SDK/uvicorn loggers to WARNING unless DEBUG is asked.
+
+    FastMCP's own ``configure_logging`` (run from the FastMCP constructor) sets
+    the root level, which already suppresses these at WARNING. This adds a belt:
+    even when the operator chooses INFO, the per-request flood stays off - only
+    an explicit DEBUG re-enables it.
+    """
+    if level.upper() == "DEBUG":
+        return
+    for name in _NOISY_REQUEST_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
 def build_server(
     *,
     config_path: Path | None = None,
     mt5_module=None,
+    log_level: str | None = None,
+    stateless_http: bool | None = None,
 ) -> FastMCP:
-    """Build a FastMCP server with all tools and resources registered."""
-    build_context(config_path=config_path, mt5_module=mt5_module)
-    mcp = FastMCP("mt5-mcp")
+    """Build a FastMCP server with all tools and resources registered.
+
+    ``log_level`` / ``stateless_http`` default to the resolved config
+    (``[logging] level`` / ``[transport.http] stateless``) when not passed;
+    ``serve`` passes the CLI-resolved values explicitly.
+    """
+    ctx = build_context(config_path=config_path, mt5_module=mt5_module)
+    cfg = ctx.config
+    level = (log_level or cfg.logging.level).upper()
+    stateless = cfg.transport.http.stateless if stateless_http is None else stateless_http
+    # FastMCP's constructor calls configure_logging(level) -> logging.basicConfig,
+    # which sets the root level and installs a handler. uvicorn also reads this
+    # level (so its access log goes quiet at WARNING). stateless_http flips the
+    # streamable-HTTP session manager into per-request-transport mode, which is
+    # what stops the per-session transport accumulation (the memory leak).
+    mcp = FastMCP("mt5-mcp", log_level=level, stateless_http=stateless)
+    _quiet_noisy_loggers(level)
     from mt5_mcp.tools import register_tools
     from mt5_mcp.resources import register_resources
 

@@ -105,55 +105,58 @@ def run(mcp: Any, *, transport: str, config: Config) -> None:
     if transport == "stdio":
         mcp.run()
         return
-    if transport == "http":
-        host = config.transport.http.host
-        port = config.transport.http.port
-        # Loopback is already enforced by the early guard above.
-        # FastMCP 3.x reads host/port from mcp.settings, not from run() kwargs.
-        # Mutate settings here so the correct address is used by uvicorn.
-        mcp.settings.host = host
-        mcp.settings.port = port
-        # Extend FastMCP's DNS-rebinding-protection allow list with operator-
-        # configured hosts. FastMCP defaults already cover localhost variants;
-        # appending lets reverse proxies (Tailscale serve, Cloudflare Tunnel,
-        # etc.) forward Host headers like `<machine>.<tailnet>.ts.net` without
-        # tripping the 421 "Invalid Host header" guard.
-        sec = mcp.settings.transport_security
-        if config.transport.http.trusted_hosts:
-            sec.allowed_hosts = list(sec.allowed_hosts) + list(config.transport.http.trusted_hosts)
-        if config.transport.http.trusted_origins:
-            sec.allowed_origins = list(sec.allowed_origins) + list(config.transport.http.trusted_origins)
-        token = config.transport.http.auth_token
-        if token:
-            mcp.add_middleware(_make_bearer_middleware_factory(token))
-        else:
-            logger.warning(
-                "transport.http.auth_token is empty: the loopback HTTP server "
-                "accepts UNAUTHENTICATED requests - any local process (or a "
-                "misconfigured port-forward) can place real trades. Set "
-                "transport.http.auth_token whenever the HTTP transport is "
-                "reachable beyond a single trusted user."
-            )
+    # transport == "http" (validated, and loopback-enforced, by the guards above).
+    _run_http(mcp, config)
+
+
+def _run_http(mcp: Any, config: Config) -> None:
+    """Serve the streamable-HTTP transport on loopback.
+
+    Two paths, both serving FastMCP's streamable-HTTP app:
+
+    * **No auth_token** - defer entirely to ``mcp.run(transport="streamable-http")``
+      and log a loud unauthenticated-access warning.
+    * **auth_token set** - wrap FastMCP's own ASGI app in ``BearerAuthMiddleware``
+      and serve it through uvicorn exactly as ``FastMCP.run_streamable_http_async``
+      does (same host/port, same log level). The mcp-package ``FastMCP`` exposes no
+      ``add_middleware`` hook, and its built-in auth is OAuth-only, so a thin ASGI
+      wrapper is the natural fit for a static shared-secret token.
+    """
+    http = config.transport.http
+    # FastMCP reads host/port from settings, not from run() kwargs.
+    mcp.settings.host = http.host
+    mcp.settings.port = http.port
+    # Extend (not replace) FastMCP's DNS-rebinding-protection allow list with
+    # operator-configured hosts/origins. FastMCP defaults already cover localhost
+    # variants; appending lets reverse proxies (Tailscale serve, Cloudflare Tunnel,
+    # etc.) forward Host/Origin headers like `<machine>.<tailnet>.ts.net` without
+    # tripping the 421 "Invalid Host header" guard.
+    sec = mcp.settings.transport_security
+    if http.trusted_hosts:
+        sec.allowed_hosts = [*sec.allowed_hosts, *http.trusted_hosts]
+    if http.trusted_origins:
+        sec.allowed_origins = [*sec.allowed_origins, *http.trusted_origins]
+
+    token = http.auth_token
+    if not token:
+        logger.warning(
+            "transport.http.auth_token is empty: the loopback HTTP server "
+            "accepts UNAUTHENTICATED requests - any local process (or a "
+            "misconfigured port-forward) can place real trades. Set "
+            "transport.http.auth_token whenever the HTTP transport is "
+            "reachable beyond a single trusted user."
+        )
         mcp.run(transport="streamable-http")
         return
 
+    # Authenticated path. BearerAuthMiddleware passes non-HTTP scopes straight
+    # through, so the lifespan event still reaches FastMCP's session manager.
+    import uvicorn
 
-def _make_bearer_middleware_factory(token: str):
-    """Return a callable FastMCP/Starlette accepts as a middleware spec.
-
-    FastMCP's add_middleware may accept either a class or an instance.
-    We store the token on the returned object so tests can introspect it.
-    """
-    expected = f"Bearer {token}"
-
-    class _Factory:
-        def __init__(self) -> None:
-            self._expected = expected
-
-        def __call__(self, app):
-            return BearerAuthMiddleware(app, token)
-
-        def __repr__(self) -> str:
-            return f"<BearerAuthMiddlewareFactory token=...{token[-3:]}>"
-
-    return _Factory()
+    app = BearerAuthMiddleware(mcp.streamable_http_app(), token)
+    uvicorn.run(
+        app,
+        host=http.host,
+        port=http.port,
+        log_level=mcp.settings.log_level.lower(),
+    )

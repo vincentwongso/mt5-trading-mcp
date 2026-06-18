@@ -166,8 +166,13 @@ if ($SkipInstall) {
         if (-not (Test-Path $python)) { throw "Venv creation failed; '$python' still missing." }
     }
     $spec = if ($Version) { "mt5-trading-mcp==$Version" } else { "mt5-trading-mcp" }
+    # pip is an external command: a non-zero exit does NOT stop the script, so
+    # check $LASTEXITCODE and fail loudly - otherwise a broken install would
+    # silently proceed to register tasks against a non-working env.
     & $python -m pip install --upgrade pip
+    if ($LASTEXITCODE -ne 0) { throw "pip self-upgrade failed (exit $LASTEXITCODE)." }
     & $python -m pip install --upgrade $spec
+    if ($LASTEXITCODE -ne 0) { throw "Installing '$spec' failed (exit $LASTEXITCODE)." }
     $installed = (& $python -m pip show mt5-trading-mcp | Select-String '^Version:').ToString()
     Write-Host "    $installed" -ForegroundColor Green
 }
@@ -223,10 +228,13 @@ if ($EnableAutoLogon) {
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
     }
     $winlogon = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
-    Set-ItemProperty $winlogon -Name AutoAdminLogon    -Value '1'             -Type String
-    Set-ItemProperty $winlogon -Name DefaultUserName   -Value $User           -Type String
-    Set-ItemProperty $winlogon -Name DefaultDomainName -Value $env:USERDOMAIN -Type String
-    Set-ItemProperty $winlogon -Name DefaultPassword   -Value $plain          -Type String
+    # New-ItemProperty -Force creates the value if absent and overwrites it
+    # otherwise - robust whether or not the key already exists (DefaultPassword
+    # in particular is often missing on a fresh box).
+    New-ItemProperty $winlogon -Name AutoAdminLogon    -Value '1'             -PropertyType String -Force | Out-Null
+    New-ItemProperty $winlogon -Name DefaultUserName   -Value $User           -PropertyType String -Force | Out-Null
+    New-ItemProperty $winlogon -Name DefaultDomainName -Value $env:USERDOMAIN -PropertyType String -Force | Out-Null
+    New-ItemProperty $winlogon -Name DefaultPassword   -Value $plain          -PropertyType String -Force | Out-Null
     # AutoLogonCount, if present, makes auto-logon expire after N logons - clear it.
     Remove-ItemProperty $winlogon -Name AutoLogonCount -ErrorAction SilentlyContinue
     $plain = $null
@@ -240,7 +248,9 @@ if ($EnableAutoLogon) {
 
 # --- 5. Verify -----------------------------------------------------------
 Write-Step 5 "Verifying"
-Start-ScheduledTask -TaskName $TaskName
+# Best-effort: on a rerun the task may already be running; don't let that abort
+# the verify step.
+Start-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 Start-Sleep -Seconds ([Math]::Max($DelaySeconds, 5) + 5)
 # A healthy long-running `serve` shows State=Running (its LastTaskResult would be
 # 267009 "task is currently running", not 0), so State + the port check are the

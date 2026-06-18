@@ -120,6 +120,15 @@ def test_log_level_env_invalid_raises(monkeypatch, tmp_path: Path):
         load_config(p)
 
 
+def test_log_level_env_whitespace_only_is_ignored(monkeypatch, tmp_path: Path):
+    """A blank/whitespace-only env var is treated as unset (per the docstring),
+    not as an invalid level - so it must not raise and the file value stands."""
+    p = tmp_path / "config.toml"
+    p.write_text(MINIMAL_TOML + '\n[logging]\nlevel = "INFO"\n')
+    monkeypatch.setenv("MT5_MCP_LOG_LEVEL", "   ")
+    assert load_config(p).logging.level == "INFO"
+
+
 def test_load_default_location(monkeypatch, tmp_path: Path):
     """When no path is given, falls back to `%APPDATA%\\mt5-mcp\\config.toml`
     (or the XDG equivalent). If that file doesn't exist either, returns a

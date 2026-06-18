@@ -72,6 +72,25 @@ def test_build_server_explicit_args_override_config(tmp_path):
         reset_context_for_tests()
 
 
+def test_build_server_honors_log_level_env_without_config_file(monkeypatch, tmp_path):
+    """No config file -> the env overlay (MT5_MCP_LOG_LEVEL) must still reach
+    FastMCP. Regression guard: ctx.config previously fell back to a bare
+    Config() with no env applied when there was no ConfigWatcher."""
+    # Point both OS default-config locations at an empty dir so no file exists,
+    # and the OS data dir at tmp so the idempotency DB / audit log land there.
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    monkeypatch.setenv("MT5_MCP_LOG_LEVEL", "DEBUG")
+    reset_context_for_tests()
+    server = build_server(mt5_module=FakeMT5())  # config_path=None -> default (absent)
+    try:
+        assert server.settings.log_level == "DEBUG"
+    finally:
+        reset_context_for_tests()
+
+
 def test_build_server_rejects_invalid_log_level(tmp_path):
     """A bad programmatic log_level fails deterministically here, not deep in
     FastMCP/uvicorn."""

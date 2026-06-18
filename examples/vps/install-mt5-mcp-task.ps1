@@ -134,8 +134,13 @@ if (-not $NoDailyRestart) {
     }
     # powershell.exe -Command runs in the user's interactive session (same
     # principal as the server task), so the restarted server lands back in the
-    # session MT5's terminal lives in.
-    $restartCmd = "Stop-ScheduledTask -TaskName '$TaskName'; Start-Sleep -Seconds 5; Start-ScheduledTask -TaskName '$TaskName'"
+    # session MT5's terminal lives in. Escape any single quote in the task name
+    # (PowerShell doubles it inside a single-quoted string) so a name with an
+    # apostrophe can't break out of the quoting. Stop is best-effort - a not-
+    # running task is a no-op, and SilentlyContinue keeps any edge case from
+    # blocking the Start that follows.
+    $escapedName = $TaskName.Replace("'", "''")
+    $restartCmd = "Stop-ScheduledTask -TaskName '$escapedName' -ErrorAction SilentlyContinue; Start-Sleep -Seconds 5; Start-ScheduledTask -TaskName '$escapedName'"
     $restartAction = New-ScheduledTaskAction `
         -Execute "powershell.exe" `
         -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -Command `"$restartCmd`""

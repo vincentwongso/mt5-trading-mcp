@@ -244,7 +244,8 @@ def _apply_logging_env_override(config: Config) -> None:
     loudly at startup rather than silently defaulting.
     """
     level_env = os.environ.get("MT5_MCP_LOG_LEVEL")
-    if not level_env:
+    # Unset, empty, or whitespace-only is ignored (matches the docstring).
+    if not level_env or not level_env.strip():
         return
     level = level_env.strip().upper()
     valid = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}

@@ -79,11 +79,18 @@ class AppContext:
     policy: PolicyEngine
     dispatcher: Dispatcher
     poller: Poller
+    # The env-overlaid config used when there is no config file to watch (no
+    # ConfigWatcher). Without this, `config` would fall back to a bare `Config()`
+    # that drops env overrides like MT5_MCP_LOG_LEVEL / MT5_LOGIN, breaking the
+    # documented CLI > env > file precedence in the no-file case.
+    static_config: Config | None = None
 
     @property
     def config(self) -> Config:
         if self.config_watcher is not None:
             return self.config_watcher.current
+        if self.static_config is not None:
+            return self.static_config
         return Config()
 
 
@@ -164,6 +171,9 @@ def build_context(
         _ctx = AppContext(
             client=client, symbols=symbols, config_watcher=watcher,
             policy=policy, dispatcher=dispatcher, poller=poller,
+            # When a watcher is active it is the live source of truth; otherwise
+            # retain the env-overlaid cfg so ctx.config keeps env overrides.
+            static_config=(None if watcher is not None else cfg),
         )
         return _ctx
 

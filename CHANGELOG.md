@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-06-18
+
+### Fixed
+
+- **HTTP transport no longer crashes when `[transport.http] auth_token` is set.**
+  Startup called `mcp.add_middleware(...)`, but the mcp-package `FastMCP` has no
+  such method (it only exists on the separate standalone `fastmcp` package), so
+  any configured token raised `AttributeError: 'FastMCP' object has no attribute
+  'add_middleware'` and the server never started. The bearer-auth path now wraps
+  FastMCP's own streamable-HTTP ASGI app in a `BearerAuthMiddleware` and serves
+  it through uvicorn the same way FastMCP does internally, so a static
+  shared-secret token works without the OAuth machinery FastMCP's built-in auth
+  would otherwise require. The empty-token (unauthenticated) path is unchanged.
+
 ## [1.4.0] - 2026-06-18
 
 ### Changed

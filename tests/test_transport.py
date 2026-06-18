@@ -306,7 +306,7 @@ def test_run_eager_connect_failure_is_non_fatal(monkeypatch, caplog):
 # No FastMCP needed; drive the middleware as a raw ASGI app.
 
 def _drive_asgi(app, scope):
-    """Run an ASGI app once against a static scope; return (sent_messages, inner_called)."""
+    """Run an ASGI app once against a static scope; return the sent ASGI messages."""
     sent = []
 
     async def receive():

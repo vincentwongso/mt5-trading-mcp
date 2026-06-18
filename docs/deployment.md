@@ -99,13 +99,41 @@ process to survive reboots:
 
 - **NSSM** ([Non-Sucking Service Manager](https://nssm.cc/)) is the lightest
   option - wrap `python -m mt5_mcp serve --transport http` as a Windows Service.
-- A scheduled task with "At system startup" + a restart-on-failure policy works
+- A scheduled task triggered **at logon** with a restart-on-failure policy works
   too. [`examples/vps/install-mt5-mcp-task.ps1`](../examples/vps/install-mt5-mcp-task.ps1)
   registers one for you, and also installs an optional companion task that
   restarts the server once a day (`-DailyRestartAt`, default `03:30`).
 
 `mt5-mcp` doesn't bundle a service wrapper; pick the one your ops setup already
 uses.
+
+> **Why "at logon", not "at system startup"?** The MetaTrader5 Python library
+> only talks to a terminal running in the **same interactive desktop session**,
+> so the server can't run as a Session 0 Windows Service / "at system startup"
+> task. It must start after a user logs on - which means surviving an unattended
+> reboot requires **Windows auto-logon** so the box logs the user in
+> automatically and the logon trigger fires.
+
+#### One-shot setup wrapper
+
+[`examples/vps/setup-vps.ps1`](../examples/vps/setup-vps.ps1) does the whole VPS
+setup in one idempotent, elevated run: install/upgrade the package into a venv,
+register the auto-start + daily-restart tasks (via `install-mt5-mcp-task.ps1`),
+drop a Startup-folder shortcut so the MT5 terminal launches at logon, optionally
+configure auto-logon (`-EnableAutoLogon`, prompts for the password), then verify
+the task is running and the port is up.
+
+```powershell
+# elevated PowerShell, from examples/vps/
+powershell -ExecutionPolicy Bypass -File .\setup-vps.ps1 -EnableAutoLogon
+```
+
+Use `-VenvPath` / `-WorkingDirectory` / `-TerminalPath` for non-default layouts,
+`-SkipInstall` to leave pip alone, and `-Uninstall` to remove the tasks and
+shortcut. `-EnableAutoLogon` uses the registry method, which stores the password
+in plaintext under `HKLM\...\Winlogon`; for encrypted storage prefer
+[Sysinternals Autologon](https://learn.microsoft.com/sysinternals/downloads/autologon)
+and omit the switch.
 
 ### HTTP memory & log noise
 

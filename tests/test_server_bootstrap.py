@@ -1,5 +1,7 @@
 """Server scaffolding only - real tool behaviour tested in tests/test_tools_*.py."""
 
+import pytest
+
 from mt5_mcp.server import build_server, reset_context_for_tests
 from tests.fakes import FakeMT5
 
@@ -33,6 +35,76 @@ def test_build_server_registers_tools(tmp_path):
         "cancel_order",
     }
     assert names == expected, f"missing or extra tools: {names ^ expected}"
+
+
+def test_build_server_applies_stateless_and_log_level_from_config(tmp_path):
+    """The leak fix + quiet default must reach FastMCP's settings."""
+    reset_context_for_tests()
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+    server = build_server(mt5_module=FakeMT5(), config_path=cfg)
+    try:
+        assert server.settings.stateless_http is True
+        assert server.settings.log_level == "WARNING"
+    finally:
+        reset_context_for_tests()
+
+
+def test_build_server_explicit_args_override_config(tmp_path):
+    """serve --no-stateless / --log-level beat the config file."""
+    reset_context_for_tests()
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+    server = build_server(
+        mt5_module=FakeMT5(), config_path=cfg,
+        log_level="INFO", stateless_http=False,
+    )
+    try:
+        assert server.settings.stateless_http is False
+        assert server.settings.log_level == "INFO"
+    finally:
+        reset_context_for_tests()
+
+
+def test_build_server_honors_log_level_env_without_config_file(monkeypatch, tmp_path):
+    """No config file -> the env overlay (MT5_MCP_LOG_LEVEL) must still reach
+    FastMCP. Regression guard: ctx.config previously fell back to a bare
+    Config() with no env applied when there was no ConfigWatcher."""
+    # Point both OS default-config locations at an empty dir so no file exists,
+    # and the OS data dir at tmp so the idempotency DB / audit log land there.
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    monkeypatch.setenv("MT5_MCP_LOG_LEVEL", "DEBUG")
+    reset_context_for_tests()
+    server = build_server(mt5_module=FakeMT5())  # config_path=None -> default (absent)
+    try:
+        assert server.settings.log_level == "DEBUG"
+    finally:
+        reset_context_for_tests()
+
+
+def test_build_server_rejects_invalid_log_level(tmp_path):
+    """A bad programmatic log_level fails deterministically here, not deep in
+    FastMCP/uvicorn."""
+    reset_context_for_tests()
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        f'[idempotency]\npath = "{(tmp_path / "idem.db").as_posix()}"\n'
+        f'[audit]\npath = "{(tmp_path / "audit.jsonl").as_posix()}"\n'
+    )
+    try:
+        with pytest.raises(ValueError, match="log_level"):
+            build_server(mt5_module=FakeMT5(), config_path=cfg, log_level="warn")
+    finally:
+        reset_context_for_tests()
 
 
 def test_app_context_includes_policy_engine(tmp_path):

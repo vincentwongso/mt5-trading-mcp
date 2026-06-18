@@ -100,7 +100,19 @@ process to survive reboots:
 - **NSSM** ([Non-Sucking Service Manager](https://nssm.cc/)) is the lightest
   option - wrap `python -m mt5_mcp serve --transport http` as a Windows Service.
 - A scheduled task with "At system startup" + a restart-on-failure policy works
-  too.
+  too. [`examples/vps/install-mt5-mcp-task.ps1`](../examples/vps/install-mt5-mcp-task.ps1)
+  registers one for you, and also installs an optional companion task that
+  restarts the server once a day (`-DailyRestartAt`, default `03:30`).
 
 `mt5-mcp` doesn't bundle a service wrapper; pick the one your ops setup already
 uses.
+
+### HTTP memory & log noise
+
+A long-running HTTP server polled around the clock can creep up in memory and
+spam its console with one log line per request. Both are handled by defaults
+since the leak fix: stateless HTTP (`[transport.http] stateless = true`) stops
+the per-session transport accumulation, and a `WARNING` default log level keeps
+the console quiet. See
+[Configuration → HTTP memory & logging](configuration.md#http-memory--logging)
+for the full rundown and the daily-restart safety net.

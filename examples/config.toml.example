@@ -35,3 +35,14 @@ max_notional_per_trade = "0"   # 0 = no local cap (the broker still enforces its
 port = 8765
 auth_token = ""   # EMPTY = UNAUTHENTICATED - any local process can place trades.
                   # Set a token to require Authorization: Bearer <token> over HTTP.
+stateless = true  # true (default) = fresh transport per request; prevents the
+                  # per-session memory growth seen with polling HTTP clients.
+                  # Set false ONLY if a client subscribes for live resource
+                  # updates (push); that needs persistent sessions.
+
+# --- Logging. ---
+[logging]
+level = "WARNING" # WARNING (default) keeps an unattended HTTP server quiet: no
+                  # per-request access log, no transport chatter; warnings/errors
+                  # still show. Use "INFO" for normal ops, "DEBUG" to trace all.
+                  # Overridden by MT5_MCP_LOG_LEVEL env and serve --log-level.

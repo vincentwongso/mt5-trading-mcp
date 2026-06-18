@@ -40,11 +40,15 @@ ttl_seconds = 86400  # 24h replay window for mutating tools that pass an idempot
 # Only relevant when using --transport http. Loopback-only.
 port = 8765
 auth_token = ""  # bearer token; EMPTY = unauthenticated (any local process can trade) - set one for HTTP
+stateless = true # default; fresh transport per request - see "HTTP memory & logging" below
 
 [streaming]
 quote_poll_interval_ms = 200       # how often quotes://{symbol} checks for price changes
 account_poll_interval_ms = 1000    # how often account://current is checked
 positions_poll_interval_ms = 1000  # how often positions://current is checked
+
+[logging]
+level = "WARNING"  # WARNING (default) keeps an unattended server quiet; INFO / DEBUG for more
 ```
 
 > **Defaults differ from this example.** Every guardrail above is **opt-in and
@@ -55,6 +59,32 @@ positions_poll_interval_ms = 1000  # how often positions://current is checked
 > broker still enforces its own). The values above are a suggested hardened
 > configuration; set `auto_approve_notional` > 0 to require human approval on
 > orders at or above that notional.
+
+## HTTP memory & logging
+
+These matter for an unattended HTTP server (a VPS, the Docker image) where a
+client polls tools around the clock.
+
+- **`[transport.http] stateless`** (default `true`). In stateless mode the server
+  builds a fresh transport per request and tears it down immediately. In stateful
+  mode (`false`) it keeps one transport per MCP *session*, and the MCP SDK only
+  frees it on a clean session close (HTTP `DELETE`). A client that opens a new
+  session each poll and never closes it therefore leaks one transport per poll -
+  the process grows unbounded. Keep `stateless = true` unless a client genuinely
+  **subscribes** to resources for server-pushed updates (`quotes://`, `account://`,
+  `positions://`); subscriptions need a persistent session and are inert in
+  stateless mode (tools still work - clients just poll). Override per run with
+  `serve --stateless` / `serve --no-stateless`.
+- **`[logging] level`** (default `WARNING`). `WARNING` silences uvicorn's
+  per-request access log and the SDK's per-request / transport-creation lines,
+  while still surfacing the consent-posture and auth warnings. Use `INFO` for
+  normal operational logging, `DEBUG` to trace everything (DEBUG also re-enables
+  the per-request flood). Precedence: `serve --log-level` > `MT5_MCP_LOG_LEVEL`
+  env > `[logging] level`.
+- **Daily restart (Windows).** As a belt-and-suspenders against any residual
+  growth, `examples/vps/install-mt5-mcp-task.ps1` installs a companion task that
+  restarts the server once a day (default `03:30`); tune with `-DailyRestartAt`
+  or skip with `-NoDailyRestart`.
 
 ## Hot reload
 

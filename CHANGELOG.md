@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-18
+
+### Changed
+
+- **Stateless HTTP is now the default** (`[transport.http] stateless = true`).
+  The streamable-HTTP transport previously kept one server transport per MCP
+  session, which the MCP SDK only frees on a clean session close. A client that
+  opened a new session per poll and never closed it leaked a transport each time,
+  growing the process unbounded - the memory leak seen on long-running VPS / HTTP
+  deployments. Stateless mode builds a fresh transport per request and tears it
+  down immediately, so nothing accumulates. Trade-off: server-pushed resource
+  subscriptions (`quotes://`, `account://`, `positions://`) need a persistent
+  session and are inert in stateless mode (tools still work - clients poll). Set
+  `stateless = false` or `serve --no-stateless` to restore the old behaviour.
+- **Default log level is now `WARNING`** (`[logging] level`). An unattended HTTP
+  server no longer floods the console with uvicorn's per-request access log or the
+  SDK's "Processing request" / "Created new transport" chatter; consent-posture
+  and auth warnings still surface. Set `INFO` / `DEBUG` for more, via
+  `[logging] level`, the `MT5_MCP_LOG_LEVEL` env var, or `serve --log-level`
+  (CLI > env > file).
+
+### Added
+
+- `serve --stateless / --no-stateless` and `serve --log-level` flags.
+- `MT5_MCP_LOG_LEVEL` environment override for the log level.
+- `examples/vps/install-mt5-mcp-task.ps1` installs a daily-restart companion
+  task (`-DailyRestartAt`, default `03:30`; `-NoDailyRestart` to skip) that
+  stops and restarts the server once a day to reclaim memory on Windows VPS
+  deployments.
+
 ## [1.3.2] - 2026-06-15
 
 ### Changed

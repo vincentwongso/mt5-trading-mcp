@@ -8,6 +8,7 @@ import sys
 import threading
 from decimal import Decimal
 from pathlib import Path
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt, ValidationError
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
@@ -106,6 +107,18 @@ class TransportHTTPSection(_Sub):
     host: str = "127.0.0.1"
     port: int = Field(8765, ge=1, le=65535)
     auth_token: str = ""
+    # Stateless HTTP: handle every request with a fresh, immediately torn-down
+    # transport instead of persisting one transport per MCP session. ON by
+    # default because it is the correct posture for the dominant HTTP usage -
+    # an agent that opens a session per poll and never tears it down. In stateful
+    # mode (stateless = false) each such session leaks a StreamableHTTPServer
+    # transport (held in the SDK's _server_instances map until a clean DELETE),
+    # so a polling client grows the process unbounded. The trade-off: stateless
+    # mode cannot push server-initiated notifications, so resource subscriptions
+    # (the [streaming] quotes/account/positions push) are inert over HTTP - tools
+    # still work, clients just poll instead of being pushed to. Set false only if
+    # a client genuinely subscribes for live updates. No effect on stdio.
+    stateless: bool = True
     # Hostnames to add to FastMCP's DNS-rebinding-protection allow list.
     # FastMCP defaults already include 127.0.0.1, localhost, [::1] (with
     # wildcard ports). Add entries here when the MCP sits behind a reverse
@@ -130,6 +143,17 @@ class StreamingSection(_Sub):
     positions_poll_interval_ms: int = Field(1000, ge=100, le=60000)
 
 
+class LoggingSection(_Sub):
+    # Root log level for the server. Defaults to WARNING so an unattended HTTP
+    # deployment stays quiet: WARNING silences uvicorn's per-request access log,
+    # the SDK's "Processing request of type CallToolRequest" line, and the
+    # transport-creation chatter - while still surfacing the consent-posture and
+    # auth warnings. Set "INFO" for normal operational logging or "DEBUG" to
+    # trace everything. Overridden by `MT5_MCP_LOG_LEVEL` (env) and
+    # `serve --log-level` (CLI); CLI wins, then env, then this value.
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "WARNING"
+
+
 class Config(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -141,6 +165,7 @@ class Config(BaseModel):
     transport: TransportSection = Field(default_factory=TransportSection)
     telemetry: TelemetrySection = Field(default_factory=TelemetrySection)
     streaming: StreamingSection = Field(default_factory=StreamingSection)
+    logging: LoggingSection = Field(default_factory=LoggingSection)
 
 
 def default_config_path() -> Path:
@@ -167,6 +192,7 @@ def load_config(path: Path | None = None) -> Config:
     """
     config = _read_config_file(path)
     _apply_mt5_env_overrides(config)
+    _apply_logging_env_override(config)
     return config
 
 
@@ -209,6 +235,25 @@ def _apply_mt5_env_overrides(config: Config) -> None:
     server_env = os.environ.get("MT5_SERVER")
     if server_env:
         config.mt5.server = server_env
+
+
+def _apply_logging_env_override(config: Config) -> None:
+    """Overlay `MT5_MCP_LOG_LEVEL` onto `[logging] level` (env wins over file).
+
+    Empty / unset is ignored. An unrecognised level raises, so a typo fails
+    loudly at startup rather than silently defaulting.
+    """
+    level_env = os.environ.get("MT5_MCP_LOG_LEVEL")
+    # Unset, empty, or whitespace-only is ignored (matches the docstring).
+    if not level_env or not level_env.strip():
+        return
+    level = level_env.strip().upper()
+    valid = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+    if level not in valid:
+        raise ValueError(
+            f"MT5_MCP_LOG_LEVEL must be one of {sorted(valid)}, got {level_env!r}"
+        )
+    config.logging.level = level  # type: ignore[assignment]
 
 
 class _ReloadHandler(FileSystemEventHandler):

@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.vincentwongso/mt5-trading-mcp",
   "title": "MetaTrader 5 MCP Bridge",
-  "description": "Let an AI agent read and trade a MetaTrader 5 account over MCP, behind a configurable human-approval gate.",
-  "version": "1.4.1",
+  "description": "Let an AI agent read and trade a MetaTrader 5 account over MCP, behind a human-approval gate.",
+  "version": "1.4.2",
   "repository": {
     "url": "https://github.com/vincentwongso/mt5-trading-mcp",
     "source": "github"
@@ -14,7 +14,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "mt5-trading-mcp",
-      "version": "1.4.1",
+      "version": "1.4.2",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

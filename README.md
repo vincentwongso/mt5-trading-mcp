@@ -1,5 +1,7 @@
 # MetaTrader 5 MCP Bridge
 
+<!-- mcp-name: io.github.vincentwongso/mt5-trading-mcp -->
+
 **Let an AI agent manage your MetaTrader 5 account over [Model Context Protocol](https://modelcontextprotocol.io) - with configurable human approval gate.**
 
 [![PyPI version](https://img.shields.io/pypi/v/mt5-trading-mcp.svg)](https://pypi.org/project/mt5-trading-mcp/)

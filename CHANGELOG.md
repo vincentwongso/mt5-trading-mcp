@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-06-25
+
+### Added
+
+- **Prepared for publishing on the official MCP Registry.** Updated `server.json` metadata
+  (`io.github.vincentwongso/mt5-trading-mcp`) and added the `mcp-name` ownership
+  marker to the README so the package can be published to
+  registry.modelcontextprotocol.io. No code changes.
+
 ## [1.4.1] - 2026-06-18
 
 ### Fixed

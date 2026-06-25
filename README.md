@@ -30,6 +30,10 @@
 Runs locally - in the same process tree as your agent, no cloud, no telemetry.
 Windows (native) or Linux (via Docker); Python 3.10+.
 
+> 📖 **The story behind this:** this project is built step by step in
+> [*Wiring AI agent into MetaTrader 5*](https://engineering.fintrixmarkets.com/posts/mt5-mcp-part-1/),
+> Part 1 of the *Trade with AI agent* series on the Fintrix engineering blog.
+
 ## What it is
 
 `mt5-mcp` lets an AI agent read your MetaTrader 5 account and place trades

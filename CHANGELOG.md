@@ -10,8 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- **Listed on the official MCP Registry.** Added a `server.json`
-  (`io.github.vincentwongso/mt5-trading-mcp`) and the `mcp-name` ownership
+- **Prepared for publishing on the official MCP Registry.** Updated `server.json` metadata
+  (`io.github.vincentwongso/mt5-trading-mcp`) and added the `mcp-name` ownership
   marker to the README so the package can be published to
   registry.modelcontextprotocol.io. No code changes.
 

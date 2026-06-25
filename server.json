@@ -1,0 +1,42 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.vincentwongso/mt5-trading-mcp",
+  "title": "MetaTrader 5 MCP Bridge",
+  "description": "Let an AI agent read and trade a MetaTrader 5 account over MCP, behind a configurable human-approval gate.",
+  "version": "1.4.1",
+  "repository": {
+    "url": "https://github.com/vincentwongso/mt5-trading-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://engineering.fintrixmarkets.com",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "mt5-trading-mcp",
+      "version": "1.4.1",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "MT5_LOGIN",
+          "description": "MetaTrader 5 account number. Optional: overrides the config file and an already-logged-in terminal.",
+          "isRequired": false
+        },
+        {
+          "name": "MT5_PASSWORD",
+          "description": "MetaTrader 5 account password. Env-only so it never lands in a config file. Optional when the terminal is already logged in.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "MT5_SERVER",
+          "description": "MetaTrader 5 broker/trade server name. Optional: overrides the config file and an already-logged-in terminal.",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

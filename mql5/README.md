@@ -22,11 +22,12 @@ requested chart, and writes the PNG back.
 
 ## Compiled .ex5
 
-The repository ships `AgentScreenshot.mq5` source only. Until a compiled
-`AgentScreenshot.ex5` is committed next to it, follow step 3 above to build
-it yourself with MetaEditor. The maintainer compiles the `.ex5` on Windows
-and commits it so future users can skip step 3; it cannot be built on
-Linux/CI, so keep it in sync whenever `AgentScreenshot.mq5` changes.
+A compiled `AgentScreenshot.ex5` is committed next to the source, so you can
+copy it straight into `MQL5/Experts/` and skip the F7 compile in step 3.
+Prefer compiling it yourself (step 3) if you do not want to trust a prebuilt
+binary. The `.ex5` cannot be built on Linux/CI, so it is compiled on Windows
+with MetaEditor and must be recompiled and re-committed whenever
+`AgentScreenshot.mq5` changes.
 
 ## Verify
 

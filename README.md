@@ -41,8 +41,9 @@ Windows (native) or Linux (via Docker); Python 3.10+.
 `mt5-mcp` lets an AI agent read your MetaTrader 5 account and place trades
 through it, over the Model Context Protocol.
 
-- **11 read-only tools**: account, quotes, positions, orders, history, OHLC
-  bars, and broker-authoritative margin estimates. No consent gate.
+- **12 read-only tools**: account, quotes, positions, orders, history, OHLC
+  bars, broker-authoritative margin estimates, and native chart screenshots
+  (Windows). No consent gate.
 - **4 mutating tools**: `place_order`, `modify_order`, `cancel_order`,
   `close_position`, each behind a preflight + human-consent + idempotency +
   audit layer.
@@ -107,6 +108,27 @@ openclaw mcp set mt5-mcp '{"url":"http://127.0.0.1:8765/mcp","transport":"stream
 
 Full walkthrough:
 **[docs/installation.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/docs/installation.md)**.
+
+## Chart screenshots (Windows only)
+
+`get_chart_screenshot(symbol, timeframe)` returns a PNG of the native MT5
+chart so an LLM can read it visually (candles, support/resistance, patterns).
+Because the MetaTrader5 Python API cannot capture charts, this uses a small
+MQL5 Expert Advisor that runs inside a GUI terminal and calls
+`ChartScreenShot()`.
+
+Setup (one time):
+
+1. Install and attach the `AgentScreenshot` EA - see `mql5/README.md`.
+2. Optionally set a template so your indicators/drawings appear in the shot:
+   `[screenshot]` `template = "agent.tpl"` in your config, or leave it unset
+   for the default chart.
+
+Config knobs (`[screenshot]` section): `width` (default 1600), `height`
+(default 900), `template` (default none), `timeout_s` (default 10).
+
+Not available on the headless Linux/Docker deployment: it needs a GUI
+terminal. Off Windows the tool returns `SCREENSHOT_NOT_SUPPORTED`.
 
 ## For AI agents
 

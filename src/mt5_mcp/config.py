@@ -143,6 +143,16 @@ class StreamingSection(_Sub):
     positions_poll_interval_ms: int = Field(1000, ge=100, le=60000)
 
 
+class ScreenshotSection(_Sub):
+    """Native MT5 chart-screenshot bridge (Windows-only feature). ``template``
+    is an optional MQL5 template name (e.g. ``agent.tpl``) applied to the
+    opened chart before capture; ``None`` uses the terminal default chart."""
+    width: PositiveInt = 1600
+    height: PositiveInt = 900
+    template: str | None = None
+    timeout_s: float = Field(10.0, gt=0)
+
+
 class LoggingSection(_Sub):
     # Root log level for the server. Defaults to WARNING so an unattended HTTP
     # deployment stays quiet: WARNING silences uvicorn's per-request access log,
@@ -166,6 +176,7 @@ class Config(BaseModel):
     telemetry: TelemetrySection = Field(default_factory=TelemetrySection)
     streaming: StreamingSection = Field(default_factory=StreamingSection)
     logging: LoggingSection = Field(default_factory=LoggingSection)
+    screenshot: ScreenshotSection = Field(default_factory=ScreenshotSection)
 
 
 def default_config_path() -> Path:

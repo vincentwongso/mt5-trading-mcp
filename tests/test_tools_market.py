@@ -243,3 +243,74 @@ def test_calc_margin_no_tick_when_price_omitted(server_and_mt5):
         symbol="EURUSD", side="buy", volume=Decimal("0.1"),
     )
     assert out["error"]["code"] == "SYMBOL_NOT_ENABLED"
+
+
+# --- get_chart_screenshot ------------------------------------------------
+
+
+def test_get_chart_screenshot_not_supported_off_windows(server_and_mt5, monkeypatch):
+    server, _fake = server_and_mt5
+    import mt5_mcp.tools.market as market
+
+    monkeypatch.setattr(market.platform, "system", lambda: "Linux")
+    out = _call(server, "get_chart_screenshot", symbol="EURUSD", timeframe="H1")
+    assert out["error"]["code"] == "SCREENSHOT_NOT_SUPPORTED"
+
+
+def test_get_chart_screenshot_bad_timeframe(server_and_mt5, monkeypatch):
+    server, fake = server_and_mt5
+    import mt5_mcp.tools.market as market
+
+    monkeypatch.setattr(market.platform, "system", lambda: "Windows")
+    fake._symbol_info["EURUSD"] = FakeSymbolInfo(name="EURUSD")
+    out = _call(server, "get_chart_screenshot", symbol="EURUSD", timeframe="Z9")
+    assert out["error"]["code"] == "INVALID_TIMEFRAME"
+
+
+def test_get_chart_screenshot_returns_image(server_and_mt5, monkeypatch):
+    from mcp.server.fastmcp import Image
+
+    server, fake = server_and_mt5
+    import mt5_mcp.tools.market as market
+
+    monkeypatch.setattr(market.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(market, "capture_chart", lambda *a, **k: b"PNGDATA")
+    fake._symbol_info["EURUSD"] = FakeSymbolInfo(name="EURUSD")
+
+    out = _call(server, "get_chart_screenshot", symbol="EURUSD", timeframe="H1")
+    assert isinstance(out, Image)
+    assert out.data == b"PNGDATA"
+
+
+def test_get_chart_screenshot_unknown_symbol(server_and_mt5, monkeypatch):
+    server, _fake = server_and_mt5
+    import mt5_mcp.tools.market as market
+
+    monkeypatch.setattr(market.platform, "system", lambda: "Windows")
+    # No FakeSymbolInfo registered -> ctx.symbols.get raises SYMBOL_NOT_FOUND.
+    out = _call(server, "get_chart_screenshot", symbol="NOPE", timeframe="H1")
+    assert out["error"]["code"] == "SYMBOL_NOT_FOUND"
+
+
+def test_get_chart_screenshot_not_supported_precedes_connection(server_and_mt5, monkeypatch):
+    from mt5_mcp.types import ErrorDetail
+    import mt5_mcp.tools.market as market
+    import mt5_mcp.tools._common as common
+
+    server, _fake = server_and_mt5
+    monkeypatch.setattr(market.platform, "system", lambda: "Linux")
+    # Simulate a host with no reachable terminal: if the platform guard did not
+    # run before the connection, error_envelope's ensure_connected would win and
+    # the tool would return TERMINAL_NOT_CONNECTED instead of the correct code.
+    monkeypatch.setattr(
+        common,
+        "ensure_connected",
+        lambda ctx: ErrorDetail(
+            code="TERMINAL_NOT_CONNECTED",
+            message="no terminal",
+            retryable=True,
+            requires_human=False,
+        ),
+    )
+    out = _call(server, "get_chart_screenshot", symbol="EURUSD", timeframe="H1")
+    assert out["error"]["code"] == "SCREENSHOT_NOT_SUPPORTED"

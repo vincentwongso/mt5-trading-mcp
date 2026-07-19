@@ -19,6 +19,7 @@ subscribable resources.
 | `get_orders(symbol?)` | Pending orders. |
 | `get_history(from_ts, to_ts, symbol?)` | Closed deals in a UTC range. |
 | `get_rates(symbol, timeframe, count)` | OHLC bars (M1…MN1), most recent first. |
+| `get_chart_screenshot(symbol, timeframe)` | PNG of the native MT5 chart (Windows only; needs the AgentScreenshot EA). |
 | `calc_margin(symbol, side, volume, price?)` | Broker-authoritative margin estimate for a hypothetical order. |
 
 ## Mutating tools (preflight + consent + idempotency + audit)

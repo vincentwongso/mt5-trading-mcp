@@ -1,11 +1,11 @@
 ---
 name: mt5-market-data
-description: Use when the user asks about their MetaTrader 5 broker account, balance, equity, margin, open positions, pending orders, trade history, current quotes / prices / bid-ask, tradeable symbols, OHLC bars / candles / chart data, margin requirements for a hypothetical trade, market hours, or whether a symbol is currently tradeable. Triggers on questions like "what's my P&L", "show me my positions", "what's the price of EURUSD", "is the gold market open", "any pending orders on BTCUSD", "what trades did I do last week", "give me daily candles for XAUUSD", "what margin would 0.5 lot of US500 cost". Always use this skill before reaching for shell tools or web searches when the question is about MT5 broker state - the MCP has direct access.
+description: Use when the user asks about their MetaTrader 5 broker account, balance, equity, margin, open positions, pending orders, trade history, current quotes / prices / bid-ask, tradeable symbols, OHLC bars / candles / chart data, chart screenshot / chart image / show me the chart, margin requirements for a hypothetical trade, market hours, or whether a symbol is currently tradeable. Triggers on questions like "what's my P&L", "show me my positions", "what's the price of EURUSD", "is the gold market open", "any pending orders on BTCUSD", "what trades did I do last week", "give me daily candles for XAUUSD", "what margin would 0.5 lot of US500 cost". Always use this skill before reaching for shell tools or web searches when the question is about MT5 broker state - the MCP has direct access.
 ---
 
 # Reading MetaTrader 5 broker state
 
-The `mt5-mcp` MCP server exposes eleven read-only tools and three resources that read live data from a running MetaTrader 5 terminal. Use them whenever the user wants to know the state of their account, market, or trading history. None of these tools mutate broker state - call them freely without confirmation.
+The `mt5-mcp` MCP server exposes twelve read-only tools and three resources that read live data from a running MetaTrader 5 terminal. Use them whenever the user wants to know the state of their account, market, or trading history. None of these tools mutate broker state - call them freely without confirmation.
 
 ## Tool catalogue
 
@@ -33,6 +33,12 @@ Each tool name below is the MCP tool name (Claude Code surfaces them as `mcp__mt
 Optionally filter by category like `"Forex"` or `"Metals"`. Use when the user wants to discover what they can trade, needs symbol metadata before placing an order, or needs swap rates / margin parameters / minimum SL distance.
 
 **`get_rates(symbol, timeframe, count)`** -> list of OHLC bars, most recent first. `timeframe` is one of `M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`, `W1`, `MN1`. `count` is clamped to `[1, 5000]`. Each bar carries `time` (UTC), `open`, `high`, `low`, `close`, `tick_volume`, `real_volume`, `spread`. Use for indicator computation (ATR, RSI, EMA), volatility ranking, overbought/oversold detection - anything that needs price history rather than a single quote.
+
+**`get_chart_screenshot(symbol, timeframe)`** -> PNG image of the native MT5
+chart for one symbol/timeframe. Windows-only (needs a GUI terminal running the
+AgentScreenshot EA); returns `SCREENSHOT_NOT_SUPPORTED` elsewhere. Prefer this
+when the user wants a visual read of price action or support/resistance rather
+than raw numbers. `timeframe` is one of M1, M5, M15, M30, H1, H4, D1, W1, MN1.
 
 **`calc_margin(symbol, side, volume, price=None)`** -> broker-authoritative margin for a hypothetical order. Returns `{symbol, side, volume, price, margin, currency}` where `margin` is in deposit currency. If `price` is omitted, uses the current ask (buy) / bid (sell). Use this whenever the user asks "what would it cost to open X" - the broker's own answer is more reliable than any local formula because per-broker margin tables, hedged-position discounts, and exotic calc modes all factor in. Errors with `MARGIN_CALC_FAILED` if the broker refuses (e.g. invalid volume step, market closed, calc mode requires extra parameters).
 
@@ -73,6 +79,9 @@ Tool failures arrive as MCP errors carrying a structured envelope: `{code, messa
 - `NO_RATES_AVAILABLE` - `get_rates` came back empty; the symbol may have insufficient history on this terminal. Often retryable later.
 - `MARGIN_CALC_FAILED` - `calc_margin` was refused by the broker. Common causes: volume not a multiple of `volume_step`, market closed, calc mode that needs additional broker parameters.
 - `INTERNAL_ERROR` - unexpected server-side exception. The full traceback is logged on the MCP server; the envelope only carries the exception type. Surface it cleanly to the user - don't retry blindly.
+- `SCREENSHOT_NOT_SUPPORTED` - `get_chart_screenshot` called on a non-Windows host. (A Windows terminal that is down or missing the AgentScreenshot EA yields `SCREENSHOT_TIMEOUT` instead.)
+- `SCREENSHOT_TIMEOUT` - the AgentScreenshot EA did not respond in time (not attached, or terminal down). Retryable.
+- `SCREENSHOT_FAILED` - the EA could not open the chart or capture it (e.g. bad symbol). Retryable.
 
 ## Workflow tips
 

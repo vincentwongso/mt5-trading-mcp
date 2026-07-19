@@ -79,7 +79,7 @@ Tool failures arrive as MCP errors carrying a structured envelope: `{code, messa
 - `NO_RATES_AVAILABLE` - `get_rates` came back empty; the symbol may have insufficient history on this terminal. Often retryable later.
 - `MARGIN_CALC_FAILED` - `calc_margin` was refused by the broker. Common causes: volume not a multiple of `volume_step`, market closed, calc mode that needs additional broker parameters.
 - `INTERNAL_ERROR` - unexpected server-side exception. The full traceback is logged on the MCP server; the envelope only carries the exception type. Surface it cleanly to the user - don't retry blindly.
-- `SCREENSHOT_NOT_SUPPORTED` - `get_chart_screenshot` called off Windows or without a GUI terminal.
+- `SCREENSHOT_NOT_SUPPORTED` - `get_chart_screenshot` called on a non-Windows host. (A Windows terminal that is down or missing the AgentScreenshot EA yields `SCREENSHOT_TIMEOUT` instead.)
 - `SCREENSHOT_TIMEOUT` - the AgentScreenshot EA did not respond in time (not attached, or terminal down). Retryable.
 - `SCREENSHOT_FAILED` - the EA could not open the chart or capture it (e.g. bad symbol). Retryable.
 

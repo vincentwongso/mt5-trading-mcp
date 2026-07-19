@@ -40,6 +40,23 @@ def _files_dir(client: Any) -> Path:
     return d
 
 
+def _sweep_stale(files_dir: Path, ttl_s: float, clock: Callable[[], float]) -> None:
+    """Best-effort removal of bridge files orphaned by earlier timeouts.
+
+    A slow EA can write a ``.png``/``.done`` after this call's ``finally``
+    cleanup already ran, leaving files that no request will ever collect.
+    Anything older than ``ttl_s`` is safe to delete: no in-flight request
+    lasts longer than the (much smaller) screenshot timeout.
+    """
+    cutoff = clock() - ttl_s
+    for p in files_dir.glob("*"):
+        try:
+            if p.stat().st_mtime < cutoff:
+                p.unlink()
+        except OSError:
+            pass
+
+
 def capture_chart(
     client: Any,
     *,
@@ -53,6 +70,8 @@ def capture_chart(
     id_factory: Callable[[], str] = lambda: str(ULID()),
     sleep: Callable[[float], None] = time.sleep,
     monotonic: Callable[[], float] = time.monotonic,
+    stale_ttl_s: float = 300.0,
+    wall_clock: Callable[[], float] = time.time,
 ) -> bytes:
     """Ask the EA to screenshot ``symbol``/``timeframe_name`` and return PNG bytes.
 
@@ -60,6 +79,7 @@ def capture_chart(
     reads a half-written file. Cleans up all bridge files in a ``finally``.
     """
     d = _files_dir(client)
+    _sweep_stale(d, stale_ttl_s, wall_clock)
     req_id = id_factory()
     tmp = d / f"{req_id}.req.tmp"
     req = d / f"{req_id}.req"

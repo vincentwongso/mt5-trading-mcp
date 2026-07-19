@@ -139,6 +139,31 @@ def test_ea_error_raises_failed(tmp_path):
     assert "ChartOpen failed" in ei.value.detail.message
 
 
+def test_stale_orphans_are_swept(tmp_path):
+    import os
+    d = _files_dir(tmp_path)
+    orphan = d / "old.png"
+    orphan.write_bytes(b"OLD")
+    os.utime(orphan, (1_000_000.0, 1_000_000.0))  # ancient mtime
+    # Fresh in-flight response for the happy path (must NOT be swept).
+    (d / "fixedid.png").write_bytes(b"PNGBYTES")
+    (d / "fixedid.done").write_text("ok", encoding="utf-16-le")
+
+    out = capture_chart(
+        _StubClient(tmp_path),
+        symbol="EURUSD.z",
+        timeframe_name="H1",
+        width=800,
+        height=600,
+        template=None,
+        timeout_s=1.0,
+        id_factory=lambda: "fixedid",
+        stale_ttl_s=300.0,
+    )
+    assert out == b"PNGBYTES"        # fresh files were used, not swept
+    assert not orphan.exists()       # ancient orphan removed
+
+
 def test_missing_data_path_raises_failed(tmp_path):
     class _NoPath:
         def call(self, fn):

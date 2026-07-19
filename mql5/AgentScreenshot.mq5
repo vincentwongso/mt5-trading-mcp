@@ -63,7 +63,11 @@ void ProcessRequest(const string reqName)
    string parts[];
    int n = StringSplit(line, '|', parts);
    if(n < 5)
-      return;  // malformed; nothing we can safely report back to
+     {
+      if(n >= 1)
+         WriteDone(parts[0], "err:malformed request");
+      return;
+     }
 
    string id       = parts[0];
    string symbol   = parts[1];
@@ -87,6 +91,8 @@ void ProcessRequest(const string reqName)
      }
 
    if(StringLen(tpl) > 0)
+      // Best-effort: a bad or missing template name falls back to the default
+      // chart rather than failing the capture. Return value intentionally ignored.
       ChartApplyTemplate(cid, tpl);
 
    ChartRedraw(cid);
@@ -101,15 +107,21 @@ void ProcessRequest(const string reqName)
 
 void OnTimer()
   {
+   string names[];
    string name;
    long handle = FileFindFirst(SubDir + "\\*.req", name);
    if(handle == INVALID_HANDLE)
       return;
    do
      {
-      ProcessRequest(name);
+      int sz = ArraySize(names);
+      ArrayResize(names, sz + 1);
+      names[sz] = name;
      }
    while(FileFindNext(handle, name));
    FileFindClose(handle);
+
+   for(int i = 0; i < ArraySize(names); i++)
+      ProcessRequest(names[i]);
   }
 //+------------------------------------------------------------------+

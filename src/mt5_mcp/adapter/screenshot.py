@@ -75,16 +75,19 @@ def capture_chart(
         while monotonic() < deadline:
             if done.exists():
                 status = done.read_text(encoding="utf-16-le").strip()
-                if status == "ok" and png.exists():
-                    return png.read_bytes()
-                reason = status[4:] if status.startswith("err:") else (status or "unknown")
-                raise MT5Error(ErrorDetail(
-                    code="SCREENSHOT_FAILED",
-                    message=f"EA failed to capture {symbol} {timeframe_name}: {reason}",
-                    retryable=True,
-                    requires_human=False,
-                    details={"symbol": symbol, "timeframe": timeframe_name},
-                ))
+                if status == "ok":
+                    if png.exists():
+                        return png.read_bytes()
+                    # status written just before the PNG is visible; keep polling
+                else:
+                    reason = status[4:] if status.startswith("err:") else (status or "unknown")
+                    raise MT5Error(ErrorDetail(
+                        code="SCREENSHOT_FAILED",
+                        message=f"EA failed to capture {symbol} {timeframe_name}: {reason}",
+                        retryable=True,
+                        requires_human=False,
+                        details={"symbol": symbol, "timeframe": timeframe_name},
+                    ))
             sleep(poll_interval_s)
 
         raise MT5Error(ErrorDetail(
@@ -101,5 +104,5 @@ def capture_chart(
         for p in (tmp, req, done, png):
             try:
                 p.unlink()
-            except FileNotFoundError:
+            except OSError:
                 pass

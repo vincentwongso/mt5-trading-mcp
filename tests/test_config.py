@@ -367,3 +367,31 @@ def test_mt5_password_env_not_loaded_into_config(tmp_path, monkeypatch):
     cfg = load_config(cfg_file)
     assert not hasattr(cfg.mt5, "password")
     assert "topsecret" not in cfg.model_dump_json()
+
+
+def test_screenshot_defaults():
+    from mt5_mcp.config import Config
+
+    c = Config()
+    assert c.screenshot.width == 1600
+    assert c.screenshot.height == 900
+    assert c.screenshot.template is None
+    assert c.screenshot.timeout_s == 10.0
+
+
+def test_screenshot_override_and_extra_forbidden():
+    import pytest
+    from pydantic import ValidationError
+
+    from mt5_mcp.config import Config
+
+    c = Config.model_validate(
+        {"screenshot": {"width": 1280, "height": 720, "template": "agent.tpl"}}
+    )
+    assert c.screenshot.width == 1280
+    assert c.screenshot.height == 720
+    assert c.screenshot.template == "agent.tpl"
+    assert c.screenshot.timeout_s == 10.0  # default preserved
+
+    with pytest.raises(ValidationError):
+        Config.model_validate({"screenshot": {"bogus": 1}})

@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-07-19
+
+### Added
+
+- **`get_chart_screenshot(symbol, timeframe)` - native MT5 chart screenshots (Windows).**
+  Returns a PNG of the actual MetaTrader 5 chart, including your template,
+  indicators, and drawings, so an LLM can read price action and
+  support/resistance visually instead of parsing OHLC numbers. Because the
+  MetaTrader5 Python API cannot capture charts, the tool bridges through a
+  bundled MQL5 Expert Advisor (`mql5/AgentScreenshot.mq5`, with a compiled
+  `.ex5` committed alongside it): it drops a request into the terminal's
+  sandboxed `MQL5/Files/agent_screenshot/` folder, the EA opens the requested
+  chart and calls `ChartScreenShot()`, and the tool returns the PNG as an MCP
+  image. A new `[screenshot]` config section tunes `width` (1600), `height`
+  (900), `template` (none), and `timeout_s` (10). The feature is Windows-only
+  and needs a GUI terminal with the EA attached; on other platforms or the
+  headless Docker path the tool returns a structured `SCREENSHOT_NOT_SUPPORTED`
+  error. It is read-only, so no consent gate applies. See the README "Chart
+  screenshots" section and `mql5/README.md` for setup and verification.
+
 ## [1.4.2] - 2026-06-25
 
 ### Added

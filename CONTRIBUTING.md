@@ -168,6 +168,39 @@ version-specific shims with no obvious alternative:
    relevant [`docs/`](docs/) page if behaviour changed.
 5. Open the PR with a clear description and link the issue it addresses.
 
+## Releasing
+
+Publishing is automated: pushing a `v*` tag triggers `publish.yml` (build ->
+PyPI via OIDC Trusted Publishing -> GitHub release) and `publish-image.yml`
+(GHCR image). The published package version comes from `pyproject.toml`, and
+the GitHub release notes are sliced from the matching `## [x.y.z]` section of
+[CHANGELOG.md](CHANGELOG.md) - so both must be updated before the tag, in a
+release PR, or the release is wrong or a silent no-op.
+
+Cut a release like this:
+
+1. Branch off an up-to-date `main` (e.g. `release/x.y.z`).
+2. Bump the version to `x.y.z` in **all four** places, which must stay in sync:
+   - `pyproject.toml` (`version = "..."`)
+   - `server.json` (two `"version"` fields: top-level and under `packages`)
+   - `uv.lock` - do NOT hand-edit; run `uv lock` after bumping `pyproject.toml`.
+     CI installs with `uv sync --locked`, so a stale lock fails **every** test
+     job with `The lockfile at 'uv.lock' needs to be updated` before a single
+     test runs. Verify with `uv lock --locked` (must exit clean).
+3. Move the CHANGELOG entries from `## [Unreleased]` into a new
+   `## [x.y.z] - YYYY-MM-DD` section. Confirm the notes CI will publish:
+   `awk -v v=x.y.z 'BEGIN{m="## [" v "]"} index($0,m)==1{f=1;next} f&&/^## /{exit} f{print}' CHANGELOG.md`
+4. Commit all of the above together, open the release PR, and merge once CI is
+   green (a green `test` matrix here is the proof the lock is in sync).
+5. Tag and push from the merged `main`:
+   ```bash
+   git checkout main && git pull --ff-only
+   git tag -a vx.y.z -m "vx.y.z: <summary>"
+   git push origin vx.y.z
+   ```
+6. Watch the release: `gh run list --workflow=publish.yml`. The `pypi`
+   deployment environment may require manual approval in the Actions tab.
+
 ## Security
 
 Please **do not** open public issues for security vulnerabilities. Follow the

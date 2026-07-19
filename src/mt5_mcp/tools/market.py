@@ -147,28 +147,9 @@ def register(mcp: FastMCP) -> None:
         offset = ctx.client.broker_offset_minutes
         return [rate_from_raw(r, broker_offset_minutes=offset) for r in rows]
 
-    @mcp.tool()
     @error_envelope
-    def get_chart_screenshot(symbol: str, timeframe: str) -> Image:
-        """PNG screenshot of the native MT5 chart for ``symbol`` at ``timeframe``.
-
-        Windows-only: needs a GUI terminal running the AgentScreenshot EA.
-        ``timeframe`` is one of ``M1``, ``M5``, ``M15``, ``M30``, ``H1``,
-        ``H4``, ``D1``, ``W1``, ``MN1``. Returns an image the caller can read
-        visually (candles, support/resistance, patterns).
-        """
-        if platform.system() != "Windows":
-            raise MT5Error(ErrorDetail(
-                code="SCREENSHOT_NOT_SUPPORTED",
-                message=(
-                    "Chart screenshots require a GUI MetaTrader 5 terminal on "
-                    "Windows with the AgentScreenshot EA attached. This host is "
-                    f"{platform.system()}."
-                ),
-                retryable=False,
-                requires_human=True,
-                details={"platform": platform.system()},
-            ))
+    def _capture_chart_screenshot(symbol: str, timeframe: str) -> Image:
+        """Windows-only body of get_chart_screenshot (needs a terminal connection)."""
         if timeframe not in _TIMEFRAME_ATTRS:
             raise MT5Error(ErrorDetail(
                 code="INVALID_TIMEFRAME",
@@ -194,6 +175,36 @@ def register(mcp: FastMCP) -> None:
             timeout_s=cfg.timeout_s,
         )
         return Image(data=png, format="png")
+
+    @mcp.tool()
+    def get_chart_screenshot(symbol: str, timeframe: str) -> Image:
+        """PNG screenshot of the native MT5 chart for ``symbol`` at ``timeframe``.
+
+        Windows-only: needs a GUI terminal running the AgentScreenshot EA.
+        ``timeframe`` is one of ``M1``, ``M5``, ``M15``, ``M30``, ``H1``,
+        ``H4``, ``D1``, ``W1``, ``MN1``. Returns an image the caller can read
+        visually (candles, support/resistance, patterns).
+        """
+        # The platform guard MUST run before any terminal connection. This tool
+        # is registered on all platforms so agents can discover it, but it only
+        # works on a GUI Windows terminal. error_envelope eagerly connects
+        # (ensure_connected) before the wrapped body, so a guard placed inside
+        # it would be masked by TERMINAL_NOT_CONNECTED on a host with no
+        # reachable terminal - which is exactly the non-Windows case here.
+        host = platform.system()
+        if host != "Windows":
+            return {"error": ErrorDetail(
+                code="SCREENSHOT_NOT_SUPPORTED",
+                message=(
+                    "Chart screenshots require a GUI MetaTrader 5 terminal on "
+                    "Windows with the AgentScreenshot EA attached. This host is "
+                    f"{host}."
+                ),
+                retryable=False,
+                requires_human=True,
+                details={"platform": host},
+            ).model_dump(mode="json")}
+        return _capture_chart_screenshot(symbol=symbol, timeframe=timeframe)
 
     @mcp.tool()
     @error_envelope

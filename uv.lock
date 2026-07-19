@@ -395,7 +395,7 @@ version = "5.0.5735"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' and sys_platform == 'win32'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/8c/bbfde8e0aa9bd08439cc60c54bab106ea485c1a5e1bc651bbe295bbe9614/metatrader5-5.0.5735-cp310-cp310-win_amd64.whl", hash = "sha256:8f576f271844069e40aefddb70197a07f3e511d71ebc048edc1fbc78695a7ba3", size = 48092, upload-time = "2026-04-04T16:44:07.236Z" },
@@ -407,7 +407,7 @@ wheels = [
 
 [[package]]
 name = "mt5-trading-mcp"
-version = "1.4.2"
+version = "1.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },

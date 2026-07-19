@@ -74,7 +74,9 @@ def capture_chart(
         deadline = monotonic() + timeout_s
         while monotonic() < deadline:
             if done.exists():
-                status = done.read_text(encoding="utf-16-le").strip()
+                # MQL5 FileWriteString(FILE_UNICODE) prepends a UTF-16 BOM to
+                # new files; strip it so "ok"/"err:" compare correctly.
+                status = done.read_text(encoding="utf-16-le").lstrip("﻿").strip()
                 if status == "ok":
                     if png.exists():
                         return png.read_bytes()

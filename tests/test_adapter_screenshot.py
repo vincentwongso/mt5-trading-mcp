@@ -54,6 +54,27 @@ def test_happy_path_returns_png_and_cleans_up(tmp_path):
     assert list(d.iterdir()) == []
 
 
+def test_bom_prefixed_ok_status_is_tolerated(tmp_path):
+    # MQL5 FileWriteString(FILE_UNICODE) prepends a UTF-16 BOM to newly
+    # created files, so a real EA's "ok" status arrives as "﻿ok".
+    d = _files_dir(tmp_path)
+    (d / "fixedid.png").write_bytes(b"PNGBYTES")
+    (d / "fixedid.done").write_text("﻿ok", encoding="utf-16-le")
+
+    out = capture_chart(
+        _StubClient(tmp_path),
+        symbol="XAUUSD.z",
+        timeframe_name="H1",
+        width=800,
+        height=600,
+        template=None,
+        timeout_s=1.0,
+        id_factory=lambda: "fixedid",
+    )
+
+    assert out == b"PNGBYTES"
+
+
 def test_request_payload_is_written(tmp_path):
     d = _files_dir(tmp_path)
     seen = {}

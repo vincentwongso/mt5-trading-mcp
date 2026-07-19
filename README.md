@@ -41,8 +41,9 @@ Windows (native) or Linux (via Docker); Python 3.10+.
 `mt5-mcp` lets an AI agent read your MetaTrader 5 account and place trades
 through it, over the Model Context Protocol.
 
-- **11 read-only tools**: account, quotes, positions, orders, history, OHLC
-  bars, and broker-authoritative margin estimates. No consent gate.
+- **12 read-only tools**: account, quotes, positions, orders, history, OHLC
+  bars, broker-authoritative margin estimates, and native chart screenshots
+  (Windows). No consent gate.
 - **4 mutating tools**: `place_order`, `modify_order`, `cancel_order`,
   `close_position`, each behind a preflight + human-consent + idempotency +
   audit layer.

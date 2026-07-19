@@ -20,11 +20,13 @@ requested chart, and writes the PNG back.
    in the top-right of that chart means it is running. Leave the terminal
    open.
 
-## Committed .ex5
+## Compiled .ex5
 
-`AgentScreenshot.ex5` is compiled on Windows with MetaEditor and committed
-next to the source so users can skip step 3. Recompile and re-commit it
-whenever `AgentScreenshot.mq5` changes. (It cannot be built on Linux/CI.)
+The repository ships `AgentScreenshot.mq5` source only. Until a compiled
+`AgentScreenshot.ex5` is committed next to it, follow step 3 above to build
+it yourself with MetaEditor. The maintainer compiles the `.ex5` on Windows
+and commits it so future users can skip step 3; it cannot be built on
+Linux/CI, so keep it in sync whenever `AgentScreenshot.mq5` changes.
 
 ## Verify
 

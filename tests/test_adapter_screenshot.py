@@ -164,6 +164,39 @@ def test_stale_orphans_are_swept(tmp_path):
     assert not orphan.exists()       # ancient orphan removed
 
 
+def test_sweep_ttl_respects_long_timeout(tmp_path):
+    # A user timeout_s above the stale_ttl_s floor must not let the sweep
+    # remove a concurrent call's still-in-flight files (age < timeout_s).
+    import os
+
+    d = _files_dir(tmp_path)
+    now = 10_000.0
+    inflight = d / "concurrent.req"
+    inflight.write_text("x", encoding="utf-16-le")
+    os.utime(inflight, (now - 10, now - 10))     # 10s old, within a 100s timeout
+    ancient = d / "ancient.png"
+    ancient.write_bytes(b"OLD")
+    os.utime(ancient, (now - 5000, now - 5000))  # far older than timeout + buffer
+    (d / "fixedid.png").write_bytes(b"PNGBYTES")
+    (d / "fixedid.done").write_text("ok", encoding="utf-16-le")
+
+    out = capture_chart(
+        _StubClient(tmp_path),
+        symbol="EURUSD.z",
+        timeframe_name="H1",
+        width=800,
+        height=600,
+        template=None,
+        timeout_s=100.0,          # exceeds the 1.0s stale floor below
+        stale_ttl_s=1.0,
+        id_factory=lambda: "fixedid",
+        wall_clock=lambda: now,
+    )
+    assert out == b"PNGBYTES"
+    assert inflight.exists()      # not swept: within the in-flight window
+    assert not ancient.exists()   # swept: far older than timeout + buffer
+
+
 def test_missing_data_path_raises_failed(tmp_path):
     class _NoPath:
         def call(self, fn):

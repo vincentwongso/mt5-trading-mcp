@@ -45,8 +45,9 @@ def _sweep_stale(files_dir: Path, ttl_s: float, clock: Callable[[], float]) -> N
 
     A slow EA can write a ``.png``/``.done`` after this call's ``finally``
     cleanup already ran, leaving files that no request will ever collect.
-    Anything older than ``ttl_s`` is safe to delete: no in-flight request
-    lasts longer than the (much smaller) screenshot timeout.
+    Anything older than ``ttl_s`` is deleted. The caller must pass a ``ttl_s``
+    that is >= the longest in-flight request window (see ``capture_chart``), so
+    a concurrent call's still-pending files are never swept out from under it.
     """
     cutoff = clock() - ttl_s
     for p in files_dir.glob("*"):
@@ -79,7 +80,13 @@ def capture_chart(
     reads a half-written file. Cleans up all bridge files in a ``finally``.
     """
     d = _files_dir(client)
-    _sweep_stale(d, stale_ttl_s, wall_clock)
+    # Never sweep files younger than any plausible in-flight request. A
+    # concurrent call may keep its .req/.done/.png alive for up to its own
+    # timeout_s; if the caller sets timeout_s above the stale_ttl_s floor, the
+    # floor alone would sweep those still-pending files and spuriously fail the
+    # other call. Guard the floor with timeout_s plus a buffer for EA latency.
+    effective_ttl = max(stale_ttl_s, timeout_s + 60.0)
+    _sweep_stale(d, effective_ttl, wall_clock)
     req_id = id_factory()
     tmp = d / f"{req_id}.req.tmp"
     req = d / f"{req_id}.req"

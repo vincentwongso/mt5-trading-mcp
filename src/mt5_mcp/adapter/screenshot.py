@@ -7,8 +7,14 @@ practice (needs a GUI terminal with the EA attached); the platform guard
 lives in the tool layer, not here, so this module stays import-safe and
 unit-testable on any OS.
 
-Request line format (UTF-16-LE, single line, '|'-delimited):
+Request payload (UTF-16-LE). Line 1 is the header; each following line is one
+annotation, fixed arity per type, label text always last:
     <id>|<symbol>|<timeframe>|<width>|<height>|<template>
+    A|hline|<price>|<bgr>|<style>|<text>
+    A|vline|<epoch>|<bgr>|<style>|<text>
+    A|text|<epoch>|<price>|<bgr>|<text>
+    A|label|<corner>|<xdist>|<ydist>|<bgr>|<text>
+    A|trend|<epoch1>|<price1>|<epoch2>|<price2>|<bgr>|<style>|<text>
 Response file ``<id>.done`` contains ``ok`` or ``err:<reason>`` (UTF-16-LE).
 """
 from __future__ import annotations
@@ -66,6 +72,7 @@ def capture_chart(
     width: int,
     height: int,
     template: str | None,
+    annotation_lines: list[str] | None = None,
     timeout_s: float,
     poll_interval_s: float = 0.15,
     id_factory: Callable[[], str] = lambda: str(ULID()),
@@ -93,7 +100,10 @@ def capture_chart(
     done = d / f"{req_id}.done"
     png = d / f"{req_id}.png"
 
-    payload = f"{req_id}|{symbol}|{timeframe_name}|{width}|{height}|{template or ''}"
+    header = f"{req_id}|{symbol}|{timeframe_name}|{width}|{height}|{template or ''}"
+    # Annotations append one line each. With none, the payload is byte-identical
+    # to the pre-1.5.1 format, so an already-deployed .ex5 keeps working.
+    payload = "\n".join([header, *(annotation_lines or [])])
     try:
         tmp.write_text(payload, encoding="utf-16-le")
         tmp.replace(req)  # atomic publish on the same filesystem

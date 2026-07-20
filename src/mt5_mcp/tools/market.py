@@ -15,6 +15,7 @@ from mt5_mcp.adapter.conversions import (
     symbol_info_from_raw,
 )
 from mt5_mcp.adapter.screenshot import capture_chart
+from mt5_mcp.annotations import Annotation, serialize_annotations, validate_annotations
 from mt5_mcp.errors import MT5Error
 from mt5_mcp.server import get_context
 from mt5_mcp.tools._common import error_envelope
@@ -148,7 +149,11 @@ def register(mcp: FastMCP) -> None:
         return [rate_from_raw(r, broker_offset_minutes=offset) for r in rows]
 
     @error_envelope
-    def _capture_chart_screenshot(symbol: str, timeframe: str) -> Image:
+    def _capture_chart_screenshot(
+        symbol: str,
+        timeframe: str,
+        annotations: list[Annotation] | None = None,
+    ) -> Image:
         """Windows-only body of get_chart_screenshot (needs a terminal connection)."""
         if timeframe not in _TIMEFRAME_ATTRS:
             raise MT5Error(ErrorDetail(
@@ -161,6 +166,8 @@ def register(mcp: FastMCP) -> None:
                 requires_human=False,
                 details={"timeframe": timeframe},
             ))
+        # Validate before any terminal work so a bad annotation costs nothing.
+        parsed = validate_annotations(annotations)
         ctx = get_context()
         # Raises SYMBOL_NOT_FOUND / SYMBOL_NOT_ENABLED, matching get_rates.
         ctx.symbols.get(symbol)
@@ -172,18 +179,41 @@ def register(mcp: FastMCP) -> None:
             width=cfg.width,
             height=cfg.height,
             template=cfg.template,
+            annotation_lines=serialize_annotations(
+                parsed, broker_offset_minutes=ctx.client.broker_offset_minutes
+            ),
             timeout_s=cfg.timeout_s,
         )
         return Image(data=png, format="png")
 
     @mcp.tool()
-    def get_chart_screenshot(symbol: str, timeframe: str) -> Image:
+    def get_chart_screenshot(
+        symbol: str,
+        timeframe: str,
+        annotations: list[Annotation] | None = None,
+    ) -> Image:
         """PNG screenshot of the native MT5 chart for ``symbol`` at ``timeframe``.
 
         Windows-only: needs a GUI terminal running the AgentScreenshot EA.
         ``timeframe`` is one of ``M1``, ``M5``, ``M15``, ``M30``, ``H1``,
         ``H4``, ``D1``, ``W1``, ``MN1``. Returns an image the caller can read
         visually (candles, support/resistance, patterns).
+
+        ``annotations`` optionally marks up the chart before capture (at most
+        16). The markup is drawn on a temporary chart that is destroyed right
+        after the screenshot, so it never touches the user's own charts.
+
+        - ``{"type": "hline", "price": 2650.0, "role": "resistance"}``
+        - ``{"type": "vline", "time": "2026-07-19T12:30:00Z", "text": "CPI"}``
+        - ``{"type": "text", "time": ..., "price": 2612.0, "text": "note"}``
+        - ``{"type": "label", "corner": "top_left", "text": "summary note"}``
+        - ``{"type": "trendline", "time1": ..., "price1": 2590.0,
+          "time2": ..., "price2": 2648.0, "role": "support"}``
+
+        ``role`` is ``resistance`` (red), ``support`` (lime), ``note``
+        (yellow, default) or ``neutral`` (gray dashed); ``color`` overrides it.
+        Times are UTC and must be real bar timestamps from ``get_rates``, not
+        guesses, or the annotation lands off-screen.
         """
         # The platform guard MUST run before any terminal connection. This tool
         # is registered on all platforms so agents can discover it, but it only
@@ -204,7 +234,9 @@ def register(mcp: FastMCP) -> None:
                 requires_human=True,
                 details={"platform": host},
             ).model_dump(mode="json")}
-        return _capture_chart_screenshot(symbol=symbol, timeframe=timeframe)
+        return _capture_chart_screenshot(
+            symbol=symbol, timeframe=timeframe, annotations=annotations
+        )
 
     @mcp.tool()
     @error_envelope

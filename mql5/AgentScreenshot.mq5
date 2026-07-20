@@ -86,7 +86,15 @@ void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES 
    // The chart was just opened, so it is scrolled to the right edge and bar 0
    // is the rightmost visible bar. That is where hline labels are anchored.
    datetime rightEdge = iTime(symbol, tf, 0);
+   if(rightEdge == 0)
+      // History for this symbol/timeframe has not loaded yet; fall back to
+      // now rather than anchoring hline labels at the Unix epoch.
+      rightEdge = TimeCurrent();
    double   priceMax  = ChartGetDouble(cid, CHART_PRICE_MAX, 0);
+   if(priceMax <= 0)
+      // Price scale not computed yet; fall back to the current bid rather
+      // than anchoring vline labels at price 0.
+      priceMax = SymbolInfoDouble(symbol, SYMBOL_BID);
 
    for(int i = 0; i < ArraySize(lines); i++)
      {
@@ -99,29 +107,31 @@ void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES 
       string oname = "agent_" + reqId + "_" + IntegerToString(i);
       string lname = oname + "_lbl";
 
-      if(kind == "hline" && n >= 6)
+      if(kind == "hline" && n >= 5)
         {
          double price = StringToDouble(f[2]);
          color  clr   = (color)StringToInteger(f[3]);
          int    style = (int)StringToInteger(f[4]);
+         string txt   = (n >= 6) ? f[5] : "";
          if(ObjectCreate(cid, oname, OBJ_HLINE, 0, 0, price))
            {
             StyleLine(cid, oname, clr, style);
-            if(StringLen(f[5]) > 0)
-               MakeTextLabel(cid, lname, rightEdge, price, f[5], clr,
+            if(StringLen(txt) > 0)
+               MakeTextLabel(cid, lname, rightEdge, price, txt, clr,
                              ANCHOR_RIGHT_LOWER);
            }
         }
-      else if(kind == "vline" && n >= 6)
+      else if(kind == "vline" && n >= 5)
         {
          datetime t     = (datetime)StringToInteger(f[2]);
          color    clr   = (color)StringToInteger(f[3]);
          int      style = (int)StringToInteger(f[4]);
+         string   txt   = (n >= 6) ? f[5] : "";
          if(ObjectCreate(cid, oname, OBJ_VLINE, 0, t, 0))
            {
             StyleLine(cid, oname, clr, style);
-            if(StringLen(f[5]) > 0)
-               MakeTextLabel(cid, lname, t, priceMax, f[5], clr,
+            if(StringLen(txt) > 0)
+               MakeTextLabel(cid, lname, t, priceMax, txt, clr,
                              ANCHOR_LEFT_UPPER);
            }
         }
@@ -149,7 +159,7 @@ void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES 
             ObjectSetInteger(cid, oname, OBJPROP_SELECTABLE, false);
            }
         }
-      else if(kind == "trend" && n >= 9)
+      else if(kind == "trend" && n >= 8)
         {
          datetime t1    = (datetime)StringToInteger(f[2]);
          double   p1    = StringToDouble(f[3]);
@@ -157,12 +167,13 @@ void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES 
          double   p2    = StringToDouble(f[5]);
          color    clr   = (color)StringToInteger(f[6]);
          int      style = (int)StringToInteger(f[7]);
+         string   txt   = (n >= 9) ? f[8] : "";
          if(ObjectCreate(cid, oname, OBJ_TREND, 0, t1, p1, t2, p2))
            {
             StyleLine(cid, oname, clr, style);
             ObjectSetInteger(cid, oname, OBJPROP_RAY_RIGHT, false);
-            if(StringLen(f[8]) > 0)
-               MakeTextLabel(cid, lname, t2, p2, f[8], clr, ANCHOR_LEFT_LOWER);
+            if(StringLen(txt) > 0)
+               MakeTextLabel(cid, lname, t2, p2, txt, clr, ANCHOR_LEFT_LOWER);
            }
         }
      }
@@ -176,10 +187,17 @@ void ProcessRequest(const string reqName)
    if(h == INVALID_HANDLE)
       return;
    string line = FileReadString(h);
+   line = StringTrimRight(line);
    string annLines[];
-   while(!FileIsEnding(h))
+   // Bounded so a stuck read (empty line without advancing the file pointer
+   // or setting the end flag) can never spin OnTimer forever. Python caps
+   // annotations at 16, so 64 is a generous, cost-free ceiling.
+   while(!FileIsEnding(h) && ArraySize(annLines) < 64)
      {
       string ln = FileReadString(h);
+      // FileReadString in FILE_TXT mode may split only on '\n', leaving a
+      // trailing '\r' attached; strip it so it never corrupts the last field.
+      ln = StringTrimRight(ln);
       if(StringLen(ln) == 0)
          continue;
       int asz = ArraySize(annLines);
@@ -231,7 +249,9 @@ void ProcessRequest(const string reqName)
    string pngPath = SubDir + "\\" + id + ".png";
    bool ok = ChartScreenShot(cid, pngPath, width, height, ALIGN_RIGHT);
    // Belt and braces: ChartClose already destroys chart-scoped objects.
-   ObjectsDeleteAll(cid);
+   // Scoped to our own objects (all named with the "agent_" prefix) so this
+   // never touches anything placed by the user's applied template.
+   ObjectsDeleteAll(cid, "agent_");
    ChartClose(cid);
 
    WriteDone(id, ok ? "ok" : "err:ChartScreenShot returned false");

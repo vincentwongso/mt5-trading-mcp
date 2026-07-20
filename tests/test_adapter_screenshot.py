@@ -82,8 +82,12 @@ def test_request_payload_is_written(tmp_path):
     def fake_sleep(_):
         # Stand in for the EA: on the first poll, read the request line and
         # seed the response, so we assert exactly what capture_chart wrote.
+        # newline="" avoids Python's universal-newline read translation, which
+        # would otherwise collapse the on-disk "\r\n" back to "\n" and hide
+        # the very thing this fix is meant to prove.
         if not seen:
-            seen["payload"] = (d / "fixedid.req").read_text(encoding="utf-16-le")
+            with open(d / "fixedid.req", encoding="utf-16-le", newline="") as f:
+                seen["payload"] = f.read()
             (d / "fixedid.png").write_bytes(b"X")
             (d / "fixedid.done").write_text("ok", encoding="utf-16-le")
 
@@ -223,7 +227,10 @@ def _capture_capturing_payload(tmp_path, **kwargs):
 
     def fake_sleep(_):
         if not seen:
-            seen["payload"] = (d / "fixedid.req").read_text(encoding="utf-16-le")
+            # newline="" preserves the on-disk "\r\n" separator (see the
+            # matching comment in test_request_payload_is_written).
+            with open(d / "fixedid.req", encoding="utf-16-le", newline="") as f:
+                seen["payload"] = f.read()
             (d / "fixedid.png").write_bytes(b"X")
             (d / "fixedid.done").write_text("ok", encoding="utf-16-le")
 
@@ -260,7 +267,7 @@ def test_annotation_lines_are_appended_after_the_header(tmp_path):
         tmp_path,
         annotation_lines=["A|hline|2650|255|0|R", "A|label|0|10|20|65535|note"],
     )
-    assert payload.split("\n") == [
+    assert payload.split("\r\n") == [
         "fixedid|EURUSD.z|M15|1280|720|agent.tpl",
         "A|hline|2650|255|0|R",
         "A|label|0|10|20|65535|note",

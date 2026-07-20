@@ -101,11 +101,21 @@ def capture_chart(
     png = d / f"{req_id}.png"
 
     header = f"{req_id}|{symbol}|{timeframe_name}|{width}|{height}|{template or ''}"
-    # Annotations append one line each. With none, the payload is byte-identical
-    # to the pre-1.5.1 format, so an already-deployed .ex5 keeps working.
-    payload = "\n".join([header, *(annotation_lines or [])])
+    # Annotations append one line each, joined with CRLF: MQL5's own file
+    # writers emit "\r\n" and FileReadString in FILE_TXT mode is not
+    # guaranteed to treat a lone "\n" as a line terminator, so a bare "\n"
+    # risks the whole payload being read back as one unsplit line. With no
+    # annotation lines, join emits no separator at all, so the payload stays
+    # byte-identical to the pre-1.5.1 format and an already-deployed .ex5
+    # keeps working.
+    payload = "\r\n".join([header, *(annotation_lines or [])])
     try:
-        tmp.write_text(payload, encoding="utf-16-le")
+        # newline="" disables Python's own newline translation, so the "\r\n"
+        # already in payload reaches disk unmodified. Without it, a Windows
+        # Python process would re-translate each embedded "\n" to "\r\n",
+        # doubling up to "\r\r\n" and corrupting the payload.
+        with open(tmp, "w", encoding="utf-16-le", newline="") as f:
+            f.write(payload)
         tmp.replace(req)  # atomic publish on the same filesystem
 
         deadline = monotonic() + timeout_s

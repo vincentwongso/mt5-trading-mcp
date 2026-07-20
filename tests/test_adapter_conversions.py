@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from mt5_mcp.adapter.conversions import (
@@ -15,6 +15,7 @@ from mt5_mcp.adapter.conversions import (
     quote_from_tick,
     symbol_info_from_raw,
     terminal_info_from_raw,
+    utc_to_broker_epoch,
 )
 from tests.fakes import (
     FakeAccountInfo,
@@ -433,3 +434,28 @@ def test_order_result_from_mt5_response_partial_fill():
     assert result.volume == Decimal("0.05")  # actual filled, not requested
     assert result.error is None
     assert result.server_response_code == 10010
+
+
+def test_utc_to_broker_epoch_round_trips():
+    original = datetime(2026, 7, 19, 14, 30, tzinfo=timezone.utc)
+    for offset in (0, 180, -300, 45):
+        epoch = utc_to_broker_epoch(original, offset)
+        assert epoch_to_utc(epoch, offset) == original
+
+
+def test_utc_to_broker_epoch_shifts_by_offset():
+    dt = datetime(2026, 7, 19, 12, 0, tzinfo=timezone.utc)
+    # GMT+3 broker: the naive broker-time epoch reads 3 hours later than UTC.
+    assert utc_to_broker_epoch(dt, 180) - utc_to_broker_epoch(dt, 0) == 3 * 3600
+
+
+def test_utc_to_broker_epoch_treats_naive_as_utc():
+    naive = datetime(2026, 7, 19, 12, 0)
+    aware = datetime(2026, 7, 19, 12, 0, tzinfo=timezone.utc)
+    assert utc_to_broker_epoch(naive, 180) == utc_to_broker_epoch(aware, 180)
+
+
+def test_utc_to_broker_epoch_converts_non_utc_tz():
+    plus_two = datetime(2026, 7, 19, 14, 0, tzinfo=timezone(timedelta(hours=2)))
+    same_moment_utc = datetime(2026, 7, 19, 12, 0, tzinfo=timezone.utc)
+    assert utc_to_broker_epoch(plus_two, 180) == utc_to_broker_epoch(same_moment_utc, 180)

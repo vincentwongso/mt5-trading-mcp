@@ -80,6 +80,19 @@ void StyleLine(const long cid, const string name, const color clr, const int sty
    ObjectSetInteger(cid, name, OBJPROP_SELECTABLE, false);
   }
 
+ENUM_ANCHOR_POINT AnchorForCorner(const int corner)
+  {
+   // OBJ_LABEL offsets are measured inward from its corner, so the anchor has
+   // to match the corner or right/bottom-anchored text runs off the canvas.
+   if(corner == CORNER_LEFT_LOWER)
+      return(ANCHOR_LEFT_LOWER);
+   if(corner == CORNER_RIGHT_LOWER)
+      return(ANCHOR_RIGHT_LOWER);
+   if(corner == CORNER_RIGHT_UPPER)
+      return(ANCHOR_RIGHT_UPPER);
+   return(ANCHOR_LEFT_UPPER);
+  }
+
 void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES tf,
                      const string reqId, const string &lines[])
   {
@@ -153,6 +166,7 @@ void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES 
          if(ObjectCreate(cid, oname, OBJ_LABEL, 0, 0, 0))
            {
             ObjectSetInteger(cid, oname, OBJPROP_CORNER, corner);
+            ObjectSetInteger(cid, oname, OBJPROP_ANCHOR, AnchorForCorner(corner));
             ObjectSetInteger(cid, oname, OBJPROP_XDISTANCE, xd);
             ObjectSetInteger(cid, oname, OBJPROP_YDISTANCE, yd);
             ObjectSetString(cid, oname, OBJPROP_TEXT, f[6]);
@@ -258,9 +272,10 @@ void ProcessRequest(const string reqName)
       // chart rather than failing the capture. Return value intentionally ignored.
       ChartApplyTemplate(cid, tpl);
 
-   DrawAnnotations(cid, symbol, tf, id, annLines);
    ChartRedraw(cid);
    Sleep(SettleMs);
+   DrawAnnotations(cid, symbol, tf, id, annLines);
+   ChartRedraw(cid);
 
    string pngPath = SubDir + "\\" + id + ".png";
    bool ok = ChartScreenShot(cid, pngPath, width, height, ALIGN_RIGHT);

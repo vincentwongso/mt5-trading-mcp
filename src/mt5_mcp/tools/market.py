@@ -227,6 +227,14 @@ def register(mcp: FastMCP) -> None:
         visible range and times older than the visible window are accepted
         but will not appear either, since the capture shows roughly the most
         recent screen of bars.
+
+        Avoid anchoring a ``text`` annotation to the last few bars at the same
+        price as an ``hline``: MT5 pins the hline's own description to the
+        right margin, so the two overlap and both become unreadable. Offset
+        the text a few bars back, shift its price, or drop the hline's
+        ``text``. Note also that the temporary chart inherits the user's
+        default template, so template indicators may appear in the capture
+        alongside the annotations.
         """
         # The platform guard MUST run before any terminal connection. This tool
         # is registered on all platforms so agents can discover it, but it only

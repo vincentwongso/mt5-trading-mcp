@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-07-20
+
+### Changed
+- **`get_chart_screenshot` annotation guidance** - documents that a `text` annotation anchored near current price at the same level as an `hline` overlaps the hline's right-margin description, and that the temporary capture chart inherits your default template. Docs only; no behavior change.
+
 ## [1.5.1] - 2026-07-20
 
 ### Added

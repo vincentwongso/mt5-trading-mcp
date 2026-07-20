@@ -59,6 +59,14 @@ the rest.
 > bars. Annotations are drawn on the temporary chart the capture already
 > opens, so they are destroyed with it and never appear on your own charts.
 
+> Avoid anchoring a `text` annotation to the last few bars at the same price as
+> an `hline`. MT5 pins the hline's own description to the right margin, so the
+> two overlap and both become unreadable - offset the text a few bars back,
+> shift its price, or drop the hline's `text`. The temporary chart also
+> inherits your default template, so template indicators appear in the capture
+> alongside the annotations; point `[screenshot] template` at a clean `.tpl` if
+> you want them out.
+
 ## Mutating tools (preflight + consent + idempotency + audit)
 
 | Tool | Purpose | Gate |

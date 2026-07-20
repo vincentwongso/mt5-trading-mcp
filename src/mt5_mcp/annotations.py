@@ -14,6 +14,7 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, field_validator
 
+from mt5_mcp.adapter.conversions import utc_to_broker_epoch
 from mt5_mcp.errors import MT5Error
 from mt5_mcp.types import ErrorDetail
 
@@ -161,3 +162,68 @@ def validate_annotations(raw: object) -> list[Annotation]:
             requires_human=False,
             details={"index": index, "field": field},
         )) from exc
+
+
+# Screen-anchored labels are placed in pixels from their corner. Multiple
+# labels sharing a corner are stacked so they never overlap.
+LABEL_BASE_X = 10
+LABEL_BASE_Y = 20
+LABEL_STEP_Y = 18
+
+
+def _num(value: Decimal) -> str:
+    """Render a price for the wire without exponent notation or trailing noise."""
+    return format(value.normalize(), "f")
+
+
+def _bgr(ann: _AnnotationBase) -> int:
+    name = ann.color or ROLE_PALETTE[ann.role][0]
+    return COLOR_BGR[name]
+
+
+def _style(ann: _AnnotationBase) -> int:
+    return ROLE_PALETTE[ann.role][1]
+
+
+def serialize_annotations(
+    annotations: list[Annotation],
+    *,
+    broker_offset_minutes: int,
+) -> list[str]:
+    """Render validated annotations as bridge request lines.
+
+    Time anchors are converted from UTC to the broker-time epoch that MT5
+    chart objects expect. Returns one line per annotation; an empty input
+    returns no lines, which keeps the request payload byte-identical to the
+    pre-annotation format.
+    """
+    lines: list[str] = []
+    corner_counts: dict[str, int] = {}
+
+    for ann in annotations:
+        clr = _bgr(ann)
+        text = getattr(ann, "text", None) or ""
+
+        if ann.type == "hline":
+            lines.append(f"A|hline|{_num(ann.price)}|{clr}|{_style(ann)}|{text}")
+        elif ann.type == "vline":
+            epoch = utc_to_broker_epoch(ann.time, broker_offset_minutes)
+            lines.append(f"A|vline|{epoch}|{clr}|{_style(ann)}|{text}")
+        elif ann.type == "text":
+            epoch = utc_to_broker_epoch(ann.time, broker_offset_minutes)
+            lines.append(f"A|text|{epoch}|{_num(ann.price)}|{clr}|{text}")
+        elif ann.type == "label":
+            n = corner_counts.get(ann.corner, 0)
+            corner_counts[ann.corner] = n + 1
+            y = LABEL_BASE_Y + n * LABEL_STEP_Y
+            cid = CORNER_ID[ann.corner]
+            lines.append(f"A|label|{cid}|{LABEL_BASE_X}|{y}|{clr}|{text}")
+        else:  # trendline
+            e1 = utc_to_broker_epoch(ann.time1, broker_offset_minutes)
+            e2 = utc_to_broker_epoch(ann.time2, broker_offset_minutes)
+            lines.append(
+                f"A|trend|{e1}|{_num(ann.price1)}|{e2}|{_num(ann.price2)}"
+                f"|{clr}|{_style(ann)}|{text}"
+            )
+
+    return lines

@@ -7,10 +7,14 @@ from decimal import Decimal
 import pytest
 
 from mt5_mcp.annotations import (
+    LABEL_BASE_X,
+    LABEL_BASE_Y,
+    LABEL_STEP_Y,
     MAX_ANNOTATIONS,
     MAX_TEXT_LEN,
     HLine,
     ScreenLabel,
+    serialize_annotations,
     validate_annotations,
 )
 from mt5_mcp.errors import MT5Error
@@ -106,3 +110,77 @@ def test_text_and_label_require_text():
 def test_models_are_constructible_directly():
     assert HLine(type="hline", price=Decimal("1")).role == "note"
     assert ScreenLabel(type="label", text="hi").corner == "top_left"
+
+
+RED, LIME, YELLOW, GRAY = 0x0000FF, 0x00FF00, 0x00FFFF, 0x808080
+
+
+def _ser(raw, offset=0):
+    return serialize_annotations(validate_annotations(raw), broker_offset_minutes=offset)
+
+
+def test_serializes_hline_with_role_palette():
+    assert _ser([{"type": "hline", "price": "2650.5", "role": "resistance",
+                  "text": "daily R"}]) == [f"A|hline|2650.5|{RED}|0|daily R"]
+
+
+def test_neutral_role_is_gray_and_dashed():
+    assert _ser([{"type": "hline", "price": "1"}]) == [f"A|hline|1|{YELLOW}|0|"]
+    assert _ser([{"type": "hline", "price": "1", "role": "neutral"}]) == [
+        f"A|hline|1|{GRAY}|2|"
+    ]
+
+
+def test_explicit_color_overrides_role_but_not_style():
+    assert _ser([{"type": "hline", "price": "1", "role": "neutral",
+                  "color": "lime"}]) == [f"A|hline|1|{LIME}|2|"]
+
+
+def test_missing_text_serializes_as_trailing_empty_field():
+    assert _ser([{"type": "hline", "price": "1", "role": "support"}]) == [
+        f"A|hline|1|{LIME}|0|"
+    ]
+
+
+def test_time_anchors_convert_to_broker_epoch():
+    # 2026-07-19T12:00:00Z on a GMT+3 broker reads as 15:00 in broker time.
+    utc_epoch = int(T.timestamp())
+    lines = _ser([{"type": "vline", "time": T}], offset=180)
+    assert lines == [f"A|vline|{utc_epoch + 3 * 3600}|{YELLOW}|0|"]
+
+
+def test_serializes_text_and_trendline():
+    e = int(T.timestamp())
+    assert _ser([{"type": "text", "time": T, "price": "2612", "text": "note"}]) == [
+        f"A|text|{e}|2612|{YELLOW}|note"
+    ]
+    assert _ser([{"type": "trendline", "time1": T, "price1": "2590",
+                  "time2": T, "price2": "2648", "role": "support"}]) == [
+        f"A|trend|{e}|2590|{e}|2648|{LIME}|0|"
+    ]
+
+
+def test_labels_stack_within_a_corner_and_reset_across_corners():
+    lines = _ser([
+        {"type": "label", "corner": "top_left", "text": "one"},
+        {"type": "label", "corner": "top_left", "text": "two"},
+        {"type": "label", "corner": "top_right", "text": "three"},
+    ])
+    assert lines == [
+        f"A|label|0|{LABEL_BASE_X}|{LABEL_BASE_Y}|{YELLOW}|one",
+        f"A|label|0|{LABEL_BASE_X}|{LABEL_BASE_Y + LABEL_STEP_Y}|{YELLOW}|two",
+        f"A|label|3|{LABEL_BASE_X}|{LABEL_BASE_Y}|{YELLOW}|three",
+    ]
+
+
+def test_no_line_ever_contains_a_newline():
+    lines = _ser([
+        {"type": "hline", "price": "1", "text": "a b c"},
+        {"type": "label", "text": "d e f"},
+    ])
+    assert all("\n" not in ln and "\r" not in ln for ln in lines)
+    assert all(ln.startswith("A|") for ln in lines)
+
+
+def test_empty_input_serializes_to_no_lines():
+    assert serialize_annotations([], broker_offset_minutes=0) == []

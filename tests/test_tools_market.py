@@ -381,7 +381,7 @@ def test_get_chart_screenshot_passes_serialized_lines(server_and_mt5, monkeypatc
         server, "get_chart_screenshot", symbol="EURUSD", timeframe="H1",
         annotations=[{"type": "hline", "price": "2650", "role": "resistance"}],
     )
-    assert seen["annotation_lines"] == ["A|hline|2650|255|0|"]
+    assert seen["annotation_lines"] == ["A|hline|2650|2237106|0|"]
 
 
 def test_get_chart_screenshot_without_annotations_passes_empty(server_and_mt5, monkeypatch):

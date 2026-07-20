@@ -35,10 +35,13 @@ up the chart before capture.
 | `label` | `corner` | Note pinned to a chart corner, no coordinates needed; `text` required. |
 | `trendline` | `time1/price1`, `time2/price2` | Diagonal support/resistance; `text` optional. |
 
-`role` sets the color and style: `resistance` (red), `support` (lime), `note`
-(yellow, default), `neutral` (gray dashed). Set `color` to override it (`red`,
-`lime`, `yellow`, `gray`, `white`, `aqua`, `orange`, `magenta`). `text` is up
-to 128 characters; required on `text` and `label`, optional on the rest.
+`role` sets the color and style: `resistance` (firebrick), `support` (navy),
+`note` (darkslate, default), `neutral` (dimgray dashed). These defaults are
+tuned for MT5's light chart template. Set `color` to override it (`red`,
+`lime`, `yellow`, `gray`, `white`, `aqua`, `orange`, `magenta`, `firebrick`,
+`navy`, `darkslate`, `dimgray`) - the brighter names suit a dark template.
+`text` is up to 128 characters; required on `text` and `label`, optional on
+the rest.
 
 ```json
 [

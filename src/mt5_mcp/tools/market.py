@@ -218,8 +218,10 @@ def register(mcp: FastMCP) -> None:
         - ``{"type": "trendline", "time1": ..., "price1": 2590.0,
           "time2": ..., "price2": 2648.0, "role": "support"}``
 
-        ``role`` is ``resistance`` (red), ``support`` (lime), ``note``
-        (yellow, default) or ``neutral`` (gray dashed); ``color`` overrides it.
+        ``role`` is ``resistance`` (firebrick), ``support`` (navy), ``note``
+        (darkslate, default) or ``neutral`` (dimgray dashed); these defaults
+        suit MT5's light chart template. ``color`` overrides it, e.g. with a
+        brighter name (``yellow``, ``lime``, ``aqua``) for a dark template.
         Times are UTC and must be real bar timestamps from ``get_rates``, not
         guesses, or the annotation lands off-screen. Prices outside the
         visible range and times older than the visible window are accepted

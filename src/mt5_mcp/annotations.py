@@ -22,7 +22,10 @@ MAX_ANNOTATIONS = 16
 MAX_TEXT_LEN = 128
 
 Role = Literal["resistance", "support", "note", "neutral"]
-ColorName = Literal["red", "lime", "yellow", "gray", "white", "aqua", "orange", "magenta"]
+ColorName = Literal[
+    "red", "lime", "yellow", "gray", "white", "aqua", "orange", "magenta",
+    "firebrick", "navy", "darkslate", "dimgray",
+]
 Corner = Literal["top_left", "top_right", "bottom_left", "bottom_right"]
 
 # MQL5 `color` is a BGR integer, not RGB. red = RGB(255,0,0) = BGR 0x0000FF.
@@ -35,14 +38,22 @@ COLOR_BGR: dict[str, int] = {
     "aqua": 0xFFFF00,
     "orange": 0x00A5FF,
     "magenta": 0xFF00FF,
+    "firebrick": 2237106,
+    "navy": 9109504,
+    "darkslate": 5197615,
+    "dimgray": 6908265,
 }
 
+# Role defaults are tuned for a light (white background) chart template,
+# where bright names like yellow/lime/aqua are close to unreadable. Users on
+# MT5's dark default template may prefer those brighter names instead, via an
+# explicit `color` override.
 # role -> (default color name, MQL5 ENUM_LINE_STYLE: STYLE_SOLID=0, STYLE_DASH=2)
 ROLE_PALETTE: dict[str, tuple[str, int]] = {
-    "resistance": ("red", 0),
-    "support": ("lime", 0),
-    "note": ("yellow", 0),
-    "neutral": ("gray", 2),
+    "resistance": ("firebrick", 0),
+    "support": ("navy", 0),
+    "note": ("darkslate", 0),
+    "neutral": ("dimgray", 2),
 }
 
 # MQL5 ENUM_BASE_CORNER ordering is not clockwise; map explicitly.

@@ -50,9 +50,11 @@ an optional `text` label, up to 128 characters.
 ```
 
 > Times are UTC and must come from real bar timestamps (`get_rates`), not
-> guesses, or the annotation lands off-screen. Annotations are drawn on the
-> temporary chart the capture already opens, so they are destroyed with it and
-> never appear on your own charts.
+> guesses, or the annotation lands off-screen. Prices outside the visible price
+> range and times older than the visible window are accepted but will not
+> appear either, since the capture shows roughly the most recent screen of
+> bars. Annotations are drawn on the temporary chart the capture already
+> opens, so they are destroyed with it and never appear on your own charts.
 
 ## Mutating tools (preflight + consent + idempotency + audit)
 

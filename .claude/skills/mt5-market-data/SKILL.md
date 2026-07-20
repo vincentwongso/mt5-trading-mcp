@@ -34,11 +34,52 @@ Optionally filter by category like `"Forex"` or `"Metals"`. Use when the user wa
 
 **`get_rates(symbol, timeframe, count)`** -> list of OHLC bars, most recent first. `timeframe` is one of `M1`, `M5`, `M15`, `M30`, `H1`, `H4`, `D1`, `W1`, `MN1`. `count` is clamped to `[1, 5000]`. Each bar carries `time` (UTC), `open`, `high`, `low`, `close`, `tick_volume`, `real_volume`, `spread`. Use for indicator computation (ATR, RSI, EMA), volatility ranking, overbought/oversold detection - anything that needs price history rather than a single quote.
 
-**`get_chart_screenshot(symbol, timeframe)`** -> PNG image of the native MT5
-chart for one symbol/timeframe. Windows-only (needs a GUI terminal running the
-AgentScreenshot EA); returns `SCREENSHOT_NOT_SUPPORTED` elsewhere. Prefer this
-when the user wants a visual read of price action or support/resistance rather
-than raw numbers. `timeframe` is one of M1, M5, M15, M30, H1, H4, D1, W1, MN1.
+**`get_chart_screenshot(symbol, timeframe, annotations=None)`** -> PNG image of
+the native MT5 chart for one symbol/timeframe. Windows-only (needs a GUI
+terminal running the AgentScreenshot EA); returns `SCREENSHOT_NOT_SUPPORTED`
+elsewhere. Prefer this when the user wants a visual read of price action or
+support/resistance rather than raw numbers. `timeframe` is one of M1, M5, M15,
+M30, H1, H4, D1, W1, MN1.
+
+`annotations` (optional, max 16) marks up the chart before capture. Use it to
+show the user *where* you see a level, not just to describe it - a drawn line
+is far easier to check than a number in prose.
+
+| type | anchors | required | optional |
+|---|---|---|---|
+| `hline` | `price` | - | `role, color, text` |
+| `vline` | `time` | - | `role, color, text` |
+| `text` | `time`, `price` | `text` | `role, color` |
+| `label` | `corner` | `text` | `role, color` |
+| `trendline` | `time1/price1`, `time2/price2` | - | `role, color, text` |
+
+```json
+[
+  {"type": "hline", "price": 2650.0, "role": "resistance", "text": "daily R"},
+  {"type": "text", "time": "2026-07-19T12:00:00Z", "price": 2612.0,
+   "text": "failed breakout"},
+  {"type": "label", "corner": "top_left", "text": "range-bound, low conviction"}
+]
+```
+
+`role` picks the color and style: `resistance` (firebrick), `support` (navy),
+`note` (dark slate, the default), `neutral` (dim gray, dashed). These defaults
+are tuned for a light chart template; override with `color` (`red`, `lime`,
+`yellow`, `gray`, `white`, `aqua`, `orange`, `magenta`, `firebrick`, `navy`,
+`darkslate`, `dimgray`) if the user runs a dark one. Labels are capped at 128
+characters. `corner` is `top_left` (default), `top_right`, `bottom_left` or
+`bottom_right`; several labels in one corner stack automatically.
+
+**Times must be real bar timestamps from `get_rates`, not guesses.** They are
+UTC, same as everything else the server returns, and the conversion to broker
+time happens server-side. Prices and times outside the visible window are
+accepted but simply will not appear - the capture shows roughly the most recent
+screen of bars, so annotate levels near current price. Nothing errors when an
+annotation lands off-screen, so do not describe a level you have not confirmed
+is actually in the returned image.
+
+Markup is drawn on a temporary chart that is destroyed right after capture, so
+it never touches the user's own charts and never needs clearing.
 
 **`calc_margin(symbol, side, volume, price=None)`** -> broker-authoritative margin for a hypothetical order. Returns `{symbol, side, volume, price, margin, currency}` where `margin` is in deposit currency. If `price` is omitted, uses the current ask (buy) / bid (sell). Use this whenever the user asks "what would it cost to open X" - the broker's own answer is more reliable than any local formula because per-broker margin tables, hedged-position discounts, and exotic calc modes all factor in. Errors with `MARGIN_CALC_FAILED` if the broker refuses (e.g. invalid volume step, market closed, calc mode requires extra parameters).
 
@@ -82,6 +123,7 @@ Tool failures arrive as MCP errors carrying a structured envelope: `{code, messa
 - `SCREENSHOT_NOT_SUPPORTED` - `get_chart_screenshot` called on a non-Windows host. (A Windows terminal that is down or missing the AgentScreenshot EA yields `SCREENSHOT_TIMEOUT` instead.)
 - `SCREENSHOT_TIMEOUT` - the AgentScreenshot EA did not respond in time (not attached, or terminal down). Retryable.
 - `SCREENSHOT_FAILED` - the EA could not open the chart or capture it (e.g. bad symbol). Retryable.
+- `INVALID_ANNOTATION` - an `annotations` entry was malformed (unknown `role` / `color` / `corner`, non-finite price, empty or over-long `text`, `|` or a newline in `text`, or more than 16 entries). The whole call is rejected rather than the bad entry dropped, so nothing is captured. The message names the offending index. Not retryable without fixing the input.
 
 ## Workflow tips
 
@@ -89,6 +131,7 @@ Tool failures arrive as MCP errors carrying a structured envelope: `{code, messa
 2. **One symbol vs all.** `get_positions(symbol="EURUSD")` is much cheaper than fetching all and filtering client-side. Use the optional symbol filter when you have one in hand.
 3. **Prefer tools over resources for one-shot questions.** Resources shine for "watch this" requests; for "what's the price right now", `get_quote` is the right call.
 4. **Don't compose your own broker schedules.** If the user wants "when does FX open Sunday night", consult their broker's website - `get_market_hours` only tells you whether it's open *now*.
+5. **Draw the levels you claim to see.** When answering a support/resistance or pattern question, pull `get_rates` first, pick the levels off actual bar highs and lows, then pass them to `get_chart_screenshot` as `annotations` and read the returned image back. Quoting a number in prose asks the user to take your word for it; a drawn line lets them check it at a glance. Feed the bar `time` values straight through - they are already the UTC the annotation schema expects.
 
 ## See also
 

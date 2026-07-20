@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import platform
 from decimal import Decimal
-from typing import Literal
+from typing import Annotated, Literal
 
 from mcp.server.fastmcp import FastMCP, Image
+from pydantic import Field
 
 from mt5_mcp.adapter.conversions import (
     calc_margin_result_from_raw,
@@ -15,7 +16,12 @@ from mt5_mcp.adapter.conversions import (
     symbol_info_from_raw,
 )
 from mt5_mcp.adapter.screenshot import capture_chart
-from mt5_mcp.annotations import Annotation, serialize_annotations, validate_annotations
+from mt5_mcp.annotations import (
+    MAX_ANNOTATIONS,
+    Annotation,
+    serialize_annotations,
+    validate_annotations,
+)
 from mt5_mcp.errors import MT5Error
 from mt5_mcp.server import get_context
 from mt5_mcp.tools._common import error_envelope
@@ -152,7 +158,7 @@ def register(mcp: FastMCP) -> None:
     def _capture_chart_screenshot(
         symbol: str,
         timeframe: str,
-        annotations: list[Annotation] | None = None,
+        annotations: Annotated[list[Annotation], Field(max_length=MAX_ANNOTATIONS)] | None = None,
     ) -> Image:
         """Windows-only body of get_chart_screenshot (needs a terminal connection)."""
         if timeframe not in _TIMEFRAME_ATTRS:
@@ -190,7 +196,7 @@ def register(mcp: FastMCP) -> None:
     def get_chart_screenshot(
         symbol: str,
         timeframe: str,
-        annotations: list[Annotation] | None = None,
+        annotations: Annotated[list[Annotation], Field(max_length=MAX_ANNOTATIONS)] | None = None,
     ) -> Image:
         """PNG screenshot of the native MT5 chart for ``symbol`` at ``timeframe``.
 
@@ -213,7 +219,10 @@ def register(mcp: FastMCP) -> None:
         ``role`` is ``resistance`` (red), ``support`` (lime), ``note``
         (yellow, default) or ``neutral`` (gray dashed); ``color`` overrides it.
         Times are UTC and must be real bar timestamps from ``get_rates``, not
-        guesses, or the annotation lands off-screen.
+        guesses, or the annotation lands off-screen. Prices outside the
+        visible range and times older than the visible window are accepted
+        but will not appear either, since the capture shows roughly the most
+        recent screen of bars.
         """
         # The platform guard MUST run before any terminal connection. This tool
         # is registered on all platforms so agents can discover it, but it only

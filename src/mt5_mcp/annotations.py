@@ -3,8 +3,8 @@
 Annotations are drawn by the AgentScreenshot EA on the throwaway chart it
 opens per request, so `ChartClose` discards them and nothing can leak onto a
 chart the user has open. This module owns the public schema, the role palette
-and serialization to the bridge wire format; it deliberately imports nothing
-from the MT5 adapter so it stays trivially unit testable.
+and serialization to the bridge wire format; it deliberately avoids importing
+the MetaTrader5 runtime so it stays trivially unit testable.
 """
 from __future__ import annotations
 

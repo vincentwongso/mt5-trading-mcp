@@ -1,0 +1,240 @@
+"""Chart annotation schema for `get_chart_screenshot`.
+
+Annotations are drawn by the AgentScreenshot EA on the throwaway chart it
+opens per request, so `ChartClose` discards them and nothing can leak onto a
+chart the user has open. This module owns the public schema, the role palette
+and serialization to the bridge wire format; it deliberately avoids importing
+the MetaTrader5 runtime so it stays trivially unit testable.
+"""
+from __future__ import annotations
+
+from datetime import datetime
+from decimal import Decimal
+from typing import Annotated, Literal, Union
+
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, field_validator
+
+from mt5_mcp.adapter.conversions import utc_to_broker_epoch
+from mt5_mcp.errors import MT5Error
+from mt5_mcp.types import ErrorDetail
+
+MAX_ANNOTATIONS = 16
+MAX_TEXT_LEN = 128
+
+Role = Literal["resistance", "support", "note", "neutral"]
+ColorName = Literal[
+    "red", "lime", "yellow", "gray", "white", "aqua", "orange", "magenta",
+    "firebrick", "navy", "darkslate", "dimgray",
+]
+Corner = Literal["top_left", "top_right", "bottom_left", "bottom_right"]
+
+# MQL5 `color` is a BGR integer, not RGB. red = RGB(255,0,0) = BGR 0x0000FF.
+COLOR_BGR: dict[str, int] = {
+    "red": 0x0000FF,
+    "lime": 0x00FF00,
+    "yellow": 0x00FFFF,
+    "gray": 0x808080,
+    "white": 0xFFFFFF,
+    "aqua": 0xFFFF00,
+    "orange": 0x00A5FF,
+    "magenta": 0xFF00FF,
+    "firebrick": 2237106,
+    "navy": 9109504,
+    "darkslate": 5197615,
+    "dimgray": 6908265,
+}
+
+# Role defaults are tuned for a light (white background) chart template,
+# where bright names like yellow/lime/aqua are close to unreadable. Users on
+# MT5's dark default template may prefer those brighter names instead, via an
+# explicit `color` override.
+# role -> (default color name, MQL5 ENUM_LINE_STYLE: STYLE_SOLID=0, STYLE_DASH=2)
+ROLE_PALETTE: dict[str, tuple[str, int]] = {
+    "resistance": ("firebrick", 0),
+    "support": ("navy", 0),
+    "note": ("darkslate", 0),
+    "neutral": ("dimgray", 2),
+}
+
+# MQL5 ENUM_BASE_CORNER ordering is not clockwise; map explicitly.
+CORNER_ID: dict[str, int] = {
+    "top_left": 0,      # CORNER_LEFT_UPPER
+    "bottom_left": 1,   # CORNER_LEFT_LOWER
+    "bottom_right": 2,  # CORNER_RIGHT_LOWER
+    "top_right": 3,     # CORNER_RIGHT_UPPER
+}
+
+
+class _AnnotationBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: Role = "note"
+    color: ColorName | None = None
+
+    @field_validator("text", check_fields=False)
+    @classmethod
+    def _check_text(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if any(ch in v for ch in ("|", "\r", "\n")):
+            raise ValueError("must not contain '|', carriage return or line feed")
+        if not 1 <= len(v) <= MAX_TEXT_LEN:
+            raise ValueError(f"must be 1 to {MAX_TEXT_LEN} characters")
+        return v
+
+    @field_validator("price", "price1", "price2", check_fields=False)
+    @classmethod
+    def _check_price(cls, v: Decimal) -> Decimal:
+        if not v.is_finite():
+            raise ValueError("must be a finite number")
+        return v
+
+
+class HLine(_AnnotationBase):
+    """Horizontal price level spanning the full chart width."""
+    type: Literal["hline"]
+    price: Decimal
+    text: str | None = None
+
+
+class VLine(_AnnotationBase):
+    """Vertical time marker spanning the full chart height."""
+    type: Literal["vline"]
+    time: datetime
+    text: str | None = None
+
+
+class ChartText(_AnnotationBase):
+    """Free-placed text anchored to a (time, price) point on the chart."""
+    type: Literal["text"]
+    time: datetime
+    price: Decimal
+    text: str
+
+
+class ScreenLabel(_AnnotationBase):
+    """Text pinned to a chart corner, independent of the visible price range."""
+    type: Literal["label"]
+    corner: Corner = "top_left"
+    text: str
+
+
+class TrendLine(_AnnotationBase):
+    """Diagonal line between two (time, price) points. Does not extend as a ray."""
+    type: Literal["trendline"]
+    time1: datetime
+    price1: Decimal
+    time2: datetime
+    price2: Decimal
+    text: str | None = None
+
+
+Annotation = Annotated[
+    Union[HLine, VLine, ChartText, ScreenLabel, TrendLine],
+    Field(discriminator="type"),
+]
+
+_ADAPTER: TypeAdapter[list[Annotation]] = TypeAdapter(list[Annotation])
+
+
+def validate_annotations(raw: object) -> list[Annotation]:
+    """Validate caller-supplied annotations into models, or raise INVALID_ANNOTATION.
+
+    Rejects the whole call rather than dropping bad entries: a silently skipped
+    annotation is invisible in a PNG, so the agent would go on to describe a
+    level that was never drawn.
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, list) and len(raw) > MAX_ANNOTATIONS:
+        raise MT5Error(ErrorDetail(
+            code="INVALID_ANNOTATION",
+            message=(
+                f"Too many annotations: {len(raw)}. "
+                f"At most {MAX_ANNOTATIONS} are allowed per screenshot."
+            ),
+            retryable=False,
+            requires_human=False,
+            details={"count": len(raw), "max": MAX_ANNOTATIONS},
+        ))
+    try:
+        return _ADAPTER.validate_python(raw)
+    except ValidationError as exc:
+        first = exc.errors()[0]
+        # loc looks like (2, 'hline', 'role'); index first, model tag second.
+        loc = first.get("loc", ())
+        index = loc[0] if loc and isinstance(loc[0], int) else None
+        field = ".".join(str(p) for p in loc[1:]) or "annotation"
+        where = f"annotations[{index}]" if index is not None else "annotations"
+        raise MT5Error(ErrorDetail(
+            code="INVALID_ANNOTATION",
+            message=f"{where}: {field} {first.get('msg', 'is invalid')}",
+            retryable=False,
+            requires_human=False,
+            details={"index": index, "field": field},
+        )) from exc
+
+
+# Screen-anchored labels are placed in pixels from their corner. Multiple
+# labels sharing a corner are stacked so they never overlap.
+LABEL_BASE_X = 10
+LABEL_BASE_Y = 20
+LABEL_STEP_Y = 18
+
+
+def _num(value: Decimal) -> str:
+    """Render a price for the wire without exponent notation or trailing noise."""
+    return format(value.normalize(), "f")
+
+
+def _bgr(ann: _AnnotationBase) -> int:
+    name = ann.color or ROLE_PALETTE[ann.role][0]
+    return COLOR_BGR[name]
+
+
+def _style(ann: _AnnotationBase) -> int:
+    return ROLE_PALETTE[ann.role][1]
+
+
+def serialize_annotations(
+    annotations: list[Annotation],
+    *,
+    broker_offset_minutes: int,
+) -> list[str]:
+    """Render validated annotations as bridge request lines.
+
+    Time anchors are converted from UTC to the broker-time epoch that MT5
+    chart objects expect. Returns one line per annotation; an empty input
+    returns no lines, which keeps the request payload byte-identical to the
+    pre-annotation format.
+    """
+    lines: list[str] = []
+    corner_counts: dict[str, int] = {}
+
+    for ann in annotations:
+        clr = _bgr(ann)
+        text = getattr(ann, "text", None) or ""
+
+        if ann.type == "hline":
+            lines.append(f"A|hline|{_num(ann.price)}|{clr}|{_style(ann)}|{text}")
+        elif ann.type == "vline":
+            epoch = utc_to_broker_epoch(ann.time, broker_offset_minutes)
+            lines.append(f"A|vline|{epoch}|{clr}|{_style(ann)}|{text}")
+        elif ann.type == "text":
+            epoch = utc_to_broker_epoch(ann.time, broker_offset_minutes)
+            lines.append(f"A|text|{epoch}|{_num(ann.price)}|{clr}|{text}")
+        elif ann.type == "label":
+            n = corner_counts.get(ann.corner, 0)
+            corner_counts[ann.corner] = n + 1
+            y = LABEL_BASE_Y + n * LABEL_STEP_Y
+            cid = CORNER_ID[ann.corner]
+            lines.append(f"A|label|{cid}|{LABEL_BASE_X}|{y}|{clr}|{text}")
+        else:  # trendline
+            e1 = utc_to_broker_epoch(ann.time1, broker_offset_minutes)
+            e2 = utc_to_broker_epoch(ann.time2, broker_offset_minutes)
+            lines.append(
+                f"A|trend|{e1}|{_num(ann.price1)}|{e2}|{_num(ann.price2)}"
+                f"|{clr}|{_style(ann)}|{text}"
+            )
+
+    return lines

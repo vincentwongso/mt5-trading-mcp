@@ -29,6 +29,12 @@ binary. The `.ex5` cannot be built on Linux/CI, so it is compiled on Windows
 with MetaEditor and must be recompiled and re-committed whenever
 `AgentScreenshot.mq5` changes.
 
+**Upgrading from 1.5.0?** Re-copy `AgentScreenshot.ex5` (or recompile from
+source) before using annotations. A 1.5.0-era `.ex5` still runs and still
+takes screenshots, but it does not understand annotation lines, so it silently
+ignores every `annotations` entry and returns a clean, unannotated chart with
+no error.
+
 ## Verify
 
 With the MCP server connected and the EA attached, call `get_chart_screenshot`

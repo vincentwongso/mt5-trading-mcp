@@ -7,8 +7,14 @@ practice (needs a GUI terminal with the EA attached); the platform guard
 lives in the tool layer, not here, so this module stays import-safe and
 unit-testable on any OS.
 
-Request line format (UTF-16-LE, single line, '|'-delimited):
+Request payload (UTF-16-LE). Line 1 is the header; each following line is one
+annotation, fixed arity per type, label text always last:
     <id>|<symbol>|<timeframe>|<width>|<height>|<template>
+    A|hline|<price>|<bgr>|<style>|<text>
+    A|vline|<epoch>|<bgr>|<style>|<text>
+    A|text|<epoch>|<price>|<bgr>|<text>
+    A|label|<corner>|<xdist>|<ydist>|<bgr>|<text>
+    A|trend|<epoch1>|<price1>|<epoch2>|<price2>|<bgr>|<style>|<text>
 Response file ``<id>.done`` contains ``ok`` or ``err:<reason>`` (UTF-16-LE).
 """
 from __future__ import annotations
@@ -66,6 +72,7 @@ def capture_chart(
     width: int,
     height: int,
     template: str | None,
+    annotation_lines: list[str] | None = None,
     timeout_s: float,
     poll_interval_s: float = 0.15,
     id_factory: Callable[[], str] = lambda: str(ULID()),
@@ -93,9 +100,22 @@ def capture_chart(
     done = d / f"{req_id}.done"
     png = d / f"{req_id}.png"
 
-    payload = f"{req_id}|{symbol}|{timeframe_name}|{width}|{height}|{template or ''}"
+    header = f"{req_id}|{symbol}|{timeframe_name}|{width}|{height}|{template or ''}"
+    # Annotations append one line each, joined with CRLF: MQL5's own file
+    # writers emit "\r\n" and FileReadString in FILE_TXT mode is not
+    # guaranteed to treat a lone "\n" as a line terminator, so a bare "\n"
+    # risks the whole payload being read back as one unsplit line. With no
+    # annotation lines, join emits no separator at all, so the payload stays
+    # byte-identical to the pre-1.5.1 format and an already-deployed .ex5
+    # keeps working.
+    payload = "\r\n".join([header, *(annotation_lines or [])])
     try:
-        tmp.write_text(payload, encoding="utf-16-le")
+        # newline="" disables Python's own newline translation, so the "\r\n"
+        # already in payload reaches disk unmodified. Without it, a Windows
+        # Python process would re-translate each embedded "\n" to "\r\n",
+        # doubling up to "\r\r\n" and corrupting the payload.
+        with open(tmp, "w", encoding="utf-16-le", newline="") as f:
+            f.write(payload)
         tmp.replace(req)  # atomic publish on the same filesystem
 
         deadline = monotonic() + timeout_s

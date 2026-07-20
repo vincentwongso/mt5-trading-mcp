@@ -40,6 +40,20 @@ def epoch_to_utc(epoch_naive: int, broker_offset_minutes: int) -> datetime:
     return as_if_utc - timedelta(minutes=broker_offset_minutes)
 
 
+def utc_to_broker_epoch(dt: datetime, broker_offset_minutes: int) -> int:
+    """Inverse of `epoch_to_utc`: aware UTC -> the naive broker-time epoch.
+
+    MT5 chart objects anchor on broker server time, but every datetime we hand
+    an agent (via `get_rates`, `get_quote`) is real UTC. `epoch_to_utc` computes
+    `utc = as_if_utc - offset`, so the inverse adds the offset back. Naive
+    datetimes are assumed to be UTC, since that is what agents echo back.
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    shifted = dt.astimezone(timezone.utc) + timedelta(minutes=broker_offset_minutes)
+    return int(shifted.timestamp())
+
+
 def infer_broker_tz_offset(
     broker_terminal_time: int,
     real_utc_now: datetime | None = None,

@@ -82,8 +82,12 @@ def test_request_payload_is_written(tmp_path):
     def fake_sleep(_):
         # Stand in for the EA: on the first poll, read the request line and
         # seed the response, so we assert exactly what capture_chart wrote.
+        # newline="" avoids Python's universal-newline read translation, which
+        # would otherwise collapse the on-disk "\r\n" back to "\n" and hide
+        # the very thing this fix is meant to prove.
         if not seen:
-            seen["payload"] = (d / "fixedid.req").read_text(encoding="utf-16-le")
+            with open(d / "fixedid.req", encoding="utf-16-le", newline="") as f:
+                seen["payload"] = f.read()
             (d / "fixedid.png").write_bytes(b"X")
             (d / "fixedid.done").write_text("ok", encoding="utf-16-le")
 
@@ -214,3 +218,57 @@ def test_missing_data_path_raises_failed(tmp_path):
             id_factory=lambda: "fixedid",
         )
     assert ei.value.detail.code == "SCREENSHOT_FAILED"
+
+
+def _capture_capturing_payload(tmp_path, **kwargs):
+    """Run capture_chart against a fake EA and return the payload it wrote."""
+    d = _files_dir(tmp_path)
+    seen = {}
+
+    def fake_sleep(_):
+        if not seen:
+            # newline="" preserves the on-disk "\r\n" separator (see the
+            # matching comment in test_request_payload_is_written).
+            with open(d / "fixedid.req", encoding="utf-16-le", newline="") as f:
+                seen["payload"] = f.read()
+            (d / "fixedid.png").write_bytes(b"X")
+            (d / "fixedid.done").write_text("ok", encoding="utf-16-le")
+
+    capture_chart(
+        _StubClient(tmp_path),
+        symbol="EURUSD.z",
+        timeframe_name="M15",
+        width=1280,
+        height=720,
+        template="agent.tpl",
+        timeout_s=1.0,
+        poll_interval_s=0.01,
+        id_factory=lambda: "fixedid",
+        sleep=fake_sleep,
+        **kwargs,
+    )
+    return seen["payload"]
+
+
+def test_no_annotations_payload_is_unchanged_single_line(tmp_path):
+    # Backward compatibility: an already-deployed 1.5.0 .ex5 must keep working.
+    payload = _capture_capturing_payload(tmp_path, annotation_lines=None)
+    assert payload == "fixedid|EURUSD.z|M15|1280|720|agent.tpl"
+    assert "\n" not in payload
+
+
+def test_empty_annotation_list_is_also_a_single_line(tmp_path):
+    payload = _capture_capturing_payload(tmp_path, annotation_lines=[])
+    assert payload == "fixedid|EURUSD.z|M15|1280|720|agent.tpl"
+
+
+def test_annotation_lines_are_appended_after_the_header(tmp_path):
+    payload = _capture_capturing_payload(
+        tmp_path,
+        annotation_lines=["A|hline|2650|255|0|R", "A|label|0|10|20|65535|note"],
+    )
+    assert payload.split("\r\n") == [
+        "fixedid|EURUSD.z|M15|1280|720|agent.tpl",
+        "A|hline|2650|255|0|R",
+        "A|label|0|10|20|65535|note",
+    ]

@@ -19,8 +19,45 @@ subscribable resources.
 | `get_orders(symbol?)` | Pending orders. |
 | `get_history(from_ts, to_ts, symbol?)` | Closed deals in a UTC range. |
 | `get_rates(symbol, timeframe, count)` | OHLC bars (M1…MN1), most recent first. |
-| `get_chart_screenshot(symbol, timeframe)` | PNG of the native MT5 chart (Windows only; needs the AgentScreenshot EA). |
+| `get_chart_screenshot(symbol, timeframe, annotations?)` | PNG of the native MT5 chart, optionally annotated (Windows only; needs the AgentScreenshot EA). |
 | `calc_margin(symbol, side, volume, price?)` | Broker-authoritative margin estimate for a hypothetical order. |
+
+### Chart annotations
+
+`get_chart_screenshot` takes an optional `annotations` list (max 16) that marks
+up the chart before capture.
+
+| Type | Anchors | Use |
+|---|---|---|
+| `hline` | `price` | Support/resistance level across the chart; `text` optional. |
+| `vline` | `time` | Time marker, e.g. a news release; `text` optional. |
+| `text` | `time`, `price` | Note placed freely against price action; `text` required. |
+| `label` | `corner` | Note pinned to a chart corner, no coordinates needed; `text` required. |
+| `trendline` | `time1/price1`, `time2/price2` | Diagonal support/resistance; `text` optional. |
+
+`role` sets the color and style: `resistance` (firebrick), `support` (navy),
+`note` (darkslate, default), `neutral` (dimgray dashed). These defaults are
+tuned for MT5's light chart template. Set `color` to override it (`red`,
+`lime`, `yellow`, `gray`, `white`, `aqua`, `orange`, `magenta`, `firebrick`,
+`navy`, `darkslate`, `dimgray`) - the brighter names suit a dark template.
+`text` is up to 128 characters; required on `text` and `label`, optional on
+the rest.
+
+```json
+[
+  {"type": "hline", "price": 2650.0, "role": "resistance", "text": "daily R"},
+  {"type": "text", "time": "2026-07-19T12:00:00Z", "price": 2612.0,
+   "text": "failed breakout"},
+  {"type": "label", "corner": "top_left", "text": "range-bound, low conviction"}
+]
+```
+
+> Times are UTC and must come from real bar timestamps (`get_rates`), not
+> guesses, or the annotation lands off-screen. Prices outside the visible price
+> range and times older than the visible window are accepted but will not
+> appear either, since the capture shows roughly the most recent screen of
+> bars. Annotations are drawn on the temporary chart the capture already
+> opens, so they are destroyed with it and never appear on your own charts.
 
 ## Mutating tools (preflight + consent + idempotency + audit)
 

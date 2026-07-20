@@ -1,9 +1,11 @@
 //+------------------------------------------------------------------+
 //| AgentScreenshot.mq5                                              |
-//| File-bridge EA for mt5-trading-mcp get_chart_screenshot.        |
-//| Polls MQL5/Files/agent_screenshot/*.req, opens the requested    |
-//| chart, calls ChartScreenShot(), writes <id>.png + <id>.done.    |
-//| Pairs with src/mt5_mcp/adapter/screenshot.py.                   |
+//| File-bridge EA for mt5-trading-mcp get_chart_screenshot.         |
+//| Polls MQL5/Files/agent_screenshot/*.req, opens the requested     |
+//| chart, draws any annotation lines, calls ChartScreenShot(), and  |
+//| writes <id>.png + <id>.done. Annotations live only on the        |
+//| temporary chart, so ChartClose discards them.                    |
+//| Pairs with src/mt5_mcp/adapter/screenshot.py.                    |
 //+------------------------------------------------------------------+
 #property strict
 #property description "mt5-trading-mcp chart screenshot bridge"
@@ -49,6 +51,160 @@ void WriteDone(const string id, const string status)
      }
   }
 
+//+------------------------------------------------------------------+
+//| Annotation drawing. All objects live on the temporary chart the  |
+//| request opened, so ChartClose destroys them; there is no state   |
+//| to clean up between requests.                                    |
+//+------------------------------------------------------------------+
+void MakeTextLabel(const long cid, const string name, const datetime t,
+                   const double p, const string txt, const color clr,
+                   const ENUM_ANCHOR_POINT anchor)
+  {
+   // MT5 renders OBJPROP_TEXT on HLINE/VLINE/TREND as a tooltip only, never
+   // on the chart surface, so a labelled line needs a companion OBJ_TEXT.
+   if(!ObjectCreate(cid, name, OBJ_TEXT, 0, t, p))
+      return;
+   ObjectSetString(cid, name, OBJPROP_TEXT, txt);
+   ObjectSetInteger(cid, name, OBJPROP_COLOR, clr);
+   ObjectSetInteger(cid, name, OBJPROP_ANCHOR, anchor);
+   ObjectSetInteger(cid, name, OBJPROP_FONTSIZE, 9);
+   ObjectSetInteger(cid, name, OBJPROP_SELECTABLE, false);
+  }
+
+void StyleLine(const long cid, const string name, const color clr, const int style)
+  {
+   ObjectSetInteger(cid, name, OBJPROP_COLOR, clr);
+   ObjectSetInteger(cid, name, OBJPROP_STYLE, style);
+   ObjectSetInteger(cid, name, OBJPROP_WIDTH, 1);
+   ObjectSetInteger(cid, name, OBJPROP_BACK, false);
+   ObjectSetInteger(cid, name, OBJPROP_SELECTABLE, false);
+  }
+
+ENUM_ANCHOR_POINT AnchorForCorner(const int corner)
+  {
+   // OBJ_LABEL offsets are measured inward from its corner, so the anchor has
+   // to match the corner or right/bottom-anchored text runs off the canvas.
+   if(corner == CORNER_LEFT_LOWER)
+      return(ANCHOR_LEFT_LOWER);
+   if(corner == CORNER_RIGHT_LOWER)
+      return(ANCHOR_RIGHT_LOWER);
+   if(corner == CORNER_RIGHT_UPPER)
+      return(ANCHOR_RIGHT_UPPER);
+   return(ANCHOR_LEFT_UPPER);
+  }
+
+void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES tf,
+                     const string reqId, const string &lines[])
+  {
+   // The chart was just opened, so it is scrolled to the right edge and bar 0
+   // is the rightmost visible bar. That is where hline labels are anchored.
+   datetime rightEdge = iTime(symbol, tf, 0);
+   if(rightEdge == 0)
+      // History for this symbol/timeframe has not loaded yet; fall back to
+      // now rather than anchoring hline labels at the Unix epoch.
+      rightEdge = TimeCurrent();
+   // Best-effort anchor near the top of the visible range for vline labels;
+   // falls back to the current bid when the price scale is not yet computed.
+   // The bid itself can also be 0 for a symbol with no ticks, so callers must
+   // still check this before using it.
+   double   vlineLabelPrice = ChartGetDouble(cid, CHART_PRICE_MAX, 0);
+   if(vlineLabelPrice <= 0)
+      vlineLabelPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
+
+   for(int i = 0; i < ArraySize(lines); i++)
+     {
+      string f[];
+      int n = StringSplit(lines[i], '|', f);
+      if(n < 2 || f[0] != "A")
+         continue;
+
+      string kind  = f[1];
+      string oname = "agent_" + reqId + "_" + IntegerToString(i);
+      string lname = oname + "_lbl";
+
+      if(kind == "hline" && n >= 5)
+        {
+         double price = StringToDouble(f[2]);
+         color  clr   = (color)StringToInteger(f[3]);
+         int    style = (int)StringToInteger(f[4]);
+         string txt   = (n >= 6) ? f[5] : "";
+         if(ObjectCreate(cid, oname, OBJ_HLINE, 0, 0, price))
+           {
+            StyleLine(cid, oname, clr, style);
+            if(StringLen(txt) > 0)
+               MakeTextLabel(cid, lname, rightEdge, price, txt, clr,
+                             ANCHOR_RIGHT_LOWER);
+           }
+        }
+      else if(kind == "vline" && n >= 5)
+        {
+         datetime t     = (datetime)StringToInteger(f[2]);
+         color    clr   = (color)StringToInteger(f[3]);
+         int      style = (int)StringToInteger(f[4]);
+         string   txt   = (n >= 6) ? f[5] : "";
+         if(ObjectCreate(cid, oname, OBJ_VLINE, 0, t, 0))
+           {
+            StyleLine(cid, oname, clr, style);
+            if(StringLen(txt) > 0 && vlineLabelPrice > 0)
+               MakeTextLabel(cid, lname, t, vlineLabelPrice, txt, clr,
+                             ANCHOR_LEFT_UPPER);
+           }
+        }
+      else if(kind == "text" && n >= 6)
+        {
+         datetime t     = (datetime)StringToInteger(f[2]);
+         double   price = StringToDouble(f[3]);
+         color    clr   = (color)StringToInteger(f[4]);
+         MakeTextLabel(cid, oname, t, price, f[5], clr, ANCHOR_LEFT_LOWER);
+        }
+      else if(kind == "label" && n >= 7)
+        {
+         int   corner = (int)StringToInteger(f[2]);
+         int   xd     = (int)StringToInteger(f[3]);
+         int   yd     = (int)StringToInteger(f[4]);
+         color clr    = (color)StringToInteger(f[5]);
+         if(ObjectCreate(cid, oname, OBJ_LABEL, 0, 0, 0))
+           {
+            ObjectSetInteger(cid, oname, OBJPROP_CORNER, corner);
+            ObjectSetInteger(cid, oname, OBJPROP_ANCHOR, AnchorForCorner(corner));
+            ObjectSetInteger(cid, oname, OBJPROP_XDISTANCE, xd);
+            ObjectSetInteger(cid, oname, OBJPROP_YDISTANCE, yd);
+            ObjectSetString(cid, oname, OBJPROP_TEXT, f[6]);
+            ObjectSetInteger(cid, oname, OBJPROP_COLOR, clr);
+            ObjectSetInteger(cid, oname, OBJPROP_FONTSIZE, 9);
+            ObjectSetInteger(cid, oname, OBJPROP_SELECTABLE, false);
+           }
+        }
+      else if(kind == "trend" && n >= 8)
+        {
+         datetime t1    = (datetime)StringToInteger(f[2]);
+         double   p1    = StringToDouble(f[3]);
+         datetime t2    = (datetime)StringToInteger(f[4]);
+         double   p2    = StringToDouble(f[5]);
+         color    clr   = (color)StringToInteger(f[6]);
+         int      style = (int)StringToInteger(f[7]);
+         string   txt   = (n >= 9) ? f[8] : "";
+         if(ObjectCreate(cid, oname, OBJ_TREND, 0, t1, p1, t2, p2))
+           {
+            StyleLine(cid, oname, clr, style);
+            ObjectSetInteger(cid, oname, OBJPROP_RAY_RIGHT, false);
+            if(StringLen(txt) > 0)
+               MakeTextLabel(cid, lname, t2, p2, txt, clr, ANCHOR_LEFT_LOWER);
+           }
+        }
+     }
+  }
+
+string StripCR(const string s)
+  {
+   // Only a trailing CR, never other whitespace: annotation label text is the
+   // last field on the wire and may legitimately end in a space.
+   int L = StringLen(s);
+   if(L > 0 && StringGetCharacter(s, L - 1) == 13)
+      return(StringSubstr(s, 0, L - 1));
+   return(s);
+  }
+
 void ProcessRequest(const string reqName)
   {
    // reqName is just "<id>.req" (from FileFindFirst); prefix the subdir.
@@ -57,6 +213,27 @@ void ProcessRequest(const string reqName)
    if(h == INVALID_HANDLE)
       return;
    string line = FileReadString(h);
+   line = StripCR(line);
+   string annLines[];
+   int guard = 0;
+   // Bounded on iteration count, not on lines collected: a stuck read (empty
+   // line without advancing the file pointer or setting the end flag) hits
+   // continue before annLines ever grows, so only an explicit counter can
+   // stop OnTimer from spinning forever. Python caps annotations at 16, so
+   // 128 iterations / 64 collected lines are generous, cost-free ceilings.
+   while(!FileIsEnding(h) && guard < 128 && ArraySize(annLines) < 64)
+     {
+      guard++;
+      string ln = FileReadString(h);
+      // FileReadString in FILE_TXT mode may split only on '\n', leaving a
+      // trailing '\r' attached; strip it so it never corrupts the last field.
+      ln = StripCR(ln);
+      if(StringLen(ln) == 0)
+         continue;
+      int asz = ArraySize(annLines);
+      ArrayResize(annLines, asz + 1);
+      annLines[asz] = ln;
+     }
    FileClose(h);
    FileDelete(reqPath);
 
@@ -97,9 +274,15 @@ void ProcessRequest(const string reqName)
 
    ChartRedraw(cid);
    Sleep(SettleMs);
+   DrawAnnotations(cid, symbol, tf, id, annLines);
+   ChartRedraw(cid);
 
    string pngPath = SubDir + "\\" + id + ".png";
    bool ok = ChartScreenShot(cid, pngPath, width, height, ALIGN_RIGHT);
+   // Belt and braces: ChartClose already destroys chart-scoped objects.
+   // Scoped to our own objects (all named with the "agent_" prefix) so this
+   // never touches anything placed by the user's applied template.
+   ObjectsDeleteAll(cid, "agent_");
    ChartClose(cid);
 
    WriteDone(id, ok ? "ok" : "err:ChartScreenShot returned false");

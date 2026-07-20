@@ -184,3 +184,20 @@ def test_no_line_ever_contains_a_newline():
 
 def test_empty_input_serializes_to_no_lines():
     assert serialize_annotations([], broker_offset_minutes=0) == []
+
+
+def test_round_prices_never_serialize_as_exponent_notation():
+    # Decimal("100").normalize() yields Decimal('1E+2'), and MQL5's
+    # StringToDouble("1E+2") silently misparses it, placing a support/resistance
+    # line at the wrong price with no error. This test pins the _num() behavior
+    # to ensure it always emits fixed-point notation, never exponent notation.
+    assert _ser([{"type": "hline", "price": "100", "role": "resistance"}]) == [
+        f"A|hline|100|{RED}|0|"
+    ]
+    assert _ser([{"type": "text", "time": T, "price": "1000", "text": "big"}]) == [
+        f"A|text|{int(T.timestamp())}|1000|{YELLOW}|big"
+    ]
+    assert _ser([{"type": "trendline", "time1": T, "price1": "100",
+                  "time2": T, "price2": "1000", "role": "support"}]) == [
+        f"A|trend|{int(T.timestamp())}|100|{int(T.timestamp())}|1000|{LIME}|0|"
+    ]

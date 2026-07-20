@@ -90,11 +90,13 @@ void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES 
       // History for this symbol/timeframe has not loaded yet; fall back to
       // now rather than anchoring hline labels at the Unix epoch.
       rightEdge = TimeCurrent();
-   double   priceMax  = ChartGetDouble(cid, CHART_PRICE_MAX, 0);
-   if(priceMax <= 0)
-      // Price scale not computed yet; fall back to the current bid rather
-      // than anchoring vline labels at price 0.
-      priceMax = SymbolInfoDouble(symbol, SYMBOL_BID);
+   // Best-effort anchor near the top of the visible range for vline labels;
+   // falls back to the current bid when the price scale is not yet computed.
+   // The bid itself can also be 0 for a symbol with no ticks, so callers must
+   // still check this before using it.
+   double   vlineLabelPrice = ChartGetDouble(cid, CHART_PRICE_MAX, 0);
+   if(vlineLabelPrice <= 0)
+      vlineLabelPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
 
    for(int i = 0; i < ArraySize(lines); i++)
      {
@@ -130,8 +132,8 @@ void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES 
          if(ObjectCreate(cid, oname, OBJ_VLINE, 0, t, 0))
            {
             StyleLine(cid, oname, clr, style);
-            if(StringLen(txt) > 0)
-               MakeTextLabel(cid, lname, t, priceMax, txt, clr,
+            if(StringLen(txt) > 0 && vlineLabelPrice > 0)
+               MakeTextLabel(cid, lname, t, vlineLabelPrice, txt, clr,
                              ANCHOR_LEFT_UPPER);
            }
         }
@@ -179,6 +181,16 @@ void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES 
      }
   }
 
+string StripCR(const string s)
+  {
+   // Only a trailing CR, never other whitespace: annotation label text is the
+   // last field on the wire and may legitimately end in a space.
+   int L = StringLen(s);
+   if(L > 0 && StringGetCharacter(s, L - 1) == 13)
+      return(StringSubstr(s, 0, L - 1));
+   return(s);
+  }
+
 void ProcessRequest(const string reqName)
   {
    // reqName is just "<id>.req" (from FileFindFirst); prefix the subdir.
@@ -187,17 +199,21 @@ void ProcessRequest(const string reqName)
    if(h == INVALID_HANDLE)
       return;
    string line = FileReadString(h);
-   line = StringTrimRight(line);
+   line = StripCR(line);
    string annLines[];
-   // Bounded so a stuck read (empty line without advancing the file pointer
-   // or setting the end flag) can never spin OnTimer forever. Python caps
-   // annotations at 16, so 64 is a generous, cost-free ceiling.
-   while(!FileIsEnding(h) && ArraySize(annLines) < 64)
+   int guard = 0;
+   // Bounded on iteration count, not on lines collected: a stuck read (empty
+   // line without advancing the file pointer or setting the end flag) hits
+   // continue before annLines ever grows, so only an explicit counter can
+   // stop OnTimer from spinning forever. Python caps annotations at 16, so
+   // 128 iterations / 64 collected lines are generous, cost-free ceilings.
+   while(!FileIsEnding(h) && guard < 128 && ArraySize(annLines) < 64)
      {
+      guard++;
       string ln = FileReadString(h);
       // FileReadString in FILE_TXT mode may split only on '\n', leaving a
       // trailing '\r' attached; strip it so it never corrupts the last field.
-      ln = StringTrimRight(ln);
+      ln = StripCR(ln);
       if(StringLen(ln) == 0)
          continue;
       int asz = ArraySize(annLines);

@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-07-20
+
+### Added
+- **Chart annotations** - `get_chart_screenshot` now takes an optional
+  `annotations` list to mark up the chart before capture: horizontal lines,
+  vertical lines, trendlines, free-placed text and corner labels. Roles
+  (`resistance`, `support`, `note`, `neutral`) pick sensible colors, or set
+  `color` directly. Up to 16 per screenshot.
+- Markup is drawn on the temporary chart the capture already uses, so it is
+  discarded with that chart and never touches your open charts.
+
+### Note
+- Requires the updated `AgentScreenshot.ex5`. Older builds keep working for
+  unannotated screenshots but ignore annotations.
+
 ## [1.5.0] - 2026-07-19
 
 ### Added

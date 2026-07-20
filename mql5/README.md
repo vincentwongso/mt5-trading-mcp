@@ -35,6 +35,16 @@ takes screenshots, but it does not understand annotation lines, so it silently
 ignores every `annotations` entry and returns a clean, unannotated chart with
 no error.
 
+**Do not save the EA into your default template.** Each capture opens a
+temporary chart with `ChartOpen`, which builds it from MT5's *Default*
+template. If you save that template while AgentScreenshot is attached, every
+temporary chart gets its own copy of the EA: you will see "AgentScreenshot" in
+the corner of every screenshot, and each capture briefly starts a second EA
+instance polling the same request folder. Save your default template from a
+chart with no EA attached, and leave the real EA running on its own chart.
+Alternatively point `[screenshot] template` at a clean `.tpl` - it is applied
+after `ChartOpen` and replaces the whole chart config, experts included.
+
 ## Verify
 
 With the MCP server connected and the EA attached, call `get_chart_screenshot`

@@ -78,8 +78,18 @@ screen of bars, so annotate levels near current price. Nothing errors when an
 annotation lands off-screen, so do not describe a level you have not confirmed
 is actually in the returned image.
 
+**Avoid anchoring `text` to the last few bars at the same price as an `hline`.**
+MT5 pins an `hline`'s own description to the right margin, so a `text`
+annotation near current price at that level overlaps it and both become
+unreadable. Either offset the `text` a few bars back, put it at a slightly
+different price, or drop the `hline`'s `text` and let the `text` annotation
+carry the wording.
+
 Markup is drawn on a temporary chart that is destroyed right after capture, so
-it never touches the user's own charts and never needs clearing.
+it never touches the user's own charts and never needs clearing. The temporary
+chart still inherits the user's default template, so indicators and their
+drawings can appear in the capture alongside your annotations - do not mistake
+them for something you drew.
 
 **`calc_margin(symbol, side, volume, price=None)`** -> broker-authoritative margin for a hypothetical order. Returns `{symbol, side, volume, price, margin, currency}` where `margin` is in deposit currency. If `price` is omitted, uses the current ask (buy) / bid (sell). Use this whenever the user asks "what would it cost to open X" - the broker's own answer is more reliable than any local formula because per-broker margin tables, hedged-position discounts, and exotic calc modes all factor in. Errors with `MARGIN_CALC_FAILED` if the broker refuses (e.g. invalid volume step, market closed, calc mode requires extra parameters).
 

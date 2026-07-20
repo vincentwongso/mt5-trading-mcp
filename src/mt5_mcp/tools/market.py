@@ -172,7 +172,9 @@ def register(mcp: FastMCP) -> None:
                 requires_human=False,
                 details={"timeframe": timeframe},
             ))
-        # Validate before any terminal work so a bad annotation costs nothing.
+        # Re-validate as defense in depth in case this is called directly,
+        # bypassing the outer get_chart_screenshot where validation normally
+        # runs. Re-checking already-constructed models is cheap.
         parsed = validate_annotations(annotations)
         ctx = get_context()
         # Raises SYMBOL_NOT_FOUND / SYMBOL_NOT_ENABLED, matching get_rates.
@@ -243,8 +245,17 @@ def register(mcp: FastMCP) -> None:
                 requires_human=True,
                 details={"platform": host},
             ).model_dump(mode="json")}
+        # Annotation validation also runs out here, before the envelope, for
+        # the same reason as the platform guard above: error_envelope eagerly
+        # connects (ensure_connected) before the wrapped body runs, so a bad
+        # annotation would be masked by TERMINAL_NOT_CONNECTED on a host with
+        # no reachable terminal instead of surfacing INVALID_ANNOTATION.
+        try:
+            parsed = validate_annotations(annotations)
+        except MT5Error as exc:
+            return {"error": exc.detail.model_dump(mode="json")}
         return _capture_chart_screenshot(
-            symbol=symbol, timeframe=timeframe, annotations=annotations
+            symbol=symbol, timeframe=timeframe, annotations=parsed
         )
 
     @mcp.tool()

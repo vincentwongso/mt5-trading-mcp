@@ -29,16 +29,16 @@ up the chart before capture.
 
 | Type | Anchors | Use |
 |---|---|---|
-| `hline` | `price` | Support/resistance level across the chart. |
-| `vline` | `time` | Time marker, e.g. a news release. |
-| `text` | `time`, `price` | Note placed freely against price action. |
-| `label` | `corner` | Note pinned to a chart corner, no coordinates needed. |
-| `trendline` | `time1/price1`, `time2/price2` | Diagonal support/resistance. |
+| `hline` | `price` | Support/resistance level across the chart; `text` optional. |
+| `vline` | `time` | Time marker, e.g. a news release; `text` optional. |
+| `text` | `time`, `price` | Note placed freely against price action; `text` required. |
+| `label` | `corner` | Note pinned to a chart corner, no coordinates needed; `text` required. |
+| `trendline` | `time1/price1`, `time2/price2` | Diagonal support/resistance; `text` optional. |
 
 `role` sets the color and style: `resistance` (red), `support` (lime), `note`
 (yellow, default), `neutral` (gray dashed). Set `color` to override it (`red`,
-`lime`, `yellow`, `gray`, `white`, `aqua`, `orange`, `magenta`). Any type takes
-an optional `text` label, up to 128 characters.
+`lime`, `yellow`, `gray`, `white`, `aqua`, `orange`, `magenta`). `text` is up
+to 128 characters; required on `text` and `label`, optional on the rest.
 
 ```json
 [

@@ -316,6 +316,36 @@ def test_get_chart_screenshot_not_supported_precedes_connection(server_and_mt5, 
     assert out["error"]["code"] == "SCREENSHOT_NOT_SUPPORTED"
 
 
+def test_get_chart_screenshot_invalid_annotation_precedes_connection(server_and_mt5, monkeypatch):
+    """Annotation validation must also run before error_envelope's connect.
+
+    Mirrors test_get_chart_screenshot_not_supported_precedes_connection: on a
+    host with no reachable terminal, an invalid annotation must still surface
+    INVALID_ANNOTATION rather than being masked by TERMINAL_NOT_CONNECTED.
+    """
+    from mt5_mcp.types import ErrorDetail
+    import mt5_mcp.tools.market as market
+    import mt5_mcp.tools._common as common
+
+    server, _fake = server_and_mt5
+    monkeypatch.setattr(market.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(
+        common,
+        "ensure_connected",
+        lambda ctx: ErrorDetail(
+            code="TERMINAL_NOT_CONNECTED",
+            message="no terminal",
+            retryable=True,
+            requires_human=False,
+        ),
+    )
+    out = _call(
+        server, "get_chart_screenshot", symbol="EURUSD", timeframe="H1",
+        annotations=[{"type": "hline", "price": "1", "role": "nope"}],
+    )
+    assert out["error"]["code"] == "INVALID_ANNOTATION"
+
+
 def test_get_chart_screenshot_rejects_bad_annotation(server_and_mt5, monkeypatch):
     """Invalid annotations fail the whole call, before the bridge is touched."""
     server, fake = server_and_mt5

@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-07-21
+
+### Fixed
+- **`get_chart_screenshot` `end_time`** - the scroll now frames the window to actually end at the requested time. In 1.6.0 the capture re-pinned to the latest bar (the screenshot ignored the scroll) and could clamp on deeper history; the EA now anchors the capture to the scrolled window, compensates for the screenshot being wider than the chart, and preloads history before navigating. Requires the rebuilt EA.
+
 ## [1.6.0] - 2026-07-21
 
 ### Added

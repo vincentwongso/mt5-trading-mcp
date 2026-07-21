@@ -214,7 +214,15 @@ def register(mcp: FastMCP) -> None:
         """PNG screenshot of the native MT5 chart for ``symbol`` at ``timeframe``.
 
         Windows-only: needs a GUI terminal running the AgentScreenshot EA.
-        Optional viewport parameters control chart framing.
+        ``scale`` (0-5) is a raw MT5 zoom passthrough; higher is more zoomed in.
+        ``bars`` targets an approximate visible candle count instead; the EA picks the
+        nearest zoom step, so it is approximate, not exact. ``scale`` and ``bars`` set
+        the same knob, so passing both is rejected. ``end_time`` (UTC ISO-8601, a real
+        bar timestamp from ``get_rates``) scrolls the window to end at that time;
+        newer than the latest bar clamps to the latest, older than loaded history is
+        ``NO_BARS_AT_TIME``. ``price_min`` and ``price_max`` (set together, max > min)
+        pin the vertical price axis to a fixed band. All four default to the live
+        chart's own framing.
         ``timeframe`` is one of ``M1``, ``M5``, ``M15``, ``M30``, ``H1``,
         ``H4``, ``D1``, ``W1``, ``MN1``. Returns an image the caller can read
         visually (candles, support/resistance, patterns).

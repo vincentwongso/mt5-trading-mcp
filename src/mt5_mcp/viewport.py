@@ -94,11 +94,17 @@ def validate_viewport(
             "Pass one or the other.",
             scale=scale, bars=bars,
         )
+    # bool is a subclass of int, so exclude it explicitly: True would otherwise
+    # pass as 1 and serialize to "True", which the EA parses to 0.
+    if scale is not None and (isinstance(scale, bool) or not isinstance(scale, int)):
+        raise _invalid(f"scale must be an integer, got {scale!r}.", scale=scale)
     if scale is not None and not (_SCALE_MIN <= scale <= _SCALE_MAX):
         raise _invalid(
             f"scale must be between {_SCALE_MIN} and {_SCALE_MAX}, got {scale}.",
             scale=scale,
         )
+    if bars is not None and (isinstance(bars, bool) or not isinstance(bars, int)):
+        raise _invalid(f"bars must be an integer, got {bars!r}.", bars=bars)
     if bars is not None and bars < 1:
         raise _invalid(f"bars must be a positive integer, got {bars}.", bars=bars)
     if (price_min is None) != (price_max is None):

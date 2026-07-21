@@ -45,6 +45,24 @@ def test_bars_must_be_positive(bad):
     assert exc.value.detail.code == "INVALID_VIEWPORT"
 
 
+@pytest.mark.parametrize("bad", [1.5, "3", True])
+def test_scale_must_be_int_not_bool_or_float(bad):
+    # bool is an int subclass, so True must be rejected too: it would otherwise
+    # pass the 0-5 range as 1 and serialize to "True".
+    with pytest.raises(MT5Error) as exc:
+        validate_viewport(scale=bad, bars=None, end_time=None,
+                          price_min=None, price_max=None)
+    assert exc.value.detail.code == "INVALID_VIEWPORT"
+
+
+@pytest.mark.parametrize("bad", [1.5, "10", True])
+def test_bars_must_be_int_not_bool_or_float(bad):
+    with pytest.raises(MT5Error) as exc:
+        validate_viewport(scale=None, bars=bad, end_time=None,
+                          price_min=None, price_max=None)
+    assert exc.value.detail.code == "INVALID_VIEWPORT"
+
+
 def test_price_band_both_or_neither():
     with pytest.raises(MT5Error) as exc:
         validate_viewport(scale=None, bars=None, end_time=None,

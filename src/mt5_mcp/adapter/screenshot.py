@@ -105,7 +105,11 @@ def capture_chart(
     header_parts = [
         req_id, symbol, timeframe_name, str(width), str(height), template or "",
     ]
-    if viewport_fields:
+    # serialize_viewport yields either [] (all unset) or exactly five fields.
+    # The any() guard also keeps a hand-built all-empty list a no-op, so the
+    # "omitted entirely when all are unset" contract above holds regardless of
+    # how the list was built.
+    if viewport_fields and any(viewport_fields):
         header_parts.extend(viewport_fields)
     header = "|".join(header_parts)
     # Annotations append one line each, joined with CRLF: MQL5's own file

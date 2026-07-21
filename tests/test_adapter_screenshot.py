@@ -279,6 +279,16 @@ def test_viewport_fields_none_keeps_six_field_header(tmp_path):
     assert payload == "fixedid|EURUSD.z|M15|1280|720|agent.tpl"
 
 
+def test_all_empty_viewport_fields_stay_six_field_header(tmp_path):
+    # A hand-built all-empty list must be a no-op too (serialize_viewport
+    # itself returns [] for an empty viewport, but capture_chart must not
+    # emit trailing empty fields regardless of how the list was built).
+    payload = _capture_capturing_payload(
+        tmp_path, viewport_fields=["", "", "", "", ""]
+    )
+    assert payload == "fixedid|EURUSD.z|M15|1280|720|agent.tpl"
+
+
 def test_viewport_fields_are_appended_after_template(tmp_path):
     payload = _capture_capturing_payload(
         tmp_path, viewport_fields=["3", "", "", "", ""]

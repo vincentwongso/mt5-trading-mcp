@@ -9,12 +9,13 @@ unit-testable on any OS.
 
 Request payload (UTF-16-LE). Line 1 is the header; each following line is one
 annotation, fixed arity per type, label text always last:
-    <id>|<symbol>|<timeframe>|<width>|<height>|<template>
+    <id>|<symbol>|<timeframe>|<width>|<height>|<template>|<scale>|<end_time>|<bars>|<price_min>|<price_max>
     A|hline|<price>|<bgr>|<style>|<text>
     A|vline|<epoch>|<bgr>|<style>|<text>
     A|text|<epoch>|<price>|<bgr>|<text>
     A|label|<corner>|<xdist>|<ydist>|<bgr>|<text>
     A|trend|<epoch1>|<price1>|<epoch2>|<price2>|<bgr>|<style>|<text>
+The five viewport fields are omitted entirely when all are unset.
 Response file ``<id>.done`` contains ``ok`` or ``err:<reason>`` (UTF-16-LE).
 """
 from __future__ import annotations
@@ -73,6 +74,7 @@ def capture_chart(
     height: int,
     template: str | None,
     annotation_lines: list[str] | None = None,
+    viewport_fields: list[str] | None = None,
     timeout_s: float,
     poll_interval_s: float = 0.15,
     id_factory: Callable[[], str] = lambda: str(ULID()),
@@ -100,7 +102,12 @@ def capture_chart(
     done = d / f"{req_id}.done"
     png = d / f"{req_id}.png"
 
-    header = f"{req_id}|{symbol}|{timeframe_name}|{width}|{height}|{template or ''}"
+    header_parts = [
+        req_id, symbol, timeframe_name, str(width), str(height), template or "",
+    ]
+    if viewport_fields:
+        header_parts.extend(viewport_fields)
+    header = "|".join(header_parts)
     # Annotations append one line each, joined with CRLF: MQL5's own file
     # writers emit "\r\n" and FileReadString in FILE_TXT mode is not
     # guaranteed to treat a lone "\n" as a line terminator, so a bare "\n"
@@ -130,10 +137,15 @@ def capture_chart(
                     # status written just before the PNG is visible; keep polling
                 else:
                     reason = status[4:] if status.startswith("err:") else (status or "unknown")
+                    code = (
+                        "NO_BARS_AT_TIME"
+                        if reason.startswith("no bars at")
+                        else "SCREENSHOT_FAILED"
+                    )
                     raise MT5Error(ErrorDetail(
-                        code="SCREENSHOT_FAILED",
+                        code=code,
                         message=f"EA failed to capture {symbol} {timeframe_name}: {reason}",
-                        retryable=True,
+                        retryable=code == "SCREENSHOT_FAILED",
                         requires_human=False,
                         details={"symbol": symbol, "timeframe": timeframe_name},
                     ))

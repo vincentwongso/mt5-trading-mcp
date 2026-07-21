@@ -272,3 +272,46 @@ def test_annotation_lines_are_appended_after_the_header(tmp_path):
         "A|hline|2650|255|0|R",
         "A|label|0|10|20|65535|note",
     ]
+
+
+def test_viewport_fields_none_keeps_six_field_header(tmp_path):
+    payload = _capture_capturing_payload(tmp_path, viewport_fields=None)
+    assert payload == "fixedid|EURUSD.z|M15|1280|720|agent.tpl"
+
+
+def test_viewport_fields_are_appended_after_template(tmp_path):
+    payload = _capture_capturing_payload(
+        tmp_path, viewport_fields=["3", "", "", "", ""]
+    )
+    assert payload == "fixedid|EURUSD.z|M15|1280|720|agent.tpl|3||||"
+
+
+def test_viewport_and_annotation_lines_coexist(tmp_path):
+    payload = _capture_capturing_payload(
+        tmp_path,
+        viewport_fields=["", "", "150", "", ""],
+        annotation_lines=["A|hline|2650|2237106|0|"],
+    )
+    lines = payload.split("\r\n")
+    assert lines[0] == "fixedid|EURUSD.z|M15|1280|720|agent.tpl|||150||"
+    assert lines[1] == "A|hline|2650|2237106|0|"
+
+
+def test_no_bars_at_time_maps_to_dedicated_code(tmp_path):
+    d = _files_dir(tmp_path)
+    (d / "fixedid.done").write_text(
+        "err:no bars at 1700000000", encoding="utf-16-le"
+    )
+    with pytest.raises(MT5Error) as ei:
+        capture_chart(
+            _StubClient(tmp_path),
+            symbol="EURUSD.z",
+            timeframe_name="H1",
+            width=800,
+            height=600,
+            template=None,
+            timeout_s=1.0,
+            id_factory=lambda: "fixedid",
+        )
+    assert ei.value.detail.code == "NO_BARS_AT_TIME"
+    assert "no bars at" in ei.value.detail.message

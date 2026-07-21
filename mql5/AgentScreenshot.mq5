@@ -322,7 +322,16 @@ void ProcessRequest(const string reqName)
       ChartSetDouble(cid, CHART_FIXED_MIN, StringToDouble(sPMin));
      }
 
-   // Horizontal scroll to end_time (broker epoch on the wire).
+   // Let the chart open, load its series, and apply scale/band before doing
+   // anything that depends on a fully rendered chart.
+   ChartRedraw(cid);
+   Sleep(SettleMs);
+
+   // Horizontal scroll to end_time (broker epoch on the wire). This MUST run
+   // after the settle above: a ChartNavigate issued on a freshly opened chart,
+   // before its first render completes, is silently discarded and the chart
+   // stays pinned to the latest bar (scale/band survive a cold open, a one-shot
+   // navigate does not). Scrolling once the series is loaded makes it stick.
    if(StringLen(sEndTime) > 0)
      {
       datetime endT   = (datetime)StringToInteger(sEndTime);
@@ -340,11 +349,11 @@ void ProcessRequest(const string reqName)
            }
          ChartSetInteger(cid, CHART_AUTOSCROLL, false);
          ChartNavigate(cid, CHART_END, -shift);
+         ChartRedraw(cid);
+         Sleep(SettleMs);
         }
      }
 
-   ChartRedraw(cid);
-   Sleep(SettleMs);
    DrawAnnotations(cid, symbol, tf, id, annLines);
    ChartRedraw(cid);
 

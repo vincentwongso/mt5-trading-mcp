@@ -322,7 +322,19 @@ void ProcessRequest(const string reqName)
       ChartSetDouble(cid, CHART_FIXED_MIN, StringToDouble(sPMin));
      }
 
-   // Horizontal scroll to end_time (broker epoch on the wire).
+   // Let the chart open, load its series, and apply scale/band before doing
+   // anything that depends on a fully rendered chart.
+   ChartRedraw(cid);
+   Sleep(SettleMs);
+
+   // Horizontal scroll to end_time (broker epoch on the wire). This MUST run
+   // after the settle above: a ChartNavigate issued on a freshly opened chart,
+   // before its first render completes, is silently discarded and the chart
+   // stays pinned to the latest bar (scale/band survive a cold open, a one-shot
+   // navigate does not). Scrolling once the series is loaded makes it stick.
+   // ALIGN_RIGHT (latest bar pinned right) for the default/no-scroll capture;
+   // switched to ALIGN_LEFT only when we scroll to an end_time (see below).
+   ENUM_ALIGN_MODE alignMode = ALIGN_RIGHT;
    if(StringLen(sEndTime) > 0)
      {
       datetime endT   = (datetime)StringToInteger(sEndTime);
@@ -338,18 +350,82 @@ void ProcessRequest(const string reqName)
             ChartClose(cid);
             return;
            }
+         // A freshly opened chart only loads ~140 bars, so ChartNavigate
+         // clamps when the target window reaches deeper than that. Force the
+         // terminal to sync enough history first (deepest bar shown is roughly
+         // shift + a screenshot width of bars; +200 is comfortable margin).
+         int needBars = shift + 200;
+         datetime tmpTime[];
+         for(int i = 0; i < 40; i++)
+           {
+            if(CopyTime(symbol, tf, 0, needBars, tmpTime) >= needBars)
+               break;
+            Sleep(50);
+           }
+
          ChartSetInteger(cid, CHART_AUTOSCROLL, false);
-         ChartNavigate(cid, CHART_END, -shift);
+         // Drop the right-margin indent so the rightmost bar sits flush.
+         ChartSetInteger(cid, CHART_SHIFT, false);
+         alignMode = ALIGN_LEFT;
+         long winPx = ChartGetInteger(cid, CHART_WIDTH_IN_PIXELS);
+
+         // ChartScreenShot renders `width` px, which usually spans MORE bars
+         // than the chart WINDOW shows. With ALIGN_LEFT the capture is anchored
+         // to the window's first-visible bar, so its right edge sits
+         // (nbars - visBars) beyond the window's right edge. Navigate that much
+         // further into history so the target bar lands on the capture's right
+         // edge. But CHART_VISIBLE_BARS reads a bogus ~4 until the chart has
+         // actually painted its bars, so we go in two passes: a coarse navigate
+         // forces the render (making visBars reliable), then a corrected one.
+         // ChartNavigate is asynchronous, so each pass polls the read-only
+         // first-visible bar until it stops moving rather than trusting a Sleep.
+         long fvbAfter = 0;
+         long visBars  = 0;
+         int  nbars    = 0;
+         int  navR     = shift;   // pass 1: coarse, uncompensated
+         for(int pass = 0; pass < 2; pass++)
+           {
+            long fvbStart = ChartGetInteger(cid, CHART_FIRST_VISIBLE_BAR);
+            ChartNavigate(cid, CHART_END, -navR);
+            // Poll until the scroll both takes effect (fvb moves off its start)
+            // AND settles (two equal reads). Requiring movement avoids breaking
+            // on the pre-navigate value before the async scroll has applied.
+            long fvbPrev = -1;
+            for(int i = 0; i < 60; i++)
+              {
+               ChartRedraw(cid);
+               Sleep(50);
+               fvbAfter = ChartGetInteger(cid, CHART_FIRST_VISIBLE_BAR);
+               if(fvbAfter != fvbStart && fvbAfter == fvbPrev)
+                  break;
+               fvbPrev = fvbAfter;
+              }
+            if(pass == 0)
+              {
+               // Chart is painted now: visBars is reliable. Compute the
+               // screenshot-width overshoot and the corrected navigate.
+               visBars = ChartGetInteger(cid, CHART_VISIBLE_BARS);
+               nbars   = (winPx > 0)
+                         ? (int)MathRound((double)width * (double)visBars / (double)winPx)
+                         : (int)visBars;
+               navR    = shift + nbars - (int)visBars;
+               if(navR < 0)
+                  navR = 0;
+               if(navR == shift)
+                  break;   // no correction needed; skip the second pass
+              }
+           }
         }
      }
 
-   ChartRedraw(cid);
-   Sleep(SettleMs);
    DrawAnnotations(cid, symbol, tf, id, annLines);
    ChartRedraw(cid);
 
    string pngPath = SubDir + "\\" + id + ".png";
-   bool ok = ChartScreenShot(cid, pngPath, width, height, ALIGN_RIGHT);
+   // ALIGN_LEFT anchors the capture to the window's current first-visible
+   // bar (honouring the ChartNavigate scroll); ALIGN_RIGHT re-pins to the
+   // latest bar and silently discards the scroll.
+   bool ok = ChartScreenShot(cid, pngPath, width, height, alignMode);
    // Belt and braces: ChartClose already destroys chart-scoped objects.
    // Scoped to our own objects (all named with the "agent_" prefix) so this
    // never touches anything placed by the user's applied template.

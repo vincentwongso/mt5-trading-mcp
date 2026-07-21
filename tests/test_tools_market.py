@@ -397,3 +397,67 @@ def test_get_chart_screenshot_without_annotations_passes_empty(server_and_mt5, m
 
     _call(server, "get_chart_screenshot", symbol="EURUSD", timeframe="H1")
     assert seen["annotation_lines"] == []
+
+
+def test_get_chart_screenshot_scale_and_bars_rejected(server_and_mt5, monkeypatch):
+    server, fake = server_and_mt5
+    from mt5_mcp.tools import market
+    fake._symbol_info["EURUSD"] = FakeSymbolInfo(name="EURUSD")
+    monkeypatch.setattr(market.platform, "system", lambda: "Windows")
+    out = _call(server, "get_chart_screenshot", symbol="EURUSD",
+                timeframe="H1", scale=2, bars=100)
+    assert out["error"]["code"] == "INVALID_VIEWPORT"
+
+
+def test_get_chart_screenshot_invalid_viewport_precedes_connection(server_and_mt5, monkeypatch):
+    """Mirror the annotation precedence test: a bad viewport must surface
+    INVALID_VIEWPORT, not TERMINAL_NOT_CONNECTED, on a host with no terminal."""
+    server, fake = server_and_mt5
+    from mt5_mcp.tools import market
+    fake._symbol_info["EURUSD"] = FakeSymbolInfo(name="EURUSD")
+    monkeypatch.setattr(market.platform, "system", lambda: "Windows")
+    # Force ensure_connected to blow up if it is ever reached before validation.
+    monkeypatch.setattr(
+        market, "capture_chart",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("connected too early")),
+    )
+    out = _call(server, "get_chart_screenshot", symbol="EURUSD",
+                timeframe="H1", scale=99)
+    assert out["error"]["code"] == "INVALID_VIEWPORT"
+
+
+def test_get_chart_screenshot_bad_end_time_is_invalid_timestamp(server_and_mt5, monkeypatch):
+    server, fake = server_and_mt5
+    from mt5_mcp.tools import market
+    fake._symbol_info["EURUSD"] = FakeSymbolInfo(name="EURUSD")
+    monkeypatch.setattr(market.platform, "system", lambda: "Windows")
+    out = _call(server, "get_chart_screenshot", symbol="EURUSD",
+                timeframe="H1", end_time="nope")
+    assert out["error"]["code"] == "INVALID_TIMESTAMP"
+
+
+def test_get_chart_screenshot_passes_viewport_fields(server_and_mt5, monkeypatch):
+    server, fake = server_and_mt5
+    from mt5_mcp.tools import market
+    fake._symbol_info["EURUSD"] = FakeSymbolInfo(name="EURUSD")
+    monkeypatch.setattr(market.platform, "system", lambda: "Windows")
+    seen: dict = {}
+    monkeypatch.setattr(
+        market, "capture_chart", lambda *a, **k: seen.update(k) or b"PNGDATA"
+    )
+    _call(server, "get_chart_screenshot", symbol="EURUSD", timeframe="H1",
+          scale=3, price_min=2600.0, price_max=2700.0)
+    assert seen["viewport_fields"] == ["3", "", "", "2600", "2700"]
+
+
+def test_get_chart_screenshot_no_viewport_passes_empty(server_and_mt5, monkeypatch):
+    server, fake = server_and_mt5
+    from mt5_mcp.tools import market
+    fake._symbol_info["EURUSD"] = FakeSymbolInfo(name="EURUSD")
+    monkeypatch.setattr(market.platform, "system", lambda: "Windows")
+    seen: dict = {}
+    monkeypatch.setattr(
+        market, "capture_chart", lambda *a, **k: seen.update(k) or b"PNGDATA"
+    )
+    _call(server, "get_chart_screenshot", symbol="EURUSD", timeframe="H1")
+    assert seen["viewport_fields"] == []

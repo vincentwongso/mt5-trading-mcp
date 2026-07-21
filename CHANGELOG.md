@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-07-21
+
+### Added
+- **`get_chart_screenshot` framing** - four optional params to frame the capture: `scale` (0-5 zoom passthrough), `bars` (approximate visible candle count, EA self-calibrates to the nearest zoom step; mutually exclusive with `scale`), `end_time` (UTC timestamp to scroll the window back to; clamps forward, `NO_BARS_AT_TIME` when older than history), and `price_min`/`price_max` (pin the vertical price band). All default to the live chart framing; requires the rebuilt EA.
+
 ## [1.5.2] - 2026-07-20
 
 ### Changed

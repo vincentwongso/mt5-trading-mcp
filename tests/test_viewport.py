@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import pytest
 
 from mt5_mcp.errors import MT5Error
-from mt5_mcp.viewport import EMPTY_VIEWPORT, Viewport, validate_viewport
+from mt5_mcp.viewport import EMPTY_VIEWPORT, Viewport, serialize_viewport, validate_viewport
 
 
 def test_all_none_is_empty():
@@ -84,9 +84,6 @@ def test_end_time_unparseable_is_invalid_timestamp():
         validate_viewport(scale=None, bars=None, end_time="not-a-date",
                           price_min=None, price_max=None)
     assert exc.value.detail.code == "INVALID_TIMESTAMP"
-
-
-from mt5_mcp.viewport import serialize_viewport
 
 
 def test_serialize_empty_returns_no_fields():

@@ -12,9 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from decimal import Decimal
 
-from mt5_mcp.adapter.conversions import utc_to_broker_epoch
 from mt5_mcp.errors import MT5Error
 from mt5_mcp.types import ErrorDetail
 

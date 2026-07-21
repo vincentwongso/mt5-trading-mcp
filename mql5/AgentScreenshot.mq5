@@ -205,6 +205,36 @@ string StripCR(const string s)
    return(s);
   }
 
+//+------------------------------------------------------------------+
+//| bars -> CHART_SCALE. MT5 has no "show N bars" primitive; the only |
+//| horizontal-density knob is the discrete CHART_SCALE (0-5). Probe  |
+//| each scale, measure bars-per-pixel on the live window, project    |
+//| onto the screenshot width, and keep the scale nearest targetBars. |
+//+------------------------------------------------------------------+
+void ApplyBarsScale(const long cid, const int targetBars, const int shotWidth)
+  {
+   int    bestScale = 0;
+   double bestErr   = -1.0;
+   for(int s = 0; s <= 5; s++)
+     {
+      ChartSetInteger(cid, CHART_SCALE, s);
+      ChartRedraw(cid);
+      Sleep(60);
+      long visBars = ChartGetInteger(cid, CHART_VISIBLE_BARS);
+      long widthPx = ChartGetInteger(cid, CHART_WIDTH_IN_PIXELS);
+      if(widthPx <= 0)
+         continue;
+      double projected = (double)visBars / (double)widthPx * (double)shotWidth;
+      double err = MathAbs(projected - (double)targetBars);
+      if(bestErr < 0.0 || err < bestErr)
+        {
+         bestErr   = err;
+         bestScale = s;
+        }
+     }
+   ChartSetInteger(cid, CHART_SCALE, bestScale);
+  }
+
 void ProcessRequest(const string reqName)
   {
    // reqName is just "<id>.req" (from FileFindFirst); prefix the subdir.
@@ -252,6 +282,11 @@ void ProcessRequest(const string reqName)
    int    width    = (int)StringToInteger(parts[3]);
    int    height   = (int)StringToInteger(parts[4]);
    string tpl      = (n >= 6) ? parts[5] : "";
+   string sScale   = (n >= 7)  ? parts[6]  : "";
+   string sEndTime = (n >= 8)  ? parts[7]  : "";
+   string sBars    = (n >= 9)  ? parts[8]  : "";
+   string sPMin    = (n >= 10) ? parts[9]  : "";
+   string sPMax    = (n >= 11) ? parts[10] : "";
 
    ENUM_TIMEFRAMES tf = TfFromName(tfName);
    if(tf == (ENUM_TIMEFRAMES)-1)
@@ -271,6 +306,42 @@ void ProcessRequest(const string reqName)
       // Best-effort: a bad or missing template name falls back to the default
       // chart rather than failing the capture. Return value intentionally ignored.
       ChartApplyTemplate(cid, tpl);
+
+   // Horizontal density: bars self-calibrates to a scale; else raw scale.
+   // (Python guarantees these are mutually exclusive.)
+   if(StringLen(sBars) > 0)
+      ApplyBarsScale(cid, (int)StringToInteger(sBars), width);
+   else if(StringLen(sScale) > 0)
+      ChartSetInteger(cid, CHART_SCALE, (int)StringToInteger(sScale));
+
+   // Vertical fixed price band.
+   if(StringLen(sPMin) > 0 && StringLen(sPMax) > 0)
+     {
+      ChartSetInteger(cid, CHART_SCALEFIX, true);
+      ChartSetDouble(cid, CHART_FIXED_MAX, StringToDouble(sPMax));
+      ChartSetDouble(cid, CHART_FIXED_MIN, StringToDouble(sPMin));
+     }
+
+   // Horizontal scroll to end_time (broker epoch on the wire).
+   if(StringLen(sEndTime) > 0)
+     {
+      datetime endT   = (datetime)StringToInteger(sEndTime);
+      datetime latest = iTime(symbol, tf, 0);
+      // Newer than the latest bar clamps to the right edge (leave as-is).
+      if(!(latest > 0 && endT >= latest))
+        {
+         int shift = iBarShift(symbol, tf, endT, false);
+         if(shift < 0)
+           {
+            WriteDone(id, "err:no bars at " + sEndTime);
+            ObjectsDeleteAll(cid, "agent_");
+            ChartClose(cid);
+            return;
+           }
+         ChartSetInteger(cid, CHART_AUTOSCROLL, false);
+         ChartNavigate(cid, CHART_END, -shift);
+        }
+     }
 
    ChartRedraw(cid);
    Sleep(SettleMs);

@@ -33,6 +33,7 @@ from mt5_mcp.types import (
     Quote,
     SymbolInfo,
 )
+from mt5_mcp.viewport import EMPTY_VIEWPORT, Viewport, serialize_viewport, validate_viewport
 
 
 # Keys are the human-readable timeframe strings exposed at the MCP boundary;
@@ -159,6 +160,7 @@ def register(mcp: FastMCP) -> None:
         symbol: str,
         timeframe: str,
         annotations: Annotated[list[Annotation], Field(max_length=MAX_ANNOTATIONS)] | None = None,
+        viewport: Viewport = EMPTY_VIEWPORT,
     ) -> Image:
         """Windows-only body of get_chart_screenshot (needs a terminal connection)."""
         if timeframe not in _TIMEFRAME_ATTRS:
@@ -180,6 +182,7 @@ def register(mcp: FastMCP) -> None:
         # Raises SYMBOL_NOT_FOUND / SYMBOL_NOT_ENABLED, matching get_rates.
         ctx.symbols.get(symbol)
         cfg = ctx.config.screenshot
+        offset = ctx.client.broker_offset_minutes
         png = capture_chart(
             ctx.client,
             symbol=symbol,
@@ -188,7 +191,10 @@ def register(mcp: FastMCP) -> None:
             height=cfg.height,
             template=cfg.template,
             annotation_lines=serialize_annotations(
-                parsed, broker_offset_minutes=ctx.client.broker_offset_minutes
+                parsed, broker_offset_minutes=offset
+            ),
+            viewport_fields=serialize_viewport(
+                viewport, broker_offset_minutes=offset
             ),
             timeout_s=cfg.timeout_s,
         )
@@ -199,10 +205,24 @@ def register(mcp: FastMCP) -> None:
         symbol: str,
         timeframe: str,
         annotations: Annotated[list[Annotation], Field(max_length=MAX_ANNOTATIONS)] | None = None,
+        scale: int | None = None,
+        bars: int | None = None,
+        end_time: str | None = None,
+        price_min: float | None = None,
+        price_max: float | None = None,
     ) -> Image:
         """PNG screenshot of the native MT5 chart for ``symbol`` at ``timeframe``.
 
         Windows-only: needs a GUI terminal running the AgentScreenshot EA.
+        ``scale`` (0-5) is a raw MT5 zoom passthrough; higher is more zoomed in.
+        ``bars`` targets an approximate visible candle count instead; the EA picks the
+        nearest zoom step, so it is approximate, not exact. ``scale`` and ``bars`` set
+        the same knob, so passing both is rejected. ``end_time`` (UTC ISO-8601, a real
+        bar timestamp from ``get_rates``) scrolls the window to end at that time;
+        newer than the latest bar clamps to the latest, older than loaded history is
+        ``NO_BARS_AT_TIME``. ``price_min`` and ``price_max`` (set together, max > min)
+        pin the vertical price axis to a fixed band. All four default to the live
+        chart's own framing.
         ``timeframe`` is one of ``M1``, ``M5``, ``M15``, ``M30``, ``H1``,
         ``H4``, ``D1``, ``W1``, ``MN1``. Returns an image the caller can read
         visually (candles, support/resistance, patterns).
@@ -255,17 +275,19 @@ def register(mcp: FastMCP) -> None:
                 requires_human=True,
                 details={"platform": host},
             ).model_dump(mode="json")}
-        # Annotation validation also runs out here, before the envelope, for
-        # the same reason as the platform guard above: error_envelope eagerly
-        # connects (ensure_connected) before the wrapped body runs, so a bad
-        # annotation would be masked by TERMINAL_NOT_CONNECTED on a host with
-        # no reachable terminal instead of surfacing INVALID_ANNOTATION.
+        # Annotation and viewport validation run out here, before the envelope,
+        # so a bad value surfaces its own code instead of being masked by
+        # TERMINAL_NOT_CONNECTED (error_envelope eagerly connects).
         try:
             parsed = validate_annotations(annotations)
+            viewport = validate_viewport(
+                scale=scale, bars=bars, end_time=end_time,
+                price_min=price_min, price_max=price_max,
+            )
         except MT5Error as exc:
             return {"error": exc.detail.model_dump(mode="json")}
         return _capture_chart_screenshot(
-            symbol=symbol, timeframe=timeframe, annotations=parsed
+            symbol=symbol, timeframe=timeframe, annotations=parsed, viewport=viewport
         )
 
     @mcp.tool()

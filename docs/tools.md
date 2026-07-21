@@ -19,8 +19,20 @@ subscribable resources.
 | `get_orders(symbol?)` | Pending orders. |
 | `get_history(from_ts, to_ts, symbol?)` | Closed deals in a UTC range. |
 | `get_rates(symbol, timeframe, count)` | OHLC bars (M1…MN1), most recent first. |
-| `get_chart_screenshot(symbol, timeframe, annotations?)` | PNG of the native MT5 chart, optionally annotated (Windows only; needs the AgentScreenshot EA). |
+| `get_chart_screenshot(symbol, timeframe, annotations?, scale?, bars?, end_time?, price_min?, price_max?)` | PNG of the native MT5 chart, optionally annotated and framed (Windows only; needs the AgentScreenshot EA). |
 | `calc_margin(symbol, side, volume, price?)` | Broker-authoritative margin estimate for a hypothetical order. |
+
+### Chart framing
+
+`scale` (0-5) is a raw MT5 zoom passthrough; higher is more zoomed in. `bars`
+targets an approximate visible candle count instead; the EA picks the nearest
+zoom step, so it is approximate, not exact. `scale` and `bars` set the same
+knob, so passing both is rejected. `end_time` (UTC ISO-8601, a real bar
+timestamp from `get_rates`) scrolls the window to end at that time; newer than
+the latest bar clamps to the latest, older than loaded history is
+`NO_BARS_AT_TIME`. `price_min` and `price_max` (set together, max > min) pin the
+vertical price axis to a fixed band. All four default to the live chart's own
+framing.
 
 ### Chart annotations
 

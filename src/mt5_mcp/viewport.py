@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 
+from mt5_mcp.adapter.conversions import utc_to_broker_epoch
 from mt5_mcp.errors import MT5Error
 from mt5_mcp.types import ErrorDetail
 
@@ -118,3 +120,33 @@ def validate_viewport(
         price_min=price_min,
         price_max=price_max,
     )
+
+
+def _num(value: float) -> str:
+    """Render a price for the wire without exponent notation or float noise.
+
+    Mirrors annotations._num: go through Decimal(str(...)) so 2600.0 -> "2600"
+    and 2712.5 -> "2712.5" rather than "2600.000000".
+    """
+    return format(Decimal(str(value)).normalize(), "f")
+
+
+def serialize_viewport(vp: Viewport, *, broker_offset_minutes: int) -> list[str]:
+    """Render the viewport as the five trailing wire fields, or [] if empty.
+
+    Order matches the header: scale|end_time|bars|price_min|price_max. Each
+    unset field is an empty string; an all-unset viewport returns [] so the
+    caller appends nothing and the payload stays byte-identical to 1.5.x.
+    end_time is converted UTC -> broker epoch, the same path annotations use.
+    """
+    if vp.is_empty():
+        return []
+    scale = "" if vp.scale is None else str(vp.scale)
+    if vp.end_time is None:
+        end_time = ""
+    else:
+        end_time = str(utc_to_broker_epoch(vp.end_time, broker_offset_minutes))
+    bars = "" if vp.bars is None else str(vp.bars)
+    price_min = "" if vp.price_min is None else _num(vp.price_min)
+    price_max = "" if vp.price_max is None else _num(vp.price_max)
+    return [scale, end_time, bars, price_min, price_max]

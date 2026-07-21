@@ -84,3 +84,41 @@ def test_end_time_unparseable_is_invalid_timestamp():
         validate_viewport(scale=None, bars=None, end_time="not-a-date",
                           price_min=None, price_max=None)
     assert exc.value.detail.code == "INVALID_TIMESTAMP"
+
+
+from mt5_mcp.viewport import serialize_viewport
+
+
+def test_serialize_empty_returns_no_fields():
+    assert serialize_viewport(EMPTY_VIEWPORT, broker_offset_minutes=0) == []
+
+
+def test_serialize_scale_only():
+    vp = Viewport(scale=3)
+    assert serialize_viewport(vp, broker_offset_minutes=0) == ["3", "", "", "", ""]
+
+
+def test_serialize_scale_zero_is_not_empty_string():
+    vp = Viewport(scale=0)
+    fields = serialize_viewport(vp, broker_offset_minutes=0)
+    assert fields[0] == "0"  # must be "0", never "" (unset vs scale 0)
+
+
+def test_serialize_bars_only():
+    vp = Viewport(bars=150)
+    assert serialize_viewport(vp, broker_offset_minutes=0) == ["", "", "150", "", ""]
+
+
+def test_serialize_price_band_clean_formatting():
+    vp = Viewport(price_min=2600.0, price_max=2712.5)
+    fields = serialize_viewport(vp, broker_offset_minutes=0)
+    assert fields[3] == "2600" and fields[4] == "2712.5"
+
+
+def test_serialize_end_time_uses_broker_offset():
+    # A +120 minute broker offset shifts the epoch forward by 7200s, matching
+    # the annotation path (utc_to_broker_epoch).
+    vp = Viewport(end_time=datetime(2026, 7, 19, 12, 0, tzinfo=timezone.utc))
+    base = serialize_viewport(vp, broker_offset_minutes=0)[1]
+    shifted = serialize_viewport(vp, broker_offset_minutes=120)[1]
+    assert int(shifted) - int(base) == 7200

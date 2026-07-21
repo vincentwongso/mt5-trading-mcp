@@ -119,3 +119,21 @@ def test_serialize_end_time_uses_broker_offset():
     base = serialize_viewport(vp, broker_offset_minutes=0)[1]
     shifted = serialize_viewport(vp, broker_offset_minutes=120)[1]
     assert int(shifted) - int(base) == 7200
+
+
+def test_serialize_all_fields_set_are_independent():
+    # scale (not bars, since they are mutually exclusive) + end_time + band all
+    # set at once: every wire position is populated, none bleed into another.
+    vp = Viewport(
+        scale=2,
+        end_time=datetime(2026, 7, 19, 12, 0, tzinfo=timezone.utc),
+        price_min=2600.0,
+        price_max=2712.5,
+    )
+    fields = serialize_viewport(vp, broker_offset_minutes=0)
+    assert fields[0] == "2"
+    assert int(fields[1]) == int(
+        datetime(2026, 7, 19, 12, 0, tzinfo=timezone.utc).timestamp()
+    )
+    assert fields[2] == ""  # bars unset
+    assert fields[3] == "2600" and fields[4] == "2712.5"

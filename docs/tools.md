@@ -22,10 +22,7 @@ subscribable resources.
 | `get_chart_screenshot(symbol, timeframe, annotations?, scale?, bars?, end_time?, price_min?, price_max?)` | PNG of the native MT5 chart, optionally annotated and framed (Windows only; needs the AgentScreenshot EA). |
 | `calc_margin(symbol, side, volume, price?)` | Broker-authoritative margin estimate for a hypothetical order. |
 
-### Chart annotations
-
-`get_chart_screenshot` takes an optional `annotations` list (max 16) that marks
-up the chart before capture.
+### Chart framing
 
 `scale` (0-5) is a raw MT5 zoom passthrough; higher is more zoomed in. `bars`
 targets an approximate visible candle count instead; the EA picks the nearest
@@ -36,6 +33,11 @@ the latest bar clamps to the latest, older than loaded history is
 `NO_BARS_AT_TIME`. `price_min` and `price_max` (set together, max > min) pin the
 vertical price axis to a fixed band. All four default to the live chart's own
 framing.
+
+### Chart annotations
+
+`get_chart_screenshot` takes an optional `annotations` list (max 16) that marks
+up the chart before capture.
 
 | Type | Anchors | Use |
 |---|---|---|

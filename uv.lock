@@ -9,6 +9,13 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 
+[options]
+exclude-newer = "2026-10-18T02:10:27.587936844Z"
+exclude-newer-span = "P7D"
+
+[options.exclude-newer-package]
+certifi = { timestamp = "2026-10-24T02:10:27.587944548Z", span = "P1D" }
+
 [[package]]
 name = "annotated-doc"
 version = "0.0.4"

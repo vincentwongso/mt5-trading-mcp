@@ -96,3 +96,9 @@ pythonpath = ["src"]
 markers = [
   "integration: marks tests requiring a live HTTP server (deselect with -m 'not integration')",
 ]
+
+[tool.uv]
+# Skip releases younger than 7 days; compromised versions are usually pulled within that window.
+exclude-newer = "7 days"
+# CA-bundle updates (e.g. revoked roots) should land fast.
+exclude-newer-package = { certifi = "1 day" }

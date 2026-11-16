@@ -40,7 +40,7 @@ classifiers = [
   "Framework :: AsyncIO",
 ]
 dependencies = [
-  "mcp[cli]>=1.12",
+  "mcp[cli]>=1.12,<2",  # mcp 2.x renamed FastMCP (mcp.server.fastmcp is gone)
   "pydantic>=2.6",
   "watchdog>=4.0",
   "tomli>=2.0; python_version < '3.11'",

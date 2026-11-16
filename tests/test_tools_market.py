@@ -102,6 +102,25 @@ def test_get_market_hours_disabled_symbol(server_and_mt5):
     assert out.is_open is False
 
 
+def test_get_market_hours_closed_during_session_break(server_and_mt5):
+    # Gold's daily break: trade_mode stays enabled but its quote stops while other symbols tick.
+    server, fake = server_and_mt5
+    now = 1_800_000_000
+    fake._symbol_info["XAUUSD"] = FakeSymbolInfo(name="XAUUSD", trade_mode=4)
+    fake._symbol_info_tick["XAUUSD"] = FakeTick(time=now - 3600)
+    fake._symbols_get = (FakeSymbolInfo(name="XAUUSD", time=now - 3600), FakeSymbolInfo(name="BTCUSD", time=now))
+    assert _call(server, "get_market_hours", symbol="XAUUSD").is_open is False
+
+
+def test_get_market_hours_open_when_quote_is_fresh(server_and_mt5):
+    server, fake = server_and_mt5
+    now = 1_800_000_000
+    fake._symbol_info["XAUUSD"] = FakeSymbolInfo(name="XAUUSD", trade_mode=4)
+    fake._symbol_info_tick["XAUUSD"] = FakeTick(time=now - 2)
+    fake._symbols_get = (FakeSymbolInfo(name="XAUUSD", time=now - 2), FakeSymbolInfo(name="BTCUSD", time=now))
+    assert _call(server, "get_market_hours", symbol="XAUUSD").is_open is True
+
+
 # --- get_rates ----------------------------------------------------------
 
 

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **`mcp` dependency** - capped at `<2`. mcp 2.x removed `mcp.server.fastmcp`, so a fresh install pulled mcp 2.3.0 and the server crashed on start (`ModuleNotFoundError`).
+- **`get_market_hours`** - `is_open` is now false during session breaks (gold's daily break, weekends) when the symbol's last quote is more than 5 minutes behind the broker's newest quote. It used to read `trade_mode` only and reported the market open during breaks.
+
 ## [1.6.1] - 2026-07-21
 
 ### Fixed

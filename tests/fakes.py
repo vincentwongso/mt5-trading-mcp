@@ -117,6 +117,7 @@ class FakeSymbolInfo:
     currency_margin: str = "USD"
     bid: float = 1.0823
     ask: float = 1.0824
+    time: int = 0  # last quote time, broker-clock epoch; 0 = unknown
     # Fields surfaced by SymbolInfo enrichment (real mt5lib exposes all of
     # these on `symbol_info()`; they were previously dropped by the adapter).
     trade_calc_mode: int = 0          # 0 = SYMBOL_CALC_MODE_FOREX

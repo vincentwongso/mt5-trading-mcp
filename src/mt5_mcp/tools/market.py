@@ -54,6 +54,10 @@ _TIMEFRAME_ATTRS: dict[str, str] = {
 
 _MAX_RATES_COUNT = 5000
 
+# A symbol whose last quote is this far behind the broker's newest quote is in a session break
+# (gold's daily break, a weekend). The MT5 Python API exposes no session schedule to read instead.
+_STALE_QUOTE_SECONDS = 300
+
 
 def register(mcp: FastMCP) -> None:
     @mcp.tool()
@@ -88,17 +92,28 @@ def register(mcp: FastMCP) -> None:
     def get_market_hours(symbol: str) -> MarketHours:
         """Whether the given symbol's session is open right now.
 
-        v1 limitation: ``is_open`` is derived from ``trade_mode`` (open
-        when non-zero). ``next_open`` and ``next_close`` are always
-        ``None`` in v1 - parsing ``symbol_info().sessions_quotes`` is
-        scheduled for a later release. Agents needing precise session
-        boundaries should consult their broker's published schedule.
+        ``is_open`` is false when trading is disabled for the symbol, or
+        when its last quote is more than 5 minutes behind the broker's
+        newest quote on any symbol (a session break such as gold's daily
+        break, or a weekend). The MT5 Python API exposes no session
+        schedule, so ``next_open`` and ``next_close`` are always ``None``;
+        agents needing precise boundaries should check the symbol's
+        trading times in the terminal or the broker's published schedule.
         """
         ctx = get_context()
         info = ctx.symbols.get(symbol)
+        is_open = getattr(info, "trade_mode", 0) != 0
+        if is_open:
+            tick = ctx.client.call(lambda m: m.symbol_info_tick(symbol))
+            last = getattr(tick, "time", 0) or 0
+            newest = max((getattr(s, "time", 0) or 0 for s in ctx.client.call(lambda m: m.symbols_get()) or ()),
+                         default=0)
+            # Both times are broker-clock epochs, so no TZ offset is needed. Unknown times leave it open.
+            if last and newest and newest - last > _STALE_QUOTE_SECONDS:
+                is_open = False
         return MarketHours(
             symbol=symbol,
-            is_open=getattr(info, "trade_mode", 0) != 0,
+            is_open=is_open,
             next_open=None,
             next_close=None,
         )

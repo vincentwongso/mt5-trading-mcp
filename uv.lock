@@ -10,11 +10,11 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-10-18T02:10:27.587936844Z"
+exclude-newer = "2026-11-09T22:35:03.820674022Z"
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
-certifi = { timestamp = "2026-10-24T02:10:27.587944548Z", span = "P1D" }
+certifi = { timestamp = "2026-11-15T22:35:03.820680173Z", span = "P1D" }
 
 [[package]]
 name = "annotated-doc"
@@ -438,7 +438,7 @@ dev = [
 requires-dist = [
     { name = "freezegun", marker = "extra == 'dev'", specifier = ">=1.4" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
-    { name = "mcp", extras = ["cli"], specifier = ">=1.12" },
+    { name = "mcp", extras = ["cli"], specifier = ">=1.12,<2" },
     { name = "metatrader5", marker = "sys_platform == 'win32'", specifier = ">=5.0.45" },
     { name = "mt5linux", marker = "extra == 'bridge'" },
     { name = "platformdirs", specifier = ">=4.0" },

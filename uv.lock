@@ -10,11 +10,11 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-11-09T22:35:03.820674022Z"
+exclude-newer = "2026-11-10T00:22:07.765973649Z"
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
-certifi = { timestamp = "2026-11-15T22:35:03.820680173Z", span = "P1D" }
+certifi = { timestamp = "2026-11-16T00:22:07.765985991Z", span = "P1D" }
 
 [[package]]
 name = "annotated-doc"
@@ -231,7 +231,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -399,7 +399,7 @@ version = "5.0.5735"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' and sys_platform == 'win32'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/8c/bbfde8e0aa9bd08439cc60c54bab106ea485c1a5e1bc651bbe295bbe9614/metatrader5-5.0.5735-cp310-cp310-win_amd64.whl", hash = "sha256:8f576f271844069e40aefddb70197a07f3e511d71ebc048edc1fbc78695a7ba3", size = 48092, upload-time = "2026-04-04T16:44:07.236Z" },
@@ -411,7 +411,7 @@ wheels = [
 
 [[package]]
 name = "mt5-trading-mcp"
-version = "1.6.1"
+version = "1.6.2"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },

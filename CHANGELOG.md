@@ -6,9 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-- **Reconnect after terminal restart**: the server reattaches when the terminal restarts (mt5lib IPC errors -10001/-10003/-10004) instead of staying on TERMINAL_NOT_CONNECTED. Errors that may have reached the terminal are not retried, so orders are never duplicated.
-- **Broker time on a fresh terminal**: the offset probe selects its symbols first and retries until resolved; a fresh terminal no longer reports offset 0 with timestamps 2h off.
-- **Docker screenshots**: the headless image installs the AgentScreenshot EA, a light chart template and a startup ini on every boot, so `get_chart_screenshot` works with no manual steps. New env vars: `MT5_EA_SYMBOL`, `MT5_MCP_AUTH_TOKEN` (only written into a new config.toml); the image pins its own mt5-trading-mcp version. Fresh-install terminal issue documented.
+### Added
+- **Docker screenshots** - the headless image installs the AgentScreenshot EA, a light template and a startup ini on every boot, and relaunches the terminal with them if it restarts. New env vars `MT5_EA_SYMBOL` and `MT5_MCP_AUTH_TOKEN` (new config.toml only; an invalid token stops mt5-mcp starting). An existing config.toml needs `[screenshot] template = "agent_light.tpl"` added by hand.
+
+### Fixed
+- **Reconnect after terminal restart** - the server reattaches when the terminal restarts instead of staying on TERMINAL_NOT_CONNECTED. Errors that may have reached the terminal are not retried, so orders are never duplicated.
+- **Broker time on a fresh terminal** - the offset probe adds its symbols to Market Watch and retries every 30s until resolved, so timestamps are no longer 2h off; a resolved offset survives reconnects.
 
 ## [1.6.2] - 2026-11-17
 

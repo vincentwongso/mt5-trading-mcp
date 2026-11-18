@@ -19,7 +19,7 @@ subscribable resources.
 | `get_orders(symbol?)` | Pending orders. |
 | `get_history(from_ts, to_ts, symbol?)` | Closed deals in a UTC range. |
 | `get_rates(symbol, timeframe, count)` | OHLC bars (M1…MN1), most recent first. |
-| `get_chart_screenshot(symbol, timeframe, annotations?, scale?, bars?, end_time?, price_min?, price_max?)` | PNG of the native MT5 chart, optionally annotated and framed (Windows, or the Linux Docker image (the EA is preinstalled there); needs the AgentScreenshot EA). |
+| `get_chart_screenshot(symbol, timeframe, annotations?, scale?, bars?, end_time?, price_min?, price_max?)` | PNG of the native MT5 chart, optionally annotated and framed (Windows with the AgentScreenshot EA attached, or the Linux Docker image, where it is preinstalled). |
 | `calc_margin(symbol, side, volume, price?)` | Broker-authoritative margin estimate for a hypothetical order. |
 
 ### Chart framing

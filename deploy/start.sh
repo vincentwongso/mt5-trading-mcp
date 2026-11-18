@@ -12,10 +12,14 @@
 # Flow:
 #   1. Wine-Mono            (gmag11)
 #   2. MetaTrader 5         (gmag11)
-#   3. Install screenshot assets + launch the terminal  (gmag11 launch) - the
-#                           EA, light template and startup.ini go in on every
-#                           boot; a login (programmatic OR a one-time VNC
-#                           login) can then attach.
+#   3. Install screenshot assets + start the terminal supervisor - the EA,
+#                           light template and startup.ini go in on every
+#                           boot. Every 10s the supervisor launches the
+#                           terminal with startup.ini if none is running, and
+#                           replaces one started without it (mt5lib's bare
+#                           `/portable` relaunch, which has no EA). A login
+#                           (programmatic OR a one-time VNC login) can then
+#                           attach.
 #   4. 64-bit Wine-Python 3.11   (NEW - stock gmag11 ships 3.9 32-bit)
 #   5. mt5-trading-mcp + numpy<2 (NEW - drops mt5linux entirely); reinstalled
 #                           when MT5_MCP_VERSION pins a different version
@@ -44,6 +48,10 @@ wine_executable="wine"
 python_win='C:\Python311\python.exe'
 python_unix='/config/.wine/drive_c/Python311/python.exe'
 MT5_CMD_OPTIONS="${MT5_CMD_OPTIONS:-}"
+# Wine shows a running terminal as `C:\Program Files\...\terminal64.exe <args>`.
+# The ^C: anchor keeps pgrep/pkill off this script's own command line.
+term_pat='^C:.*terminal64\.exe'
+term_pid=""
 
 mono_url="https://dl.winehq.org/wine/wine-mono/10.3.0/wine-mono-10.3.0-x86.msi"
 python_url="https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe"
@@ -69,6 +77,31 @@ require() { command -v "$1" >/dev/null 2>&1 || { log "FATAL: $1 not installed"; 
 require curl
 require "$wine_executable"
 require socat
+require pgrep
+
+launch_terminal() {
+    # shellcheck disable=SC2086
+    $wine_executable "$mt5file" "/config:C:\\Program Files\\MetaTrader 5\\startup.ini" $MT5_CMD_OPTIONS &
+    term_pid=$!
+}
+
+# One supervisor tick. If the terminal dies, mt5lib's initialize() relaunches
+# it as a bare `/portable` instance with no EA, so replace any instance that
+# was not started with our ini.
+check_terminal() {
+    local procs
+    procs="$(pgrep -af "$term_pat")"
+    if [ -z "$procs" ]; then
+        # Our launch is still starting (Wine has not renamed it to C:\... yet).
+        kill -0 "$term_pid" 2>/dev/null && return
+        log "terminal not running; launching it with startup.ini"
+        launch_terminal
+    elif ! grep -q '/config:' <<<"$procs"; then
+        log "terminal running without startup.ini (no EA); restarting it with startup.ini"
+        pkill -f "$term_pat"
+        launch_terminal
+    fi
+}
 
 # --- 1. Wine-Mono --------------------------------------------------------
 if [ ! -e "/config/.wine/drive_c/windows/mono" ]; then
@@ -115,9 +148,11 @@ if [ -e "$mt5file" ]; then
     # LiveUpdate must not replace it: builds newer than 28 Sep do not start under Wine.
     chmod a-w "$mt5file"
     log "terminal64.exe sha256 $(sha256sum "$mt5file" | cut -c1-8)"
-    log "[3/6] Launching MetaTrader 5 terminal..."
-    # shellcheck disable=SC2086
-    $wine_executable "$mt5file" "/config:C:\\Program Files\\MetaTrader 5\\startup.ini" $MT5_CMD_OPTIONS &
+    log "[3/6] Starting the MetaTrader 5 terminal supervisor..."
+    while true; do
+        check_terminal
+        sleep 10
+    done &
 else
     log "[3/6] WARNING: terminal64.exe missing; MT5 install may have failed."
 fi
@@ -198,6 +233,10 @@ if [ "$token_ok" = 1 ]; then
     done &
 fi
 
-# Match gmag11's pattern: the autostart script returns, leaving the terminal,
-# socat, and the serve supervisor running under the desktop session.
-log "Bootstrap complete; terminal + mt5-mcp running. VNC web UI for one-time login."
+# Match gmag11's pattern: the autostart script returns, leaving the terminal
+# supervisor, socat, and the serve supervisor running under the desktop session.
+if [ "$token_ok" = 1 ]; then
+    log "Bootstrap complete; terminal + mt5-mcp running. VNC web UI for one-time login."
+else
+    log "Bootstrap complete; terminal running, mt5-mcp NOT started (invalid MT5_MCP_AUTH_TOKEN)."
+fi

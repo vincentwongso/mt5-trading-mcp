@@ -6,9 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-11-19
+
 ### Added
 - **Docker screenshots** - the headless image installs the AgentScreenshot EA, a light template and a startup ini on every boot, so `get_chart_screenshot` works there; a restarted terminal is relaunched with them. An existing config.toml needs `[screenshot] template = "agent_light.tpl"` added by hand.
-- **Docker env vars** - `MT5_EA_SYMBOL` picks the EA's symbol; `MT5_MCP_AUTH_TOKEN` seeds a new config.toml only, and an invalid one stops mt5-mcp starting.
+- **Docker env vars** - `MT5_EA_SYMBOL` picks the EA's symbol; `MT5_MCP_AUTH_TOKEN` seeds a new config.toml only, and an invalid one stops mt5-mcp starting. The image pins its matching mt5-trading-mcp release.
 
 ### Fixed
 - **Reconnect after terminal restart** - the server reattaches when the terminal restarts instead of staying on TERMINAL_NOT_CONNECTED. Reads are retried once; order calls are never retried or resent.

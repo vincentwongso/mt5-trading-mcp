@@ -10,11 +10,11 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-11-10T00:22:07.765973649Z"
+exclude-newer = "2026-11-11T23:05:05.330943976Z"
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
-certifi = { timestamp = "2026-11-16T00:22:07.765985991Z", span = "P1D" }
+certifi = { timestamp = "2026-11-17T23:05:05.330950018Z", span = "P1D" }
 
 [[package]]
 name = "annotated-doc"
@@ -411,7 +411,7 @@ wheels = [
 
 [[package]]
 name = "mt5-trading-mcp"
-version = "1.6.2"
+version = "1.6.3"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },

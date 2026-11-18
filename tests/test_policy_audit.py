@@ -110,3 +110,23 @@ def test_concurrent_writes_preserve_file_order_with_timestamps(tmp_path: Path):
     # `ts` was generated outside the lock.
     for prev, curr in zip(timestamps, timestamps[1:]):
         assert prev <= curr, f"out-of-order ts: {prev!r} then {curr!r}"
+
+
+def test_ts_keeps_microseconds_on_a_whole_second(tmp_path: Path, monkeypatch):
+    """isoformat() drops the fraction when microsecond == 0, which made a
+    whole-second ts sort after the next one as text (flaky ordering test)."""
+    from datetime import datetime, timezone
+
+    import mt5_mcp.policy.audit as audit_mod
+
+    class _Whole(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 11, 18, 22, 16, 50, 0, tzinfo=timezone.utc)
+
+    monkeypatch.setattr(audit_mod, "datetime", _Whole)
+    a = AuditLog(path=tmp_path / "audit.jsonl", max_bytes=10_000)
+    a.write({"tool": "x"})
+    a.close()
+    ts = json.loads((tmp_path / "audit.jsonl").read_text())["ts"]
+    assert ts == "2026-11-18T22:16:50.000000Z"

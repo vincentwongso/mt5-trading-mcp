@@ -90,7 +90,13 @@ class AuditLog:
         with self._lock:
             if self._fp is None:
                 self._open()
-            ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            # Fixed width: plain isoformat() drops the fraction on a whole second,
+            # which breaks text ordering of ts.
+            ts = (
+                datetime.now(timezone.utc)
+                .isoformat(timespec="microseconds")
+                .replace("+00:00", "Z")
+            )
             record = {"ts": ts, **event}
             line = json.dumps(record, separators=(",", ":"), default=str)
             self._fp.write(line + "\n")

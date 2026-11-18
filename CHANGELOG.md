@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 - **Reconnect after terminal restart** - the server reattaches when the terminal restarts instead of staying on TERMINAL_NOT_CONNECTED. Errors that may have reached the terminal are not retried, so orders are never duplicated.
 - **Broker time on a fresh terminal** - the offset probe adds its symbols to Market Watch and retries every 30s until resolved, so timestamps are no longer 2h off; a resolved offset survives reconnects.
+- **Audit log timestamps** - `ts` always carries microseconds; a write on a whole second dropped the fraction and sorted out of order as text.
 
 ## [1.6.2] - 2026-11-17
 

@@ -25,9 +25,10 @@ logger = logging.getLogger(__name__)
 
 _OFFSET_RETRY_INTERVAL_S = 30.0
 
-# Request never reached the terminal (-10001 send failed, as after a restart;
-# -10003, -10004), so a retry cannot duplicate an order_send. -10002/-10005 may
-# have been delivered: no retry.
+# Codes after which the client reattaches (-10001 send failed, as after a
+# terminal restart). Reads are then retried; trade calls pass resend=False,
+# since no code proves the terminal did not get the request. -10002/-10005 may
+# have been delivered: no reattach-and-retry at all.
 _REINIT_CODES = frozenset({-10001, -10003, -10004})
 
 # Symbols probed during connect() to derive the broker TZ offset when
@@ -399,7 +400,7 @@ class MT5Client:
 
     # --- call routing ---------------------------------------------------
 
-    def call(self, fn: Callable[[Any], T]) -> T:
+    def call(self, fn: Callable[[Any], T], *, resend: bool = True) -> T:
         """Invoke ``fn(mt5_module)`` with transparent re-init on IPC/init errors.
 
         The MT5 terminal can drop its IPC link mid-session (terminal restart,
@@ -409,16 +410,18 @@ class MT5Client:
         Receive-failed (-10002) and timeout (-10005) are not retried: the
         request may have been delivered, and a retry could duplicate a trade.
         This wrapper detects that case, calls ``connect()`` once, and retries
-        ``fn`` exactly once. Other ``None`` results pass through verbatim so
-        callers can distinguish "no data" from "connection lost".
+        ``fn`` exactly once. With ``resend=False`` (every ``order_send``) it
+        reattaches but returns the ``None`` without calling ``fn`` again, so a
+        trade is never sent twice. Other ``None`` results pass through verbatim
+        so callers can distinguish "no data" from "connection lost".
 
         Read tools route every mt5lib data call through ``call()``; only
         constant lookups (e.g. ``ctx.client.mt5.ORDER_FILLING_IOC``) and
         ``ping`` skip it.
         """
-        return self._call_with_reinit(lambda: fn(self._mt5))
+        return self._call_with_reinit(lambda: fn(self._mt5), resend=resend)
 
-    def _call_with_reinit(self, fn: Callable[[], T]) -> T:
+    def _call_with_reinit(self, fn: Callable[[], T], *, resend: bool = True) -> T:
         """Invoke `fn`; if it returns None AND last_error is the
         IPC/init retcode, re-init once and retry."""
         result = fn()
@@ -435,6 +438,8 @@ class MT5Client:
             self.connect()
         except MT5Error:
             raise
+        if not resend:
+            return result
         return fn()  # one retry; propagates whatever the second call returns
 
     # --- module accessor (used by symbols + tools) -----------------------

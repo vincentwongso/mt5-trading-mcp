@@ -727,3 +727,21 @@ def test_reinit_without_fresh_tick_keeps_resolved_offset(
     assert client._initialised is True
     assert client.broker_offset_minutes == 180
     assert client._offset_resolved is True
+
+
+def test_call_without_resend_reattaches_but_never_repeats_fn(
+    client: MT5Client, fake_mt5: FakeMT5, frozen_utc
+):
+    """Trade calls: reattach so the next call works, but never resend, since
+    no IPC code proves the terminal did not receive the request."""
+    client.connect()
+    calls = {"n": 0}
+
+    def fn(_m):
+        calls["n"] += 1
+        fake_mt5._last_error = (-10001, "IPC send failed")
+        return None
+
+    assert client.call(fn, resend=False) is None
+    assert calls["n"] == 1
+    assert fake_mt5.calls["initialize"] == 2

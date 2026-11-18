@@ -224,3 +224,19 @@ def test_unparseable_volume_returns_invalid_request(server_and_mt5):
     assert out["error"]["code"] == "INVALID_REQUEST"
     assert out["error"]["details"]["field"] == "volume"
     assert len(fake.order_send_calls) == 0
+
+
+def test_order_send_is_not_resent_after_ipc_error(server_and_mt5):
+    server, fake = server_and_mt5
+    _call(server, "get_terminal_info")  # connect first
+
+    real = fake.order_send
+
+    def dropped(request):
+        real(request)
+        fake._last_error = (-10001, "IPC send failed")
+        return None
+
+    fake.order_send = dropped
+    _call(server, "place_order", symbol="EURUSD", side="buy", type="market", volume="0.10")
+    assert len(fake.order_send_calls) == 1

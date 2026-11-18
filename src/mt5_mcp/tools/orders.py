@@ -185,7 +185,7 @@ def register(mcp: FastMCP) -> None:
                 req, symbol_info=info, filling_mode=filling,
                 price=ref_price, mt5=ctx.client.mt5,
             )
-            g.execute(lambda: ctx.client.call(lambda m: m.order_send(mt5_dict)))
+            g.execute(lambda: ctx.client.call(lambda m: m.order_send(mt5_dict), resend=False))
             return g.finalize(
                 order_result_from_mt5_response,
                 request_echo=req.model_dump(mode="json", exclude={"idempotency_key"}),
@@ -346,7 +346,7 @@ def register(mcp: FastMCP) -> None:
                     mt5_dict["type_expiration"] = int(req.expiration.timestamp())
                 else:
                     mt5_dict["type_time"] = getattr(mt5, "ORDER_TIME_GTC", 0)
-            g.execute(lambda: ctx.client.call(lambda m: m.order_send(mt5_dict)))
+            g.execute(lambda: ctx.client.call(lambda m: m.order_send(mt5_dict), resend=False))
             return g.finalize(
                 order_result_from_mt5_response,
                 request_echo=req.model_dump(mode="json", exclude={"idempotency_key"}),
@@ -385,7 +385,7 @@ def register(mcp: FastMCP) -> None:
                 "action": mt5.TRADE_ACTION_REMOVE,
                 "order": int(ticket),
             }
-            g.execute(lambda: ctx.client.call(lambda m: m.order_send(mt5_dict)))
+            g.execute(lambda: ctx.client.call(lambda m: m.order_send(mt5_dict), resend=False))
             return g.finalize(
                 order_result_from_mt5_response,
                 request_echo=req.model_dump(mode="json", exclude={"idempotency_key"}),

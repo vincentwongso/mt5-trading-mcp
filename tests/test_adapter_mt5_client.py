@@ -710,3 +710,20 @@ def test_stale_ticks_keep_retrying_but_stay_zero(
         client.connect()
         assert client.broker_offset_minutes == 0
         assert fake_mt5.calls["symbol_info_tick"] > before
+
+
+def test_reinit_without_fresh_tick_keeps_resolved_offset(
+    fake_mt5: FakeMT5, frozen_utc,
+):
+    # A restarted terminal often has no fresh tick; the offset must not drop to 0.
+    _no_time_terminal(fake_mt5)
+    fake_mt5._symbol_info_tick["BTCUSD"] = _broker_tick(13)
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 180
+    fake_mt5._symbol_info_tick.clear()
+    client._initialised = False
+    client.connect()
+    assert client._initialised is True
+    assert client.broker_offset_minutes == 180
+    assert client._offset_resolved is True

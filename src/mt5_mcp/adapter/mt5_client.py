@@ -3,7 +3,7 @@
 This is the ONLY module that imports `MetaTrader5`. Everything else goes
 through an `MT5Client` instance, which:
   - Owns initialize / shutdown lifecycle.
-  - Caches the broker's TZ offset (inferred once per connect).
+  - Caches the broker's TZ offset (kept across reinits once resolved).
   - Transparently re-initialises once if a call returns the "not
     initialized" retcode mid-session.
 """
@@ -23,9 +23,11 @@ from mt5_mcp.types import ErrorDetail
 
 logger = logging.getLogger(__name__)
 
-# Request never reached the terminal (-10001 send failed, as after a restart; -10003, -10004),
-# so a retry cannot duplicate an order_send. -10002/-10005 may have been delivered: no retry.
 _OFFSET_RETRY_INTERVAL_S = 30.0
+
+# Request never reached the terminal (-10001 send failed, as after a restart;
+# -10003, -10004), so a retry cannot duplicate an order_send. -10002/-10005 may
+# have been delivered: no retry.
 _REINIT_CODES = frozenset({-10001, -10003, -10004})
 
 # Symbols probed during connect() to derive the broker TZ offset when
@@ -224,8 +226,13 @@ class MT5Client:
         if ti is None:
             raise MT5Error(self._connection_error("terminal_info returned None"))
         result = self._derive_broker_offset(ti)
-        self.broker_offset_minutes = result or 0
-        self._offset_resolved = result is not None
+        # A just-restarted terminal often has no fresh tick yet; keep an
+        # offset resolved before the reinit rather than dropping it to 0.
+        if result is not None:
+            self.broker_offset_minutes = result
+            self._offset_resolved = True
+        elif not self._offset_resolved:
+            self.broker_offset_minutes = 0
         self._offset_retry_at = time.monotonic() + _OFFSET_RETRY_INTERVAL_S
         self._initialised = True
         logger.info(
@@ -263,10 +270,11 @@ class MT5Client:
            must land within ``_FRESH_TICK_SECONDS`` of real-utc-now once
            the offset is removed; a weekend-stale tick blows that gap out
            by hours and is rejected.
-        3. None (unresolved; caller uses 0 and retries), with a warning. Means timestamps the server emits are
-           interpreted as broker-local-time-treated-as-UTC, which is
-           wrong by the broker offset until the next reconnect during
-           market hours.
+        3. None (unresolved), with a warning. The caller keeps an offset
+           resolved earlier, else uses 0 and retries every
+           ``_OFFSET_RETRY_INTERVAL_S`` (30s) from ``connect()``. While 0,
+           emitted timestamps are broker-local-time-treated-as-UTC, wrong
+           by the broker offset until a retry finds a fresh tick.
         """
         now_utc = datetime.now(timezone.utc)
 

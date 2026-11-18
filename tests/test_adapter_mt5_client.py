@@ -96,6 +96,63 @@ def test_call_reinit_fails_hard_when_reinit_broken(client: MT5Client, fake_mt5: 
     assert ei.value.detail.code == "TERMINAL_NOT_CONNECTED"
 
 
+@pytest.mark.parametrize("code", [-10001, -10003, -10004])
+def test_call_reinits_on_ipc_error_codes(client: MT5Client, fake_mt5: FakeMT5, frozen_utc, code):
+    client.connect()
+    calls = {"n": 0}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            fake_mt5._last_error = (code, "IPC send failed")
+            return None
+        fake_mt5._last_error = (1, "Success")
+        return "ok"
+
+    assert client._call_with_reinit(flaky) == "ok"
+    assert fake_mt5.calls["initialize"] == 2
+
+
+@pytest.mark.parametrize("code", [-10002, -10005])
+def test_call_does_not_retry_when_request_may_have_been_delivered(
+    client: MT5Client, fake_mt5: FakeMT5, frozen_utc, code
+):
+    client.connect()
+    calls = {"n": 0}
+
+    def fn():
+        calls["n"] += 1
+        fake_mt5._last_error = (code, "maybe delivered")
+        return None
+
+    assert client._call_with_reinit(fn) is None
+    assert calls["n"] == 1
+    assert fake_mt5.calls["initialize"] == 1
+
+
+def test_call_does_not_reinit_on_genuine_none(client: MT5Client, fake_mt5: FakeMT5, frozen_utc):
+    client.connect()
+    fake_mt5._last_error = (1, "Success")
+    assert client._call_with_reinit(lambda: None) is None
+    assert fake_mt5.calls["initialize"] == 1
+
+
+def test_failed_reattach_leaves_client_retryable(client: MT5Client, fake_mt5: FakeMT5, frozen_utc):
+    client.connect()
+
+    def dead():
+        fake_mt5._last_error = (-10001, "IPC send failed")
+        return None
+
+    fake_mt5._initialize = False
+    with pytest.raises(MT5Error):
+        client._call_with_reinit(dead)
+    assert client._initialised is False
+    fake_mt5._initialize = True
+    fake_mt5._last_error = (1, "Success")
+    assert client._call_with_reinit(lambda: "ok") == "ok"
+
+
 def test_ping_reports_latency(client: MT5Client, fake_mt5: FakeMT5, frozen_utc):
     client.connect()
     ok, ms, via = client.ping()
@@ -549,3 +606,147 @@ def test_startup_retry_is_one_shot_not_per_reinit(fake_mt5, frozen_utc, monkeypa
     with pytest.raises(MT5Error):
         c.connect()
     assert fake_mt5.calls["initialize"] == 1  # no retry on reinit
+
+
+# --- fresh-terminal offset derivation -------------------------------------
+
+
+def _no_time_terminal(fake_mt5: FakeMT5) -> None:
+    from dataclasses import dataclass
+
+    @dataclass
+    class _NoTime:
+        connected: bool = True
+        trade_allowed: bool = True
+        build: int = 4150
+        name: str = "MetaTrader 5"
+        company: str = "Example Broker Ltd"
+        path: str = ""
+
+    fake_mt5._terminal_info = _NoTime()
+
+
+def _broker_tick(hour: int, day: int = 21):
+    from tests.fakes import FakeTick
+
+    return FakeTick(
+        time=int(datetime(2026, 4, day, hour, 0, tzinfo=timezone.utc).timestamp())
+    )
+
+
+def _clock(monkeypatch) -> list[float]:
+    now = [1000.0]
+    monkeypatch.setattr(
+        "mt5_mcp.adapter.mt5_client.time.monotonic", lambda: now[0]
+    )
+    return now
+
+
+def test_offset_probe_selects_symbol_before_reading_tick(
+    fake_mt5: FakeMT5, frozen_utc, monkeypatch,
+):
+    _no_time_terminal(fake_mt5)
+    ticks = {"BTCUSD": _broker_tick(13)}
+    selected: set[str] = set()
+    monkeypatch.setattr(
+        fake_mt5, "symbol_select",
+        lambda sym, enable=True: selected.add(sym) or True,
+    )
+    monkeypatch.setattr(
+        fake_mt5, "symbol_info_tick",
+        lambda sym: ticks.get(sym) if sym in selected else None,
+    )
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 180
+
+
+def test_unresolved_offset_retries_after_interval(
+    fake_mt5: FakeMT5, frozen_utc, monkeypatch,
+):
+    _no_time_terminal(fake_mt5)
+    now = _clock(monkeypatch)
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 0
+    fake_mt5._symbol_info_tick["BTCUSD"] = _broker_tick(13)
+    now[0] += 10
+    client.connect()
+    assert client.broker_offset_minutes == 0
+    now[0] += 21
+    client.connect()
+    assert client.broker_offset_minutes == 180
+
+
+def test_resolved_offset_is_not_rederived(
+    fake_mt5: FakeMT5, frozen_utc, monkeypatch,
+):
+    _no_time_terminal(fake_mt5)
+    now = _clock(monkeypatch)
+    fake_mt5._symbol_info_tick["BTCUSD"] = _broker_tick(13)
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 180
+    fake_mt5._symbol_info_tick["BTCUSD"] = _broker_tick(14)
+    calls = fake_mt5.calls["symbol_info_tick"]
+    now[0] += 3600
+    client.connect()
+    assert client.broker_offset_minutes == 180
+    assert fake_mt5.calls["symbol_info_tick"] == calls
+
+
+def test_stale_ticks_keep_retrying_but_stay_zero(
+    fake_mt5: FakeMT5, frozen_utc, monkeypatch,
+):
+    _no_time_terminal(fake_mt5)
+    now = _clock(monkeypatch)
+    fake_mt5._symbol_info_tick["BTCUSD"] = _broker_tick(13, day=18)
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 0
+    for _ in range(2):
+        before = fake_mt5.calls["symbol_info_tick"]
+        now[0] += 31
+        client.connect()
+        assert client.broker_offset_minutes == 0
+        assert fake_mt5.calls["symbol_info_tick"] > before
+
+
+def test_reinit_without_fresh_tick_keeps_resolved_offset(
+    fake_mt5: FakeMT5, frozen_utc,
+):
+    # A restarted terminal often has no fresh tick; the offset must not drop to 0.
+    _no_time_terminal(fake_mt5)
+    fake_mt5._symbol_info_tick["BTCUSD"] = _broker_tick(13)
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 180
+    fake_mt5._symbol_info_tick.clear()
+    client._initialised = False
+    client.connect()
+    assert client._initialised is True
+    assert client.broker_offset_minutes == 180
+    assert client._offset_resolved is True
+
+
+def test_call_without_resend_never_repeats_fn_and_defers_reattach(
+    client: MT5Client, fake_mt5: FakeMT5, frozen_utc
+):
+    """Trade calls: never resend and do not reattach inline (that would reset
+    last_error and could raise mid-order); the next call reattaches."""
+    client.connect()
+    calls = {"n": 0}
+
+    def fn(_m):
+        calls["n"] += 1
+        fake_mt5._last_error = (-10001, "IPC send failed")
+        return None
+
+    assert client.call(fn, resend=False) is None
+    assert calls["n"] == 1
+    assert fake_mt5.calls["initialize"] == 1
+    assert fake_mt5.last_error() == (-10001, "IPC send failed")
+    # The next tool call's ensure_connected() -> connect() reattaches.
+    fake_mt5._last_error = (1, "Success")
+    client.connect()
+    assert fake_mt5.calls["initialize"] == 2

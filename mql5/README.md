@@ -20,6 +20,11 @@ requested chart, and writes the PNG back.
    in the top-right of that chart means it is running. Leave the terminal
    open.
 
+## Docker
+
+The Linux Docker image installs the EA, the light template and a startup ini
+on every boot. No manual install is needed there.
+
 ## Compiled .ex5
 
 A compiled `AgentScreenshot.ex5` is committed next to the source, so you can

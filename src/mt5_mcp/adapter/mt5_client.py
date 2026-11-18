@@ -3,7 +3,7 @@
 This is the ONLY module that imports `MetaTrader5`. Everything else goes
 through an `MT5Client` instance, which:
   - Owns initialize / shutdown lifecycle.
-  - Caches the broker's TZ offset (inferred once per connect).
+  - Caches the broker's TZ offset (kept across reinits once resolved).
   - Transparently re-initialises once if a call returns the "not
     initialized" retcode mid-session.
 """
@@ -23,9 +23,13 @@ from mt5_mcp.types import ErrorDetail
 
 logger = logging.getLogger(__name__)
 
-# mt5lib's internal retcode indicating the library wasn't initialized for
-# this call. Exact number per MetaTrader5 source.
-_RES_NOT_INITIALIZED = -10004
+_OFFSET_RETRY_INTERVAL_S = 30.0
+
+# Codes after which the client reattaches (-10001 send failed, as after a
+# terminal restart). Reads are retried; trade calls pass resend=False and are
+# never retried, since no code proves the terminal did not get the request. -10002/-10005 may
+# have been delivered: no reattach-and-retry at all.
+_REINIT_CODES = frozenset({-10001, -10003, -10004})
 
 # Symbols probed during connect() to derive the broker TZ offset when
 # terminal_info().time is absent. Crypto first because BTCUSD/ETHUSD
@@ -148,6 +152,8 @@ class MT5Client:
         self._lock = threading.RLock()
         self._initialised = False
         self.broker_offset_minutes = 0
+        self._offset_resolved = False
+        self._offset_retry_at = 0.0
         self.backend_label = backend_label
 
     def _initialize_terminal(self) -> bool:
@@ -193,6 +199,7 @@ class MT5Client:
         """
         with self._lock:
             if self._initialised:
+                self._retry_unresolved_offset()
                 return
             retries = self._connect_retries if self._first_connect else 0
             self._first_connect = False
@@ -219,13 +226,36 @@ class MT5Client:
         ti = self._mt5.terminal_info()
         if ti is None:
             raise MT5Error(self._connection_error("terminal_info returned None"))
-        self.broker_offset_minutes = self._derive_broker_offset(ti)
+        result = self._derive_broker_offset(ti)
+        # A just-restarted terminal often has no fresh tick yet; keep an
+        # offset resolved before the reinit rather than dropping it to 0.
+        if result is not None:
+            self.broker_offset_minutes = result
+            self._offset_resolved = True
+        elif not self._offset_resolved:
+            self.broker_offset_minutes = 0
+        self._offset_retry_at = time.monotonic() + _OFFSET_RETRY_INTERVAL_S
         self._initialised = True
         logger.info(
             "MT5 connected; broker TZ offset = %+d min", self.broker_offset_minutes
         )
 
-    def _derive_broker_offset(self, ti: Any) -> int:
+    def _retry_unresolved_offset(self) -> None:
+        """Re-derive an offset that fell back to 0, at most every 30s."""
+        if self._offset_resolved or time.monotonic() < self._offset_retry_at:
+            return
+        self._offset_retry_at = time.monotonic() + _OFFSET_RETRY_INTERVAL_S
+        try:
+            result = self._derive_broker_offset(self._mt5.terminal_info())
+        except Exception:
+            logger.debug("Broker TZ offset retry failed", exc_info=True)
+            return
+        if result is not None:
+            self.broker_offset_minutes = result
+            self._offset_resolved = True
+            logger.info("Derived broker TZ offset = %+d min on retry", result)
+
+    def _derive_broker_offset(self, ti: Any) -> int | None:
         """Derive the broker TZ offset (minutes from UTC).
 
         Layered fallback - degrades gracefully so the server still starts
@@ -241,10 +271,11 @@ class MT5Client:
            must land within ``_FRESH_TICK_SECONDS`` of real-utc-now once
            the offset is removed; a weekend-stale tick blows that gap out
            by hours and is rejected.
-        3. Zero, with a warning. Means timestamps the server emits are
-           interpreted as broker-local-time-treated-as-UTC, which is
-           wrong by the broker offset until the next reconnect during
-           market hours.
+        3. None (unresolved), with a warning. The caller keeps an offset
+           resolved earlier, else uses 0 and retries every
+           ``_OFFSET_RETRY_INTERVAL_S`` (30s) from ``connect()``. While 0,
+           emitted timestamps are broker-local-time-treated-as-UTC, wrong
+           by the broker offset until a retry finds a fresh tick.
         """
         now_utc = datetime.now(timezone.utc)
 
@@ -254,6 +285,9 @@ class MT5Client:
 
         for sym in _BROKER_TIME_PROBE_SYMBOLS:
             try:
+                # A fresh terminal has no probe symbols in Market Watch, so
+                # their ticks are None until selected.
+                self._mt5.symbol_select(sym, True)
                 tick = self._mt5.symbol_info_tick(sym)
             except Exception:
                 continue
@@ -282,14 +316,17 @@ class MT5Client:
                 )
                 return candidate
 
-        logger.warning(
+        # Retries and reinits that keep a resolved offset log at debug, so a
+        # closed market is quiet.
+        quiet = self._initialised or self._offset_resolved
+        (logger.debug if quiet else logger.warning)(
             "Could not derive broker TZ offset (terminal_info.time absent and "
-            "no fresh tick on any of %s); assuming offset = 0. Timestamps in "
-            "tool outputs may be off by the broker's real offset until the "
+            "no fresh tick on any of %s); keeping offset = %+d min. Timestamps "
+            "in tool outputs may be off by the broker's real offset until the "
             "market resumes streaming.",
-            list(_BROKER_TIME_PROBE_SYMBOLS),
+            list(_BROKER_TIME_PROBE_SYMBOLS), self.broker_offset_minutes,
         )
-        return 0
+        return None
 
     def disconnect(self) -> None:
         with self._lock:
@@ -363,35 +400,45 @@ class MT5Client:
 
     # --- call routing ---------------------------------------------------
 
-    def call(self, fn: Callable[[Any], T]) -> T:
-        """Invoke ``fn(mt5_module)`` with transparent re-init on NOT_INITIALIZED.
+    def call(self, fn: Callable[[Any], T], *, resend: bool = True) -> T:
+        """Invoke ``fn(mt5_module)`` with transparent re-init on IPC/init errors.
 
         The MT5 terminal can drop its IPC link mid-session (terminal restart,
         Windows wake-from-sleep, antivirus interruption). When this happens
-        mt5lib returns ``None`` AND sets ``last_error()`` to ``-10004``.
+        mt5lib returns ``None`` AND sets ``last_error()`` to one of
+        ``_REINIT_CODES`` (-10001 send failed after a restart).
+        Receive-failed (-10002) and timeout (-10005) are not retried: the
+        request may have been delivered, and a retry could duplicate a trade.
         This wrapper detects that case, calls ``connect()`` once, and retries
-        ``fn`` exactly once. Other ``None`` results pass through verbatim so
-        callers can distinguish "no data" from "connection lost".
+        ``fn`` exactly once. With ``resend=False`` (every ``order_send``) it
+        returns the ``None`` untouched and leaves the reattach to the next
+        call, so a trade is never sent twice. Other ``None`` results pass through verbatim
+        so callers can distinguish "no data" from "connection lost".
 
         Read tools route every mt5lib data call through ``call()``; only
         constant lookups (e.g. ``ctx.client.mt5.ORDER_FILLING_IOC``) and
         ``ping`` skip it.
         """
-        return self._call_with_reinit(lambda: fn(self._mt5))
+        return self._call_with_reinit(lambda: fn(self._mt5), resend=resend)
 
-    def _call_with_reinit(self, fn: Callable[[], T]) -> T:
+    def _call_with_reinit(self, fn: Callable[[], T], *, resend: bool = True) -> T:
         """Invoke `fn`; if it returns None AND last_error is the
-        not-initialized retcode, re-init once and retry."""
+        IPC/init retcode, re-init once and retry."""
         result = fn()
         if result is not None:
             return result
         err = self._mt5.last_error()
         code = err[0] if isinstance(err, (tuple, list)) and err else 0
-        if code != _RES_NOT_INITIALIZED:
+        if code not in _REINIT_CODES:
             return result  # genuine None; caller will decide what it means
-        logger.warning("mt5lib returned NOT_INITIALIZED; attempting re-init")
         with self._lock:
+            # Mark for reattach either way; the next call reconnects.
             self._initialised = False
+        if not resend:
+            # Trade call: no reattach here (it would reset last_error and can
+            # fail mid-order), and never a resend. Keep the 1.6.2 outcome.
+            return result
+        logger.warning("mt5lib returned error %s; attempting re-init", code)
         try:
             self.connect()
         except MT5Error:

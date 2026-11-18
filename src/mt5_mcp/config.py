@@ -144,7 +144,8 @@ class StreamingSection(_Sub):
 
 
 class ScreenshotSection(_Sub):
-    """Native MT5 chart-screenshot bridge (Windows-only feature). ``template``
+    """Native MT5 chart-screenshot bridge (Windows with the AgentScreenshot EA
+    attached, or the Linux Docker image, where it is preinstalled). ``template``
     is an optional MQL5 template name (e.g. ``agent.tpl``) applied to the
     opened chart before capture; ``None`` uses the terminal default chart."""
     width: PositiveInt = 1600

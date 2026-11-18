@@ -479,9 +479,13 @@ def order_result_from_mt5_response(
             error=ErrorDetail(
                 code="MT5_NULL_RESPONSE",
                 message=(
-                    "mt5lib order_send returned None - request rejected before "
-                    "reaching the broker (check terminal connection, AutoTrading "
-                    "toggle, stops_level/freeze_level, and symbol tradeability)."
+                    "mt5lib order_send returned None. Usually the terminal "
+                    "rejected the request before the broker (check terminal "
+                    "connection, AutoTrading toggle, stops_level/freeze_level, "
+                    "and symbol tradeability). If last_error is an IPC error "
+                    "(-10001..-10005) the terminal link dropped and the order "
+                    "may have reached the broker: check positions, orders and "
+                    "history before resending."
                 ),
                 retryable=False,
                 requires_human=True,

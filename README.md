@@ -106,10 +106,18 @@ agent at `http://127.0.0.1:8765/mcp`. Wire it to OpenClaw in one command:
 openclaw mcp set mt5-mcp '{"url":"http://127.0.0.1:8765/mcp","transport":"streamable-http"}'
 ```
 
+Known issue: fresh installs. The current MT5 installer's terminal refuses to
+start under Wine ("A debugger has been found running", or a silent exit).
+Recovery: copy a working `terminal64.exe` (build 6230, 28 Sep 2026) into
+`/config/.wine/drive_c/Program Files/MetaTrader 5/` with `docker cp` (runs as
+root; the boot script makes the binary read-only, so a copy as `abc` fails),
+or `rm -f` the old file first. Then `chown abc:abc` it and restart the
+container.
+
 Full walkthrough:
 **[docs/installation.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/docs/installation.md)**.
 
-## Chart screenshots (Windows only)
+## Chart screenshots
 
 `get_chart_screenshot(symbol, timeframe, annotations?)` returns a PNG of the
 native MT5 chart, optionally annotated, so an LLM can read it visually
@@ -130,8 +138,13 @@ Setup (one time):
 Config knobs (`[screenshot]` section): `width` (default 1600), `height`
 (default 900), `template` (default none), `timeout_s` (default 10).
 
-Not available on the headless Linux/Docker deployment: it needs a GUI
-terminal. Off Windows the tool returns `SCREENSHOT_NOT_SUPPORTED`.
+Docker: the image preinstalls the EA, the light template and a startup ini on
+every boot, so no manual setup is needed. Set `MT5_EA_SYMBOL` (default
+`BTCUSD`) to a symbol your account has, otherwise screenshots time out. The
+light template is wired in only when the first boot seeds `config.toml`; on a
+volume that already has one, add `[screenshot]` `template = "agent_light.tpl"`
+by hand (an existing `config.toml` also ignores `MT5_MCP_AUTH_TOKEN`).
+Elsewhere (macOS, native Linux) the tool returns `SCREENSHOT_NOT_SUPPORTED`.
 
 ## For AI agents
 

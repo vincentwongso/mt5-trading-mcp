@@ -1,0 +1,11 @@
+.venv
+.git
+.ruff_cache
+.claude
+.superpowers
+docs
+demo
+tests
+examples
+**/__pycache__
+**/.env

@@ -11,8 +11,8 @@
 services:
   mt5-mcp:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: deploy/Dockerfile
     # Pull the published image (docker compose pull) or build locally (--build).
     image: ghcr.io/vincentwongso/mt5-trading-mcp:headless
     container_name: mt5-mcp
@@ -24,12 +24,24 @@ services:
       - MT5_LOGIN=${MT5_LOGIN:-}
       - MT5_PASSWORD=${MT5_PASSWORD:-}
       - MT5_SERVER=${MT5_SERVER:-}
+      # Symbol the screenshot EA attaches to (must exist on the account).
+      - MT5_EA_SYMBOL=${MT5_EA_SYMBOL:-BTCUSD}
+      # Optional bearer token for the HTTP endpoint (seeds config.toml once).
+      - MT5_MCP_AUTH_TOKEN=${MT5_MCP_AUTH_TOKEN:-}
+      # Empty falls back to the image's baked pin (MT5_MCP_IMAGE_VERSION).
+      - MT5_MCP_VERSION=${MT5_MCP_VERSION:-}
       # KasmVNC web-UI auth (for the one-time login session).
       - CUSTOM_USER=${VNC_USER:-mt5}
       - PASSWORD=${VNC_PASSWORD:-change-me}
     volumes:
       - mt5-mcp-config:/config
-    restart: unless-stopped
+    # Plain Docker only reports health; recovery comes from the server's own
+    # reattach after a terminal restart.
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f '^C:.*terminal64.exe' && curl -m 10 -so /dev/null http://127.0.0.1:8765/mcp"]
+      interval: 60s
+      start_period: 5m
+    restart: always
 
 volumes:
   mt5-mcp-config:

@@ -162,7 +162,7 @@ def register(mcp: FastMCP) -> None:
                 "type_time": getattr(mt5, "ORDER_TIME_GTC", 0),
                 "magic": 0,
             }
-            g.execute(lambda: ctx.client.call(lambda m: m.order_send(mt5_dict)))
+            g.execute(lambda: ctx.client.call(lambda m: m.order_send(mt5_dict), resend=False))
             return g.finalize(
                 order_result_from_mt5_response,
                 request_echo=req.model_dump(mode="json", exclude={"idempotency_key"}),

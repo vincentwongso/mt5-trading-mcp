@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 _OFFSET_RETRY_INTERVAL_S = 30.0
 
 # Codes after which the client reattaches (-10001 send failed, as after a
-# terminal restart). Reads are then retried; trade calls pass resend=False,
-# since no code proves the terminal did not get the request. -10002/-10005 may
+# terminal restart). Reads are retried; trade calls pass resend=False and are
+# never retried, since no code proves the terminal did not get the request. -10002/-10005 may
 # have been delivered: no reattach-and-retry at all.
 _REINIT_CODES = frozenset({-10001, -10003, -10004})
 
@@ -411,8 +411,8 @@ class MT5Client:
         request may have been delivered, and a retry could duplicate a trade.
         This wrapper detects that case, calls ``connect()`` once, and retries
         ``fn`` exactly once. With ``resend=False`` (every ``order_send``) it
-        reattaches but returns the ``None`` without calling ``fn`` again, so a
-        trade is never sent twice. Other ``None`` results pass through verbatim
+        returns the ``None`` untouched and leaves the reattach to the next
+        call, so a trade is never sent twice. Other ``None`` results pass through verbatim
         so callers can distinguish "no data" from "connection lost".
 
         Read tools route every mt5lib data call through ``call()``; only
@@ -431,15 +431,18 @@ class MT5Client:
         code = err[0] if isinstance(err, (tuple, list)) and err else 0
         if code not in _REINIT_CODES:
             return result  # genuine None; caller will decide what it means
-        logger.warning("mt5lib returned error %s; attempting re-init", code)
         with self._lock:
+            # Mark for reattach either way; the next call reconnects.
             self._initialised = False
+        if not resend:
+            # Trade call: no reattach here (it would reset last_error and can
+            # fail mid-order), and never a resend. Keep the 1.6.2 outcome.
+            return result
+        logger.warning("mt5lib returned error %s; attempting re-init", code)
         try:
             self.connect()
         except MT5Error:
             raise
-        if not resend:
-            return result
         return fn()  # one retry; propagates whatever the second call returns
 
     # --- module accessor (used by symbols + tools) -----------------------

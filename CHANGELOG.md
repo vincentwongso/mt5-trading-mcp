@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Docker env vars** - `MT5_EA_SYMBOL` picks the EA's symbol; `MT5_MCP_AUTH_TOKEN` seeds a new config.toml only, and an invalid one stops mt5-mcp starting.
 
 ### Fixed
-- **Reconnect after terminal restart** - the server reattaches when the terminal restarts instead of staying on TERMINAL_NOT_CONNECTED. Reads are retried once; orders are never resent, so a trade cannot be duplicated.
+- **Reconnect after terminal restart** - the server reattaches when the terminal restarts instead of staying on TERMINAL_NOT_CONNECTED. Reads are retried once; order calls are never retried or resent.
 - **Broker time on a fresh terminal** - the offset probe adds its symbols to Market Watch and retries every 30s until resolved, so timestamps are no longer 2h off; a resolved offset survives reconnects.
 - **Audit log timestamps** - `ts` always carries microseconds; a write on a whole second dropped the fraction and sorted out of order as text.
 

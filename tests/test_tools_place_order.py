@@ -238,5 +238,15 @@ def test_order_send_is_not_resent_after_ipc_error(server_and_mt5):
         return None
 
     fake.order_send = dropped
-    _call(server, "place_order", symbol="EURUSD", side="buy", type="market", volume="0.10")
+    args = dict(symbol="EURUSD", side="buy", type="market", volume="0.10",
+                idempotency_key="k-ipc-1")
+    out = _call(server, "place_order", **args)
+    assert len(fake.order_send_calls) == 1
+    assert out["error"]["code"] == "MT5_NULL_RESPONSE"
+    assert out["error"]["details"]["last_error"] == [-10001, "IPC send failed"]
+    # Same key after the terminal is back: replayed, never sent again.
+    fake.order_send = real
+    fake._last_error = (1, "Success")
+    again = _call(server, "place_order", **args)
+    assert again["replayed"] is True
     assert len(fake.order_send_calls) == 1

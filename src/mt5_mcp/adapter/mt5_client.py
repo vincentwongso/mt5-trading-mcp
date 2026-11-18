@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Request never reached the terminal (-10001 send failed, as after a restart; -10003, -10004),
 # so a retry cannot duplicate an order_send. -10002/-10005 may have been delivered: no retry.
+_OFFSET_RETRY_INTERVAL_S = 30.0
 _REINIT_CODES = frozenset({-10001, -10003, -10004})
 
 # Symbols probed during connect() to derive the broker TZ offset when
@@ -148,6 +149,8 @@ class MT5Client:
         self._lock = threading.RLock()
         self._initialised = False
         self.broker_offset_minutes = 0
+        self._offset_resolved = False
+        self._offset_retry_at = 0.0
         self.backend_label = backend_label
 
     def _initialize_terminal(self) -> bool:
@@ -193,6 +196,7 @@ class MT5Client:
         """
         with self._lock:
             if self._initialised:
+                self._retry_unresolved_offset()
                 return
             retries = self._connect_retries if self._first_connect else 0
             self._first_connect = False
@@ -219,13 +223,31 @@ class MT5Client:
         ti = self._mt5.terminal_info()
         if ti is None:
             raise MT5Error(self._connection_error("terminal_info returned None"))
-        self.broker_offset_minutes = self._derive_broker_offset(ti)
+        result = self._derive_broker_offset(ti)
+        self.broker_offset_minutes = result or 0
+        self._offset_resolved = result is not None
+        self._offset_retry_at = time.monotonic() + _OFFSET_RETRY_INTERVAL_S
         self._initialised = True
         logger.info(
             "MT5 connected; broker TZ offset = %+d min", self.broker_offset_minutes
         )
 
-    def _derive_broker_offset(self, ti: Any) -> int:
+    def _retry_unresolved_offset(self) -> None:
+        """Re-derive an offset that fell back to 0, at most every 30s."""
+        if self._offset_resolved or time.monotonic() < self._offset_retry_at:
+            return
+        self._offset_retry_at = time.monotonic() + _OFFSET_RETRY_INTERVAL_S
+        try:
+            result = self._derive_broker_offset(self._mt5.terminal_info())
+        except Exception:
+            logger.debug("Broker TZ offset retry failed", exc_info=True)
+            return
+        if result is not None:
+            self.broker_offset_minutes = result
+            self._offset_resolved = True
+            logger.info("Derived broker TZ offset = %+d min on retry", result)
+
+    def _derive_broker_offset(self, ti: Any) -> int | None:
         """Derive the broker TZ offset (minutes from UTC).
 
         Layered fallback - degrades gracefully so the server still starts
@@ -241,7 +263,7 @@ class MT5Client:
            must land within ``_FRESH_TICK_SECONDS`` of real-utc-now once
            the offset is removed; a weekend-stale tick blows that gap out
            by hours and is rejected.
-        3. Zero, with a warning. Means timestamps the server emits are
+        3. None (unresolved; caller uses 0 and retries), with a warning. Means timestamps the server emits are
            interpreted as broker-local-time-treated-as-UTC, which is
            wrong by the broker offset until the next reconnect during
            market hours.
@@ -254,6 +276,9 @@ class MT5Client:
 
         for sym in _BROKER_TIME_PROBE_SYMBOLS:
             try:
+                # A fresh terminal has no probe symbols in Market Watch, so
+                # their ticks are None until selected.
+                self._mt5.symbol_select(sym, True)
                 tick = self._mt5.symbol_info_tick(sym)
             except Exception:
                 continue
@@ -282,14 +307,15 @@ class MT5Client:
                 )
                 return candidate
 
-        logger.warning(
+        # Retries (already initialised) log at debug so a closed market is quiet.
+        (logger.debug if self._initialised else logger.warning)(
             "Could not derive broker TZ offset (terminal_info.time absent and "
             "no fresh tick on any of %s); assuming offset = 0. Timestamps in "
             "tool outputs may be off by the broker's real offset until the "
             "market resumes streaming.",
             list(_BROKER_TIME_PROBE_SYMBOLS),
         )
-        return 0
+        return None
 
     def disconnect(self) -> None:
         with self._lock:

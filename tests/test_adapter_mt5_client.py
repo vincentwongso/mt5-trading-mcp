@@ -606,3 +606,107 @@ def test_startup_retry_is_one_shot_not_per_reinit(fake_mt5, frozen_utc, monkeypa
     with pytest.raises(MT5Error):
         c.connect()
     assert fake_mt5.calls["initialize"] == 1  # no retry on reinit
+
+
+# --- fresh-terminal offset derivation -------------------------------------
+
+
+def _no_time_terminal(fake_mt5: FakeMT5) -> None:
+    from dataclasses import dataclass
+
+    @dataclass
+    class _NoTime:
+        connected: bool = True
+        trade_allowed: bool = True
+        build: int = 4150
+        name: str = "MetaTrader 5"
+        company: str = "Example Broker Ltd"
+        path: str = ""
+
+    fake_mt5._terminal_info = _NoTime()
+
+
+def _broker_tick(hour: int, day: int = 21):
+    from tests.fakes import FakeTick
+
+    return FakeTick(
+        time=int(datetime(2026, 4, day, hour, 0, tzinfo=timezone.utc).timestamp())
+    )
+
+
+def _clock(monkeypatch) -> list[float]:
+    now = [1000.0]
+    monkeypatch.setattr(
+        "mt5_mcp.adapter.mt5_client.time.monotonic", lambda: now[0]
+    )
+    return now
+
+
+def test_offset_probe_selects_symbol_before_reading_tick(
+    fake_mt5: FakeMT5, frozen_utc, monkeypatch,
+):
+    _no_time_terminal(fake_mt5)
+    ticks = {"BTCUSD": _broker_tick(13)}
+    selected: set[str] = set()
+    monkeypatch.setattr(
+        fake_mt5, "symbol_select",
+        lambda sym, enable=True: selected.add(sym) or True,
+    )
+    monkeypatch.setattr(
+        fake_mt5, "symbol_info_tick",
+        lambda sym: ticks.get(sym) if sym in selected else None,
+    )
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 180
+
+
+def test_unresolved_offset_retries_after_interval(
+    fake_mt5: FakeMT5, frozen_utc, monkeypatch,
+):
+    _no_time_terminal(fake_mt5)
+    now = _clock(monkeypatch)
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 0
+    fake_mt5._symbol_info_tick["BTCUSD"] = _broker_tick(13)
+    now[0] += 10
+    client.connect()
+    assert client.broker_offset_minutes == 0
+    now[0] += 21
+    client.connect()
+    assert client.broker_offset_minutes == 180
+
+
+def test_resolved_offset_is_not_rederived(
+    fake_mt5: FakeMT5, frozen_utc, monkeypatch,
+):
+    _no_time_terminal(fake_mt5)
+    now = _clock(monkeypatch)
+    fake_mt5._symbol_info_tick["BTCUSD"] = _broker_tick(13)
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 180
+    fake_mt5._symbol_info_tick["BTCUSD"] = _broker_tick(14)
+    calls = fake_mt5.calls["symbol_info_tick"]
+    now[0] += 3600
+    client.connect()
+    assert client.broker_offset_minutes == 180
+    assert fake_mt5.calls["symbol_info_tick"] == calls
+
+
+def test_stale_ticks_keep_retrying_but_stay_zero(
+    fake_mt5: FakeMT5, frozen_utc, monkeypatch,
+):
+    _no_time_terminal(fake_mt5)
+    now = _clock(monkeypatch)
+    fake_mt5._symbol_info_tick["BTCUSD"] = _broker_tick(13, day=18)
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 0
+    for _ in range(2):
+        before = fake_mt5.calls["symbol_info_tick"]
+        now[0] += 31
+        client.connect()
+        assert client.broker_offset_minutes == 0
+        assert fake_mt5.calls["symbol_info_tick"] > before

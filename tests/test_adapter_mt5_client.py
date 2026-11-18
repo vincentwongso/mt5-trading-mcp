@@ -96,7 +96,7 @@ def test_call_reinit_fails_hard_when_reinit_broken(client: MT5Client, fake_mt5: 
     assert ei.value.detail.code == "TERMINAL_NOT_CONNECTED"
 
 
-@pytest.mark.parametrize("code", [-10001, -10002, -10003, -10004, -10005])
+@pytest.mark.parametrize("code", [-10001, -10003, -10004])
 def test_call_reinits_on_ipc_error_codes(client: MT5Client, fake_mt5: FakeMT5, frozen_utc, code):
     client.connect()
     calls = {"n": 0}
@@ -111,6 +111,23 @@ def test_call_reinits_on_ipc_error_codes(client: MT5Client, fake_mt5: FakeMT5, f
 
     assert client._call_with_reinit(flaky) == "ok"
     assert fake_mt5.calls["initialize"] == 2
+
+
+@pytest.mark.parametrize("code", [-10002, -10005])
+def test_call_does_not_retry_when_request_may_have_been_delivered(
+    client: MT5Client, fake_mt5: FakeMT5, frozen_utc, code
+):
+    client.connect()
+    calls = {"n": 0}
+
+    def fn():
+        calls["n"] += 1
+        fake_mt5._last_error = (code, "maybe delivered")
+        return None
+
+    assert client._call_with_reinit(fn) is None
+    assert calls["n"] == 1
+    assert fake_mt5.calls["initialize"] == 1
 
 
 def test_call_does_not_reinit_on_genuine_none(client: MT5Client, fake_mt5: FakeMT5, frozen_utc):

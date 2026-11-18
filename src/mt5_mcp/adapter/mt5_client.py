@@ -23,8 +23,9 @@ from mt5_mcp.types import ErrorDetail
 
 logger = logging.getLogger(__name__)
 
-# mt5lib IPC/init failures; a restarted terminal surfaces as IPC send failed (-10001).
-_REINIT_CODES = frozenset({-10001, -10002, -10003, -10004, -10005})
+# Request never reached the terminal (-10001 send failed, as after a restart; -10003, -10004),
+# so a retry cannot duplicate an order_send. -10002/-10005 may have been delivered: no retry.
+_REINIT_CODES = frozenset({-10001, -10003, -10004})
 
 # Symbols probed during connect() to derive the broker TZ offset when
 # terminal_info().time is absent. Crypto first because BTCUSD/ETHUSD
@@ -368,7 +369,9 @@ class MT5Client:
         The MT5 terminal can drop its IPC link mid-session (terminal restart,
         Windows wake-from-sleep, antivirus interruption). When this happens
         mt5lib returns ``None`` AND sets ``last_error()`` to one of
-        ``_REINIT_CODES`` (-10001 IPC send failed after a restart).
+        ``_REINIT_CODES`` (-10001 send failed after a restart).
+        Receive-failed (-10002) and timeout (-10005) are not retried: the
+        request may have been delivered, and a retry could duplicate a trade.
         This wrapper detects that case, calls ``connect()`` once, and retries
         ``fn`` exactly once. Other ``None`` results pass through verbatim so
         callers can distinguish "no data" from "connection lost".

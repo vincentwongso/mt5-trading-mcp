@@ -23,9 +23,8 @@ from mt5_mcp.types import ErrorDetail
 
 logger = logging.getLogger(__name__)
 
-# mt5lib's internal retcode indicating the library wasn't initialized for
-# this call. Exact number per MetaTrader5 source.
-_RES_NOT_INITIALIZED = -10004
+# mt5lib IPC/init failures; a restarted terminal surfaces as IPC send failed (-10001).
+_REINIT_CODES = frozenset({-10001, -10002, -10003, -10004, -10005})
 
 # Symbols probed during connect() to derive the broker TZ offset when
 # terminal_info().time is absent. Crypto first because BTCUSD/ETHUSD
@@ -364,11 +363,12 @@ class MT5Client:
     # --- call routing ---------------------------------------------------
 
     def call(self, fn: Callable[[Any], T]) -> T:
-        """Invoke ``fn(mt5_module)`` with transparent re-init on NOT_INITIALIZED.
+        """Invoke ``fn(mt5_module)`` with transparent re-init on IPC/init errors.
 
         The MT5 terminal can drop its IPC link mid-session (terminal restart,
         Windows wake-from-sleep, antivirus interruption). When this happens
-        mt5lib returns ``None`` AND sets ``last_error()`` to ``-10004``.
+        mt5lib returns ``None`` AND sets ``last_error()`` to one of
+        ``_REINIT_CODES`` (-10001 IPC send failed after a restart).
         This wrapper detects that case, calls ``connect()`` once, and retries
         ``fn`` exactly once. Other ``None`` results pass through verbatim so
         callers can distinguish "no data" from "connection lost".
@@ -381,15 +381,15 @@ class MT5Client:
 
     def _call_with_reinit(self, fn: Callable[[], T]) -> T:
         """Invoke `fn`; if it returns None AND last_error is the
-        not-initialized retcode, re-init once and retry."""
+        IPC/init retcode, re-init once and retry."""
         result = fn()
         if result is not None:
             return result
         err = self._mt5.last_error()
         code = err[0] if isinstance(err, (tuple, list)) and err else 0
-        if code != _RES_NOT_INITIALIZED:
+        if code not in _REINIT_CODES:
             return result  # genuine None; caller will decide what it means
-        logger.warning("mt5lib returned NOT_INITIALIZED; attempting re-init")
+        logger.warning("mt5lib returned error %s; attempting re-init", code)
         with self._lock:
             self._initialised = False
         try:

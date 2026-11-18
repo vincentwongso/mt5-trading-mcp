@@ -96,6 +96,46 @@ def test_call_reinit_fails_hard_when_reinit_broken(client: MT5Client, fake_mt5: 
     assert ei.value.detail.code == "TERMINAL_NOT_CONNECTED"
 
 
+@pytest.mark.parametrize("code", [-10001, -10002, -10003, -10004, -10005])
+def test_call_reinits_on_ipc_error_codes(client: MT5Client, fake_mt5: FakeMT5, frozen_utc, code):
+    client.connect()
+    calls = {"n": 0}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            fake_mt5._last_error = (code, "IPC send failed")
+            return None
+        fake_mt5._last_error = (1, "Success")
+        return "ok"
+
+    assert client._call_with_reinit(flaky) == "ok"
+    assert fake_mt5.calls["initialize"] == 2
+
+
+def test_call_does_not_reinit_on_genuine_none(client: MT5Client, fake_mt5: FakeMT5, frozen_utc):
+    client.connect()
+    fake_mt5._last_error = (1, "Success")
+    assert client._call_with_reinit(lambda: None) is None
+    assert fake_mt5.calls["initialize"] == 1
+
+
+def test_failed_reattach_leaves_client_retryable(client: MT5Client, fake_mt5: FakeMT5, frozen_utc):
+    client.connect()
+
+    def dead():
+        fake_mt5._last_error = (-10001, "IPC send failed")
+        return None
+
+    fake_mt5._initialize = False
+    with pytest.raises(MT5Error):
+        client._call_with_reinit(dead)
+    assert client._initialised is False
+    fake_mt5._initialize = True
+    fake_mt5._last_error = (1, "Success")
+    assert client._call_with_reinit(lambda: "ok") == "ok"
+
+
 def test_ping_reports_latency(client: MT5Client, fake_mt5: FakeMT5, frozen_utc):
     client.connect()
     ok, ms, via = client.ping()

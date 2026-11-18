@@ -8,3 +8,4 @@ demo
 tests
 examples
 **/__pycache__
+**/.env

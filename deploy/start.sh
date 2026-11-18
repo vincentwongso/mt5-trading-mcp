@@ -96,10 +96,22 @@ fi
 if [ -e "$mt5file" ]; then
     log "[3/6] Installing screenshot EA, light template and startup.ini..."
     mkdir -p "$term_dir/MQL5/Experts" "$term_dir/MQL5/Profiles/Templates"
-    cp "$assets/AgentScreenshot.ex5" "$term_dir/MQL5/Experts/"
-    cp "$assets/agent_light.tpl" "$term_dir/MQL5/Profiles/Templates/"
+    cp "$assets/AgentScreenshot.ex5" "$term_dir/MQL5/Experts/" \
+        || log "WARNING: could not copy AgentScreenshot.ex5"
+    cp "$assets/agent_light.tpl" "$term_dir/MQL5/Profiles/Templates/" \
+        || log "WARNING: could not copy agent_light.tpl"
     # default.tpl is left alone: it is the user's own chart template.
-    sed "s/@EA_SYMBOL@/${MT5_EA_SYMBOL:-BTCUSD}/" "$assets/startup.ini" > "$term_dir/startup.ini"
+    # The symbol goes through sed, so reject characters sed would misread.
+    ea_symbol="${MT5_EA_SYMBOL:-BTCUSD}"
+    if ! [[ "$ea_symbol" =~ ^[A-Za-z0-9._#+-]+$ ]]; then
+        log "WARNING: MT5_EA_SYMBOL '${ea_symbol}' has invalid characters; using BTCUSD"
+        ea_symbol=BTCUSD
+    fi
+    if sed "s/@EA_SYMBOL@/${ea_symbol}/" "$assets/startup.ini" > "$term_dir/startup.ini.tmp"; then
+        mv "$term_dir/startup.ini.tmp" "$term_dir/startup.ini"
+    else
+        log "WARNING: could not write startup.ini"
+    fi
     log "[3/6] Launching MetaTrader 5 terminal..."
     # shellcheck disable=SC2086
     $wine_executable "$mt5file" "/config:C:\\Program Files\\MetaTrader 5\\startup.ini" $MT5_CMD_OPTIONS &
@@ -138,7 +150,14 @@ fi
 # --- 6. config.toml + socat bridge + serve ------------------------------
 # Seeded once; never overwritten, so user edits survive. umask 077 keeps the
 # optional auth token private. The token is only ever printf'd, never logged.
-if [ ! -e "$cfg" ]; then
+# An unescaped token would break the TOML and crash-loop the server, so
+# reject it up front (never fall back to unauthenticated).
+token_ok=1
+if [ -n "${MT5_MCP_AUTH_TOKEN:-}" ] && ! [[ "$MT5_MCP_AUTH_TOKEN" =~ ^[A-Za-z0-9._~+/=-]+$ ]]; then
+    log "FATAL: MT5_MCP_AUTH_TOKEN contains characters outside [A-Za-z0-9._~+/=-]; refusing to start mt5-mcp"
+    token_ok=0
+fi
+if [ "$token_ok" = 1 ] && [ ! -e "$cfg" ]; then
     log "[6/6] Writing initial config.toml."
     mkdir -p "$(dirname "$cfg")"
     (
@@ -150,28 +169,31 @@ if [ ! -e "$cfg" ]; then
             fi
         } > "$cfg"
     )
-else
+elif [ -e "$cfg" ]; then
     log "[6/6] config.toml present; leaving it unchanged"
+    [ -n "${MT5_MCP_AUTH_TOKEN:-}" ] && log "WARNING: MT5_MCP_AUTH_TOKEN ignored because config.toml is present"
 fi
 
-container_ip="$(hostname -i 2>/dev/null | awk '{print $1}')"
-if [ -n "$container_ip" ] && [ "$container_ip" != "$mcp_host" ]; then
-    log "[6/6] Bridging ${container_ip}:${mcp_port} -> ${mcp_host}:${mcp_port} (socat)"
-    socat "TCP-LISTEN:${mcp_port},fork,reuseaddr,bind=${container_ip}" \
-          "TCP:${mcp_host}:${mcp_port}" &
-else
-    log "[6/6] No distinct container IP found; skipping socat bridge."
-fi
+if [ "$token_ok" = 1 ]; then
+    container_ip="$(hostname -i 2>/dev/null | awk '{print $1}')"
+    if [ -n "$container_ip" ] && [ "$container_ip" != "$mcp_host" ]; then
+        log "[6/6] Bridging ${container_ip}:${mcp_port} -> ${mcp_host}:${mcp_port} (socat)"
+        socat "TCP-LISTEN:${mcp_port},fork,reuseaddr,bind=${container_ip}" \
+              "TCP:${mcp_host}:${mcp_port}" &
+    else
+        log "[6/6] No distinct container IP found; skipping socat bridge."
+    fi
 
-log "[6/6] Starting mt5-mcp HTTP server on ${mcp_host}:${mcp_port} (Wine-Python)."
-# Keep the server alive across crashes / mid-boot terminal hiccups. Each
-# relaunch gets a fresh connect-retry window, so a one-time VNC login performed
-# after boot is picked up on the next attempt.
-while true; do
-    $wine_executable "$python_win" -m mt5_mcp serve --transport http
-    log "mt5-mcp serve exited (rc=$?); restarting in 5s..."
-    sleep 5
-done &
+    log "[6/6] Starting mt5-mcp HTTP server on ${mcp_host}:${mcp_port} (Wine-Python)."
+    # Keep the server alive across crashes / mid-boot terminal hiccups. Each
+    # relaunch gets a fresh connect-retry window, so a one-time VNC login performed
+    # after boot is picked up on the next attempt.
+    while true; do
+        $wine_executable "$python_win" -m mt5_mcp serve --transport http
+        log "mt5-mcp serve exited (rc=$?); restarting in 5s..."
+        sleep 5
+    done &
+fi
 
 # Match gmag11's pattern: the autostart script returns, leaving the terminal,
 # socat, and the serve supervisor running under the desktop session.

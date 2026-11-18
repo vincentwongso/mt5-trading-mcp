@@ -28,7 +28,8 @@ services:
       - MT5_EA_SYMBOL=${MT5_EA_SYMBOL:-BTCUSD}
       # Optional bearer token for the HTTP endpoint (seeds config.toml once).
       - MT5_MCP_AUTH_TOKEN=${MT5_MCP_AUTH_TOKEN:-}
-      - MT5_MCP_VERSION=${MT5_MCP_VERSION:-}
+      # Bare form: an unset host var keeps the image's baked version pin.
+      - MT5_MCP_VERSION
       # KasmVNC web-UI auth (for the one-time login session).
       - CUSTOM_USER=${VNC_USER:-mt5}
       - PASSWORD=${VNC_PASSWORD:-change-me}
@@ -37,7 +38,7 @@ services:
     # Plain Docker only reports health; recovery comes from the server's own
     # reattach after a terminal restart.
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f '^C:.*terminal64.exe' && curl -so /dev/null http://127.0.0.1:8765/mcp"]
+      test: ["CMD-SHELL", "pgrep -f '^C:.*terminal64.exe' && curl -m 10 -so /dev/null http://127.0.0.1:8765/mcp"]
       interval: 60s
       start_period: 5m
     restart: always

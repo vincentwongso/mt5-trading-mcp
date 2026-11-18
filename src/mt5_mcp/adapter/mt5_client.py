@@ -315,13 +315,15 @@ class MT5Client:
                 )
                 return candidate
 
-        # Retries (already initialised) log at debug so a closed market is quiet.
-        (logger.debug if self._initialised else logger.warning)(
+        # Retries and reinits that keep a resolved offset log at debug, so a
+        # closed market is quiet.
+        quiet = self._initialised or self._offset_resolved
+        (logger.debug if quiet else logger.warning)(
             "Could not derive broker TZ offset (terminal_info.time absent and "
-            "no fresh tick on any of %s); assuming offset = 0. Timestamps in "
-            "tool outputs may be off by the broker's real offset until the "
+            "no fresh tick on any of %s); keeping offset = %+d min. Timestamps "
+            "in tool outputs may be off by the broker's real offset until the "
             "market resumes streaming.",
-            list(_BROKER_TIME_PROBE_SYMBOLS),
+            list(_BROKER_TIME_PROBE_SYMBOLS), self.broker_offset_minutes,
         )
         return None
 

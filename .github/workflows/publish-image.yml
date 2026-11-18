@@ -10,6 +10,8 @@ on:
   pull_request:
     paths:
       - "deploy/**"
+      - "mql5/**"
+      - ".dockerignore"
       - ".github/workflows/publish-image.yml"
   workflow_dispatch:
 
@@ -53,8 +55,9 @@ jobs:
       - name: Build (and push on tags)
         uses: docker/build-push-action@v6
         with:
-          context: ./deploy
+          context: .
           file: ./deploy/Dockerfile
+          build-args: MT5_MCP_VERSION=${{ github.ref_type == 'tag' && steps.meta.outputs.version || '' }}
           push: ${{ github.ref_type == 'tag' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

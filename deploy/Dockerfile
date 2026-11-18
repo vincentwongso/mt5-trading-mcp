@@ -6,7 +6,7 @@
 # Option 1: mt5-mcp runs in-process under Wine-Python (the same native code
 # path it uses on Windows).
 #
-#   docker build -t mt5-trading-mcp:headless deploy
+#   docker build -f deploy/Dockerfile -t mt5-trading-mcp:headless .
 #   # or: docker compose -f deploy/docker-compose.yml up -d --build
 # Pinned to a digest for reproducible builds (tag 2.3 == latest at pin time).
 # Bump via Dependabot's docker ecosystem.
@@ -30,8 +30,16 @@ RUN rm -f /etc/apt/sources.list.d/winehq*.sources /etc/apt/sources.list.d/winehq
 # launcher) with our headless-MCP version. The KasmVNC desktop autostart
 # already points at /Metatrader/start.sh, so this swaps the behaviour cleanly
 # while keeping the base's MT5-install + terminal-launch + VNC machinery.
-COPY start.sh /Metatrader/start.sh
+COPY deploy/start.sh /Metatrader/start.sh
 RUN chmod +x /Metatrader/start.sh
+
+# Screenshot EA, light chart template and startup ini; start.sh installs them
+# into the terminal data folder on every boot.
+COPY mql5/AgentScreenshot.ex5 deploy/agent_light.tpl deploy/startup.ini /opt/mt5-mcp/
+
+# Release builds pin the PyPI version start.sh installs (empty = latest).
+ARG MT5_MCP_VERSION=
+ENV MT5_MCP_VERSION=${MT5_MCP_VERSION}
 
 # KasmVNC web UI (one-time login) is inherited as 3000; add the MCP HTTP port.
 EXPOSE 8765

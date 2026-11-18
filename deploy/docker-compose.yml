@@ -28,8 +28,8 @@ services:
       - MT5_EA_SYMBOL=${MT5_EA_SYMBOL:-BTCUSD}
       # Optional bearer token for the HTTP endpoint (seeds config.toml once).
       - MT5_MCP_AUTH_TOKEN=${MT5_MCP_AUTH_TOKEN:-}
-      # Bare form: an unset host var keeps the image's baked version pin.
-      - MT5_MCP_VERSION
+      # Empty falls back to the image's baked pin (MT5_MCP_IMAGE_VERSION).
+      - MT5_MCP_VERSION=${MT5_MCP_VERSION:-}
       # KasmVNC web-UI auth (for the one-time login session).
       - CUSTOM_USER=${VNC_USER:-mt5}
       - PASSWORD=${VNC_PASSWORD:-change-me}

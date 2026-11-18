@@ -41,6 +41,8 @@ COPY mql5/AgentScreenshot.ex5 deploy/agent_light.tpl deploy/startup.ini /opt/mt5
 # Release builds pin the PyPI version start.sh installs (empty = latest).
 ARG MT5_MCP_VERSION=
 ENV MT5_MCP_VERSION=${MT5_MCP_VERSION}
+# Survives a compose override of MT5_MCP_VERSION; start.sh falls back to it.
+ENV MT5_MCP_IMAGE_VERSION=${MT5_MCP_VERSION}
 
 # KasmVNC web UI (one-time login) is inherited as 3000; add the MCP HTTP port.
 EXPOSE 8765

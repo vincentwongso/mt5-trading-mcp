@@ -22,7 +22,7 @@
 #                           attach.
 #   4. 64-bit Wine-Python 3.11   (NEW - stock gmag11 ships 3.9 32-bit)
 #   5. mt5-trading-mcp + numpy<2 (NEW - drops mt5linux entirely); reinstalled
-#                           when MT5_MCP_VERSION pins a different version
+#                           when the pin (MT5_MCP_VERSION or the image's) differs
 #   6. config.toml (first boot only) + socat bridge +
 #      `mt5_mcp serve --transport http`  (NEW)
 #
@@ -68,10 +68,49 @@ mt5setup_url="https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5
 # stay 8765 or socat would forward to a port nothing is listening on.
 mcp_host="127.0.0.1"
 mcp_port="8765"
-# Optionally pin the published mt5-trading-mcp version (else latest from PyPI).
-mt5_mcp_spec="mt5-trading-mcp${MT5_MCP_VERSION:+==${MT5_MCP_VERSION}}"
+# Effective pin: a runtime MT5_MCP_VERSION wins, else the version baked at image
+# build (compose cannot pass a bare override through without unsetting the ENV).
+pin="${MT5_MCP_VERSION:-${MT5_MCP_IMAGE_VERSION:-}}"
+mt5_mcp_spec="mt5-trading-mcp${pin:+==${pin}}"
+install_retry_secs=60
 
 log() { echo "[mt5-mcp-boot] $*"; }
+
+# Sets $installed; returns 0 when mt5-trading-mcp must be (re)installed.
+mt5_mcp_needs_install() {
+    installed="$($wine_executable "$python_win" -m pip show mt5-trading-mcp 2>/dev/null | tr -d '\r' | sed -n 's/^Version: //p')"
+    [ -z "$installed" ] || { [ -n "$pin" ] && [ "$installed" != "$pin" ]; }
+}
+
+# Keeps an already-installed version serving when the pinned install fails.
+install_mt5_mcp() {
+    log "[5/6] Installing ${mt5_mcp_spec} + numpy<2 into Wine-Python..."
+    [ "${1:-}" = retry ] || $wine_executable "$python_win" -m pip install --upgrade --no-cache-dir pip
+    if ! $wine_executable "$python_win" -m pip install --no-cache-dir "$mt5_mcp_spec" "numpy<2" \
+        && [ -n "$installed" ]; then
+        log "WARNING: could not install ${mt5_mcp_spec}; keeping ${installed}"
+    fi
+}
+
+# Atomic: a partial config.toml would count as "present" on the next boot.
+write_cfg() {
+    local tmp
+    tmp="$(dirname "$cfg")/.config.toml.$$"
+    if (
+        umask 077
+        mkdir -p "$(dirname "$cfg")" || exit 1
+        {
+            printf '[screenshot]\ntemplate = "agent_light.tpl"\n'
+            if [ -n "${MT5_MCP_AUTH_TOKEN:-}" ]; then
+                printf '\n[transport.http]\nauth_token = "%s"\n' "$MT5_MCP_AUTH_TOKEN"
+            fi
+        } > "$tmp"
+    ) && mv "$tmp" "$cfg"; then
+        return 0
+    fi
+    rm -f "$tmp"
+    return 1
+}
 
 require() { command -v "$1" >/dev/null 2>&1 || { log "FATAL: $1 not installed"; exit 1; }; }
 require curl
@@ -173,14 +212,8 @@ fi
 # The official MetaTrader5 package rides in as a dependency (its environment
 # marker is platform_system=='Windows', which Wine-Python satisfies). numpy
 # MUST stay <2 - numpy 2.x crashes the MetaTrader5 import under Wine.
-installed="$($wine_executable "$python_win" -m pip show mt5-trading-mcp 2>/dev/null | tr -d '\r' | sed -n 's/^Version: //p')"
-if [ -z "$installed" ] || { [ -n "${MT5_MCP_VERSION:-}" ] && [ "$installed" != "$MT5_MCP_VERSION" ]; }; then
-    log "[5/6] Installing ${mt5_mcp_spec} + numpy<2 into Wine-Python..."
-    $wine_executable "$python_win" -m pip install --upgrade --no-cache-dir pip
-    if ! $wine_executable "$python_win" -m pip install --no-cache-dir "$mt5_mcp_spec" "numpy<2" \
-        && [ -n "$installed" ]; then
-        log "WARNING: could not install ${mt5_mcp_spec}; keeping ${installed}"
-    fi
+if mt5_mcp_needs_install; then
+    install_mt5_mcp
 else
     log "[5/6] mt5-trading-mcp ${installed} already installed."
 fi
@@ -197,16 +230,14 @@ if [ -n "${MT5_MCP_AUTH_TOKEN:-}" ] && ! [[ "$MT5_MCP_AUTH_TOKEN" =~ ^[A-Za-z0-9
 fi
 if [ "$token_ok" = 1 ] && [ ! -e "$cfg" ]; then
     log "[6/6] Writing initial config.toml."
-    mkdir -p "$(dirname "$cfg")"
-    (
-        umask 077
-        {
-            printf '[screenshot]\ntemplate = "agent_light.tpl"\n'
-            if [ -n "${MT5_MCP_AUTH_TOKEN:-}" ]; then
-                printf '\n[transport.http]\nauth_token = "%s"\n' "$MT5_MCP_AUTH_TOKEN"
-            fi
-        } > "$cfg"
-    )
+    if ! write_cfg; then
+        if [ -n "${MT5_MCP_AUTH_TOKEN:-}" ]; then
+            log "FATAL: could not write config.toml; refusing to start mt5-mcp without the requested auth token"
+            token_ok=0
+        else
+            log "WARNING: could not write config.toml; mt5-mcp will run on defaults"
+        fi
+    fi
 elif [ -e "$cfg" ]; then
     log "[6/6] config.toml present; leaving it unchanged"
     [ -n "${MT5_MCP_AUTH_TOKEN:-}" ] && log "WARNING: MT5_MCP_AUTH_TOKEN ignored because config.toml is present"
@@ -226,7 +257,13 @@ if [ "$token_ok" = 1 ]; then
     # Keep the server alive across crashes / mid-boot terminal hiccups. Each
     # relaunch gets a fresh connect-retry window, so a one-time VNC login performed
     # after boot is picked up on the next attempt.
+    last_install=$SECONDS
     while true; do
+        # The image can ship before its pinned version reaches PyPI; keep retrying.
+        if [ $((SECONDS - last_install)) -ge "$install_retry_secs" ] && mt5_mcp_needs_install; then
+            last_install=$SECONDS
+            install_mt5_mcp retry
+        fi
         $wine_executable "$python_win" -m mt5_mcp serve --transport http
         log "mt5-mcp serve exited (rc=$?); restarting in 5s..."
         sleep 5

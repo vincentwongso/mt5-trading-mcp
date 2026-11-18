@@ -52,12 +52,18 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
 
+      # metadata-action reports `headless` as version for PEP 440 pre-release tags.
+      - name: Package version from tag
+        id: pin
+        if: github.ref_type == 'tag'
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
       - name: Build (and push on tags)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./deploy/Dockerfile
-          build-args: MT5_MCP_VERSION=${{ github.ref_type == 'tag' && steps.meta.outputs.version || '' }}
+          build-args: MT5_MCP_VERSION=${{ steps.pin.outputs.version }}
           push: ${{ github.ref_type == 'tag' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

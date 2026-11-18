@@ -112,6 +112,9 @@ if [ -e "$mt5file" ]; then
     else
         log "WARNING: could not write startup.ini"
     fi
+    # LiveUpdate must not replace it: builds newer than 28 Sep do not start under Wine.
+    chmod a-w "$mt5file"
+    log "terminal64.exe sha256 $(sha256sum "$mt5file" | cut -c1-8)"
     log "[3/6] Launching MetaTrader 5 terminal..."
     # shellcheck disable=SC2086
     $wine_executable "$mt5file" "/config:C:\\Program Files\\MetaTrader 5\\startup.ini" $MT5_CMD_OPTIONS &

@@ -228,7 +228,8 @@ def register(mcp: FastMCP) -> None:
     ) -> Image:
         """PNG screenshot of the native MT5 chart for ``symbol`` at ``timeframe``.
 
-        Windows-only: needs a GUI terminal running the AgentScreenshot EA.
+        Windows, or the Linux Docker image (the EA is preinstalled there):
+        needs a GUI terminal running the AgentScreenshot EA.
         ``scale`` (0-5) is a raw MT5 zoom passthrough; higher is more zoomed in.
         ``bars`` targets an approximate visible candle count instead; the EA picks the
         nearest zoom step, so it is approximate, not exact. ``scale`` and ``bars`` set

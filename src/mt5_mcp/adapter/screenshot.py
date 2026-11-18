@@ -2,8 +2,8 @@
 
 Requests a native MT5 chart screenshot by dropping a request file into the
 terminal's sandboxed ``MQL5/Files/agent_screenshot/`` folder, then waits for
-the EA to write back a PNG plus a ``.done`` status file. Windows-only in
-practice (needs a GUI terminal with the EA attached); the platform guard
+the EA to write back a PNG plus a ``.done`` status file. Windows, or the Linux Docker image (the EA is preinstalled there); needs
+a GUI terminal with the EA attached. The platform guard
 lives in the tool layer, not here, so this module stays import-safe and
 unit-testable on any OS.
 

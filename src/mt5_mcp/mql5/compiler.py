@@ -8,9 +8,10 @@ failure), and `/inc:` must point at the data folder's `MQL5` directory.
 from __future__ import annotations
 
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Callable, Literal
 
 _DIAG = re.compile(
     r"^(?P<path>.+?)(?:\((?P<line>\d+),(?P<col>\d+)\))? : "
@@ -105,3 +106,39 @@ def format_diagnostic(d: Diagnostic, cwd: Path) -> str:
     except ValueError:
         path = d.path
     return f"{path}:{d.line}:{d.col}: {d.severity} {d.code}: {d.message}"
+
+
+class CompileTimeout(Exception):
+    pass
+
+
+def build_command_line(metaeditor: Path, source: Path, inc_dir: Path, log: Path) -> str:
+    # A malformed /compile: argument makes MetaEditor compile the whole MQL5
+    # tree (seen 2026-11-19), so refuse anything but one real .mq5 file.
+    if source.suffix.lower() != ".mq5" or not source.is_file():
+        raise ValueError(f"not an .mq5 file: {source}")
+    # Built by hand, not via subprocess's list quoting: this exact form is
+    # what was verified on Windows, spaces and non-ASCII paths included.
+    return f'"{metaeditor}" /compile:"{source}" /inc:"{inc_dir}" /log:"{log}"'
+
+
+def run_metaeditor(
+    cmdline: str,
+    *,
+    timeout_s: float,
+    popen: Callable[..., Any] = subprocess.Popen,
+) -> int:
+    """Run one compile; the process never outlives this call.
+
+    The probe showed one process per compile and no children, so killing
+    the PID is enough. The exit code is returned but means nothing.
+    """
+    proc = popen(cmdline)
+    try:
+        return proc.wait(timeout=timeout_s)
+    except subprocess.TimeoutExpired:
+        raise CompileTimeout(f"MetaEditor did not finish in {timeout_s:g}s; killed.") from None
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()

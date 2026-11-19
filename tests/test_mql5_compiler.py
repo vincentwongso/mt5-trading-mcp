@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from mt5_mcp.mql5.compiler import (
+    CompileTimeout,
     Diagnostic,
+    build_command_line,
     detect_kind,
     format_diagnostic,
     install_target,
     parse_log,
     read_source,
+    run_metaeditor,
 )
 
 FIX = Path(__file__).parent / "fixtures" / "mql5"
@@ -113,3 +117,91 @@ def test_install_target_uses_agent_subfolder(tmp_path):
 
 def test_install_target_libraries_at_root(tmp_path):
     assert install_target(tmp_path, "Libraries", "MyLib") == tmp_path / "MQL5" / "Libraries" / "MyLib.ex5"
+
+
+def test_command_line_quotes_paths_with_spaces(tmp_path):
+    src = tmp_path / "My EAs" / "x.mq5"
+    src.parent.mkdir()
+    src.write_text("void OnTick(){}")
+    me = Path("C:/Program Files/MT5/metaeditor64.exe")
+    inc = Path("C:/data dir/MQL5")
+    log = Path("C:/t/x.log")
+    cmd = build_command_line(me, src, inc, log)
+    assert cmd == f'"{me}" /compile:"{src}" /inc:"{inc}" /log:"{log}"'
+
+
+def test_command_line_accepts_upper_case_suffix(tmp_path):
+    src = tmp_path / "X.MQ5"
+    src.write_text("")
+    assert f'/compile:"{src}"' in build_command_line(Path("me.exe"), src, tmp_path, tmp_path / "l.log")
+
+
+@pytest.mark.parametrize("name", ["x.mqh", "x.txt"])
+def test_command_line_refuses_non_mq5(tmp_path, name):
+    p = tmp_path / name
+    p.write_text("")
+    with pytest.raises(ValueError):
+        build_command_line(Path("me.exe"), p, tmp_path, tmp_path / "l.log")
+
+
+@pytest.mark.parametrize("target", ["dir", "missing.mq5"])
+def test_command_line_refuses_directory_or_missing(tmp_path, target):
+    p = tmp_path / target
+    if target == "dir":
+        p = tmp_path / "folder.mq5"
+        p.mkdir()
+    with pytest.raises(ValueError):
+        build_command_line(Path("me.exe"), p, tmp_path, tmp_path / "l.log")
+
+
+class FakeProc:
+    def __init__(self, *, returncode=0, wait_raises=None):
+        self.pid = 4242
+        self.returncode = returncode
+        self._wait_raises = wait_raises
+        self.killed = False
+        self.cmdline = None
+
+    def wait(self, timeout=None):
+        if self._wait_raises is not None and not self.killed:
+            raise self._wait_raises
+        return self.returncode
+
+    def poll(self):
+        return None if (self._wait_raises is not None and not self.killed) else self.returncode
+
+    def kill(self):
+        self.killed = True
+
+
+def _popen(proc):
+    def popen(cmdline, *a, **k):
+        proc.cmdline = cmdline
+        return proc
+    return popen
+
+
+def test_run_passes_command_line_verbatim():
+    proc = FakeProc()
+    run_metaeditor('"me.exe" /compile:"a b.mq5"', timeout_s=5, popen=_popen(proc))
+    assert proc.cmdline == '"me.exe" /compile:"a b.mq5"'
+
+
+def test_run_kills_on_timeout():
+    proc = FakeProc(wait_raises=subprocess.TimeoutExpired("me", 0.01))
+    with pytest.raises(CompileTimeout):
+        run_metaeditor("cmd", timeout_s=0.01, popen=_popen(proc))
+    assert proc.killed
+
+
+def test_run_kills_on_keyboard_interrupt():
+    proc = FakeProc(wait_raises=KeyboardInterrupt())
+    with pytest.raises(KeyboardInterrupt):
+        run_metaeditor("cmd", timeout_s=5, popen=_popen(proc))
+    assert proc.killed
+
+
+def test_run_returns_exit_code_without_killing():
+    proc = FakeProc(returncode=1)
+    assert run_metaeditor("cmd", timeout_s=5, popen=_popen(proc)) == 1
+    assert not proc.killed

@@ -59,6 +59,46 @@ def parse_log(raw: bytes) -> CompileLog:
     return CompileLog(diagnostics, errors, warnings, text)
 
 
+KIND_FOLDERS: dict[str, str] = {
+    "expert": "Experts",
+    "indicator": "Indicators",
+    "script": "Scripts",
+    "service": "Services",
+    "library": "Libraries",
+}
+
+_COMMENTS = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
+# First match wins; anything else is an Expert Advisor.
+_KIND_RULES = (
+    (re.compile(r"#property\s+service\b"), "Services"),
+    (re.compile(r"#property\s+library\b"), "Libraries"),
+    (re.compile(r"\bOnCalculate\s*\("), "Indicators"),
+    (re.compile(r"\bOnStart\s*\("), "Scripts"),
+)
+
+
+def read_source(path: Path) -> str:
+    """MetaEditor saves UTF-16 or UTF-8, with or without BOM."""
+    return _decode(path.read_bytes())
+
+
+def detect_kind(source_text: str) -> str:
+    code = _COMMENTS.sub("", source_text)
+    for pattern, folder in _KIND_RULES:
+        if pattern.search(code):
+            return folder
+    return "Experts"
+
+
+def install_target(data_dir: Path, kind_folder: str, stem: str) -> Path:
+    # Libraries skip Agent/: `#import "X.ex5"` only searches the caller's
+    # folder and the Libraries root.
+    base = data_dir / "MQL5" / kind_folder
+    if kind_folder != "Libraries":
+        base = base / "Agent"
+    return base / f"{stem}.ex5"
+
+
 def format_diagnostic(d: Diagnostic, cwd: Path) -> str:
     try:
         path = str(Path(d.path).relative_to(cwd))

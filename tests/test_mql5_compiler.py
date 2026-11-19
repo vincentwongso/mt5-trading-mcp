@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mt5_mcp.mql5.compiler import Diagnostic, format_diagnostic, parse_log
+import pytest
+
+from mt5_mcp.mql5.compiler import (
+    Diagnostic,
+    detect_kind,
+    format_diagnostic,
+    install_target,
+    parse_log,
+    read_source,
+)
 
 FIX = Path(__file__).parent / "fixtures" / "mql5"
 LOGS = FIX / "logs"
@@ -73,3 +82,34 @@ def test_format_relative_under_cwd(tmp_path):
 def test_format_absolute_outside_cwd(tmp_path):
     d = Diagnostic("/elsewhere/a.mq5", 1, 1, "warning", 43, "m")
     assert format_diagnostic(d, tmp_path) == "/elsewhere/a.mq5:1:1: warning 43: m"
+
+
+@pytest.mark.parametrize("src,kind", [
+    ("#property service\nvoid OnStart(){}", "Services"),
+    ("#property library\nint f(){return 0;}", "Libraries"),
+    ("int OnCalculate(const int a,const int b,const int c,const double &p[]){return a;}", "Indicators"),
+    ("void OnStart(){}", "Scripts"),
+    ("int OnInit(){return 0;} void OnTick(){}", "Experts"),
+    ("// OnCalculate( mentioned\n/* void OnStart() */\nvoid OnTick(){}", "Experts"),
+])
+def test_detect_kind(src, kind):
+    assert detect_kind(src) == kind
+
+
+def test_detect_kind_real_indicator_fixture():
+    assert detect_kind(read_source(FIX / "src" / "indicator.mq5")) == "Indicators"
+
+
+@pytest.mark.parametrize("encoding,bom", [("utf-16-le", "\ufeff"), ("utf-16-be", "\ufeff"), ("utf-8", "\ufeff")])
+def test_read_source_bom(tmp_path, encoding, bom):
+    p = tmp_path / "i.mq5"
+    p.write_bytes((bom + "int OnCalculate(){return 0;}").encode(encoding))
+    assert detect_kind(read_source(p)) == "Indicators"
+
+
+def test_install_target_uses_agent_subfolder(tmp_path):
+    assert install_target(tmp_path, "Experts", "MyEA") == tmp_path / "MQL5" / "Experts" / "Agent" / "MyEA.ex5"
+
+
+def test_install_target_libraries_at_root(tmp_path):
+    assert install_target(tmp_path, "Libraries", "MyLib") == tmp_path / "MQL5" / "Libraries" / "MyLib.ex5"

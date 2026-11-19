@@ -40,6 +40,11 @@ def _no_first_tick_wait(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _no_live_tick_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("mt5_mcp.adapter.mt5_client._sleep", lambda s: None)
+
+
+@pytest.fixture(autouse=True)
 def _reset_app_context():
     """Ensure each test starts with a clean app-context singleton.
 

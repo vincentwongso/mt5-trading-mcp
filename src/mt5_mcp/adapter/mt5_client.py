@@ -45,6 +45,17 @@ _BROKER_TIME_PROBE_SYMBOLS: tuple[str, ...] = (
 # while rejecting weekend-stale ticks.
 _FRESH_TICK_SECONDS = 5 * 60
 
+# A just-started terminal serves the last tick it cached before shutdown. One
+# about an hour old passes the residual check (the 15-min rounding absorbs the
+# staleness) and yields an offset an hour short, so only a tick seen to advance
+# is trusted. Polled this many times, this far apart.
+_LIVE_TICK_POLLS = 12
+_LIVE_TICK_POLL_S = 0.25
+
+
+def _sleep(seconds: float) -> None:
+    time.sleep(seconds)
+
 # Plausible real-world broker TZ offset range. Real brokers run on
 # server clocks between UTC-12 and UTC+14; anything outside this range
 # is a sign the probe tick is N×15-min stale (the residual check below
@@ -283,38 +294,42 @@ class MT5Client:
         if ti_time:
             return infer_broker_tz_offset(int(ti_time), now_utc)
 
+        first: dict[str, int] = {}
         for sym in _BROKER_TIME_PROBE_SYMBOLS:
+            # A fresh terminal has no probe symbols in Market Watch, so their
+            # ticks are None until selected.
             try:
-                # A fresh terminal has no probe symbols in Market Watch, so
-                # their ticks are None until selected.
                 self._mt5.symbol_select(sym, True)
-                tick = self._mt5.symbol_info_tick(sym)
             except Exception:
                 continue
-            if tick is None:
-                continue
-            tick_time = getattr(tick, "time", 0) or 0
-            if not tick_time:
-                continue
-            candidate = infer_broker_tz_offset(int(tick_time), now_utc)
-            # A tick that's exactly N×15-min stale produces a candidate
-            # offset that lines up with the rounding step; the residual
-            # check below would accept it. Bound to plausible TZ range
-            # first to close that hole.
-            if abs(candidate) > _MAX_PLAUSIBLE_OFFSET_MINUTES:
-                continue
-            broker_now_in_utc = (
-                datetime.fromtimestamp(int(tick_time), tz=timezone.utc)
-                - timedelta(minutes=candidate)
-            )
-            residual_seconds = abs((broker_now_in_utc - now_utc).total_seconds())
-            if residual_seconds <= _FRESH_TICK_SECONDS:
-                logger.info(
-                    "Derived broker TZ offset = %+d min from a %s tick "
-                    "(terminal_info.time absent on this MT5 build).",
-                    candidate, sym,
+            tick_time = self._probe_tick_time(sym)
+            if tick_time:
+                first[sym] = tick_time
+
+        for attempt in range(_LIVE_TICK_POLLS if first else 0):
+            if attempt:
+                _sleep(_LIVE_TICK_POLL_S)
+            for sym, seen in first.items():
+                tick_time = self._probe_tick_time(sym)
+                if tick_time <= seen:
+                    continue
+                candidate = infer_broker_tz_offset(tick_time, now_utc)
+                # Bound to a plausible TZ range: a tick stale by a multiple of
+                # 15 min would otherwise pass the residual check below.
+                if abs(candidate) > _MAX_PLAUSIBLE_OFFSET_MINUTES:
+                    continue
+                broker_now_in_utc = (
+                    datetime.fromtimestamp(tick_time, tz=timezone.utc)
+                    - timedelta(minutes=candidate)
                 )
-                return candidate
+                residual_seconds = abs((broker_now_in_utc - now_utc).total_seconds())
+                if residual_seconds <= _FRESH_TICK_SECONDS:
+                    logger.info(
+                        "Derived broker TZ offset = %+d min from a live %s tick "
+                        "(terminal_info.time absent on this MT5 build).",
+                        candidate, sym,
+                    )
+                    return candidate
 
         # Retries and reinits that keep a resolved offset log at debug, so a
         # closed market is quiet.
@@ -327,6 +342,13 @@ class MT5Client:
             list(_BROKER_TIME_PROBE_SYMBOLS), self.broker_offset_minutes,
         )
         return None
+
+    def _probe_tick_time(self, sym: str) -> int:
+        try:
+            tick = self._mt5.symbol_info_tick(sym)
+        except Exception:
+            return 0
+        return int(getattr(tick, "time", 0) or 0) if tick is not None else 0
 
     def disconnect(self) -> None:
         with self._lock:

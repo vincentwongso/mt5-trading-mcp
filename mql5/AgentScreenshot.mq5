@@ -108,6 +108,11 @@ void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES 
    // The bid itself can also be 0 for a symbol with no ticks, so callers must
    // still check this before using it.
    double   vlineLabelPrice = ChartGetDouble(cid, CHART_PRICE_MAX, 0);
+   double   priceMin        = ChartGetDouble(cid, CHART_PRICE_MIN, 0);
+   // The range is read from the chart window, not the taller screenshot, so a
+   // label hung from the very top can render past the edge. Drop it 3%.
+   if(vlineLabelPrice > 0 && priceMin > 0 && vlineLabelPrice > priceMin)
+      vlineLabelPrice -= (vlineLabelPrice - priceMin) * 0.03;
    if(vlineLabelPrice <= 0)
       vlineLabelPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
 
@@ -211,7 +216,7 @@ string StripCR(const string s)
 //| each scale, measure bars-per-pixel on the live window, project    |
 //| onto the screenshot width, and keep the scale nearest targetBars. |
 //+------------------------------------------------------------------+
-void ApplyBarsScale(const long cid, const int targetBars, const int shotWidth)
+int ApplyBarsScale(const long cid, const int targetBars, const int shotWidth)
   {
    int    bestScale = 0;
    double bestErr   = -1.0;
@@ -233,6 +238,12 @@ void ApplyBarsScale(const long cid, const int targetBars, const int shotWidth)
         }
      }
    ChartSetInteger(cid, CHART_SCALE, bestScale);
+   return(bestScale);
+  }
+
+bool SamePrice(const double a, const double b)
+  {
+   return(MathAbs(a - b) <= MathMax(1e-8, MathAbs(b) * 1e-9));
   }
 
 void ProcessRequest(const string reqName)
@@ -307,25 +318,41 @@ void ProcessRequest(const string reqName)
       // chart rather than failing the capture. Return value intentionally ignored.
       ChartApplyTemplate(cid, tpl);
 
-   // Horizontal density: bars self-calibrates to a scale; else raw scale.
-   // (Python guarantees these are mutually exclusive.)
-   if(StringLen(sBars) > 0)
-      ApplyBarsScale(cid, (int)StringToInteger(sBars), width);
-   else if(StringLen(sScale) > 0)
-      ChartSetInteger(cid, CHART_SCALE, (int)StringToInteger(sScale));
-
-   // Vertical fixed price band.
-   if(StringLen(sPMin) > 0 && StringLen(sPMax) > 0)
-     {
-      ChartSetInteger(cid, CHART_SCALEFIX, true);
-      ChartSetDouble(cid, CHART_FIXED_MAX, StringToDouble(sPMax));
-      ChartSetDouble(cid, CHART_FIXED_MIN, StringToDouble(sPMin));
-     }
-
-   // Let the chart open, load its series, and apply scale/band before doing
-   // anything that depends on a fully rendered chart.
+   // Let the chart open, load its series and apply the template first.
+   // ChartApplyTemplate is asynchronous and the template carries its own
+   // scale and price band, so framing set before it lands is overwritten.
    ChartRedraw(cid);
    Sleep(SettleMs);
+
+   // Horizontal density: bars self-calibrates to a scale; else raw scale.
+   // (Python guarantees these are mutually exclusive.)
+   int wantScale = -1;
+   if(StringLen(sBars) > 0)
+      wantScale = ApplyBarsScale(cid, (int)StringToInteger(sBars), width);
+   else if(StringLen(sScale) > 0)
+      wantScale = (int)StringToInteger(sScale);
+
+   // Vertical fixed price band. Scale and band are re-applied until they
+   // read back, in case a slow template lands after the settle.
+   bool band = StringLen(sPMin) > 0 && StringLen(sPMax) > 0;
+   for(int i = 0; i < 10 && (wantScale >= 0 || band); i++)
+     {
+      if(wantScale >= 0)
+         ChartSetInteger(cid, CHART_SCALE, wantScale);
+      if(band)
+        {
+         ChartSetInteger(cid, CHART_SCALEFIX, true);
+         ChartSetDouble(cid, CHART_FIXED_MAX, StringToDouble(sPMax));
+         ChartSetDouble(cid, CHART_FIXED_MIN, StringToDouble(sPMin));
+        }
+      ChartRedraw(cid);
+      Sleep(50);
+      if((wantScale < 0 || ChartGetInteger(cid, CHART_SCALE) == wantScale)
+         && (!band || (ChartGetInteger(cid, CHART_SCALEFIX) != 0
+                       && SamePrice(ChartGetDouble(cid, CHART_FIXED_MIN), StringToDouble(sPMin))
+                       && SamePrice(ChartGetDouble(cid, CHART_FIXED_MAX), StringToDouble(sPMax)))))
+         break;
+     }
 
    // Horizontal scroll to end_time (broker epoch on the wire). This MUST run
    // after the settle above: a ChartNavigate issued on a freshly opened chart,

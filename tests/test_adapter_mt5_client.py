@@ -292,7 +292,7 @@ def test_connect_falls_back_when_terminal_info_lacks_time(fake_mt5: FakeMT5, fro
 
 
 def test_connect_derives_offset_from_tick_when_terminal_info_lacks_time(
-    fake_mt5: FakeMT5, frozen_utc, caplog,
+    fake_mt5: FakeMT5, frozen_utc, caplog, monkeypatch,
 ):
     """When .time is absent, fall back to the freshest probe-symbol tick.
 
@@ -320,6 +320,7 @@ def test_connect_derives_offset_from_tick_when_terminal_info_lacks_time(
     fake_mt5._symbol_info_tick["BTCUSD"] = FakeTick(
         time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp())
     )
+    _live_ticks(fake_mt5, monkeypatch)
     client = MT5Client(mt5_module=fake_mt5)
 
     import logging
@@ -642,6 +643,21 @@ def _clock(monkeypatch) -> list[float]:
     return now
 
 
+def _live_ticks(fake_mt5: FakeMT5, monkeypatch) -> None:
+    """Each read returns the stored tick one second later, like a live feed."""
+    import dataclasses
+
+    reads = [0]
+    real = fake_mt5.symbol_info_tick
+
+    def read(sym):
+        tick = real(sym)
+        reads[0] += 1
+        return None if tick is None else dataclasses.replace(tick, time=tick.time + reads[0])
+
+    monkeypatch.setattr(fake_mt5, "symbol_info_tick", read)
+
+
 def test_offset_probe_selects_symbol_before_reading_tick(
     fake_mt5: FakeMT5, frozen_utc, monkeypatch,
 ):
@@ -656,6 +672,7 @@ def test_offset_probe_selects_symbol_before_reading_tick(
         fake_mt5, "symbol_info_tick",
         lambda sym: ticks.get(sym) if sym in selected else None,
     )
+    _live_ticks(fake_mt5, monkeypatch)
     client = MT5Client(mt5_module=fake_mt5)
     client.connect()
     assert client.broker_offset_minutes == 180
@@ -666,6 +683,7 @@ def test_unresolved_offset_retries_after_interval(
 ):
     _no_time_terminal(fake_mt5)
     now = _clock(monkeypatch)
+    _live_ticks(fake_mt5, monkeypatch)
     client = MT5Client(mt5_module=fake_mt5)
     client.connect()
     assert client.broker_offset_minutes == 0
@@ -684,6 +702,7 @@ def test_resolved_offset_is_not_rederived(
     _no_time_terminal(fake_mt5)
     now = _clock(monkeypatch)
     fake_mt5._symbol_info_tick["BTCUSD"] = _broker_tick(13)
+    _live_ticks(fake_mt5, monkeypatch)
     client = MT5Client(mt5_module=fake_mt5)
     client.connect()
     assert client.broker_offset_minutes == 180
@@ -713,11 +732,12 @@ def test_stale_ticks_keep_retrying_but_stay_zero(
 
 
 def test_reinit_without_fresh_tick_keeps_resolved_offset(
-    fake_mt5: FakeMT5, frozen_utc,
+    fake_mt5: FakeMT5, frozen_utc, monkeypatch,
 ):
     # A restarted terminal often has no fresh tick; the offset must not drop to 0.
     _no_time_terminal(fake_mt5)
     fake_mt5._symbol_info_tick["BTCUSD"] = _broker_tick(13)
+    _live_ticks(fake_mt5, monkeypatch)
     client = MT5Client(mt5_module=fake_mt5)
     client.connect()
     assert client.broker_offset_minutes == 180
@@ -750,3 +770,54 @@ def test_call_without_resend_never_repeats_fn_and_defers_reattach(
     fake_mt5._last_error = (1, "Success")
     client.connect()
     assert fake_mt5.calls["initialize"] == 2
+
+
+def test_cached_tick_an_hour_old_does_not_resolve_offset(fake_mt5: FakeMT5, frozen_utc):
+    """A just-started terminal serves its last cached tick. One an hour old
+    passes the residual check and implies +120 for a +180 broker; it must not
+    be trusted unless it advances."""
+    _no_time_terminal(fake_mt5)
+    fake_mt5._symbol_info_tick["BTCUSD"] = _broker_tick(12)  # broker 13:00 less 1h
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 0
+    assert client._offset_resolved is False
+
+
+def test_cached_tick_then_live_tick_resolves_from_the_live_one(
+    fake_mt5: FakeMT5, frozen_utc, monkeypatch,
+):
+    _no_time_terminal(fake_mt5)
+    ticks = iter([_broker_tick(12), _broker_tick(13)])
+    last = [None]
+
+    def read(sym):
+        if sym != "BTCUSD":
+            return None
+        last[0] = next(ticks, last[0])
+        return last[0]
+
+    monkeypatch.setattr(fake_mt5, "symbol_info_tick", read)
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 180
+
+
+def test_probe_keeps_polling_a_symbol_whose_first_tick_is_missing(
+    fake_mt5: FakeMT5, frozen_utc, monkeypatch,
+):
+    _no_time_terminal(fake_mt5)
+    ticks = iter([None, _broker_tick(13), _broker_tick(13)])
+    last = [None]
+
+    def read(sym):
+        if sym != "BTCUSD":
+            return None
+        last[0] = next(ticks, last[0])
+        return last[0]
+
+    monkeypatch.setattr(fake_mt5, "symbol_info_tick", read)
+    _live_ticks(fake_mt5, monkeypatch)
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 180

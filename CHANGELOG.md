@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+- **Docker chart template** - `agent_light.tpl` uses teal/salmon candles, teal volumes and a lighter grid, with trade markers off, matching the Windows setup.
+
+### Fixed
+- **First quote of a symbol** - a symbol just added to Market Watch returned success with bid/ask 0.0 and a 1970 time; the order tools priced it at zero, under every notional limit. Quotes and order pricing now wait up to 3s for a tick with both bid and ask, else return retryable `SYMBOL_NOT_ENABLED`.
+- **`get_chart_screenshot` with a template** - `scale`, `bars` and the price band were overridden by the chart template, which MT5 applies asynchronously; `scale` was ignored and `bars` 80-140 zoomed fully out. The EA now frames the chart after the template lands and checks the band bounds; vline labels no longer render past the top edge. Requires the rebuilt EA.
+- **Broker time after a terminal restart** - the offset probe could read the tick the terminal cached before it stopped; one about an hour old set the offset an hour short and stamped every time an hour in the future. It now trusts only a tick it sees advance.
+- **Tool errors** - every result with a non-null `error`, including failed and replayed-failed trades, now comes back with `isError: true`. Typed tools (`get_quote`, `get_rates`, `calc_margin` and others) used to return a pydantic validation dump instead of the envelope. Success output is unchanged. Needs `mcp` 1.19 or newer (the floor was 1.12).
+
 ## [1.6.3] - 2026-11-19
 
 ### Added

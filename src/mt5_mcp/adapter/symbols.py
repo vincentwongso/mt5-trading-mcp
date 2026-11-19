@@ -23,6 +23,11 @@ from mt5_mcp.types import ErrorDetail
 
 _CACHE_TTL_S = 60.0
 
+# A symbol just added to Market Watch reports an empty tick (zero prices,
+# epoch-0 time) until the first quote streams in, usually within a second.
+_FIRST_TICK_WAIT_S = 3.0
+_FIRST_TICK_POLL_S = 0.1
+
 # Symbol-side filling-mode bitmask values from MQL5 ENUM_SYMBOL_FILLING_MODE.
 # The Python MetaTrader5 module does NOT expose these as attributes (only
 # the order-side ORDER_FILLING_* constants are exported), so the symbol-side
@@ -35,6 +40,15 @@ _SYMBOL_FILLING_BOC = 4  # bit 2 - "Book or Cancel" (RETURN in the order-side en
 # Indirection so tests can monkeypatch the clock.
 def _monotonic() -> float:
     return _time.monotonic()
+
+
+def _sleep(seconds: float) -> None:
+    _time.sleep(seconds)
+
+
+def _is_empty_tick(tick: Any) -> bool:
+    # Both sides required: a one-sided quote would price that side at zero.
+    return not all(getattr(tick, f, 0) for f in ("time", "bid", "ask"))
 
 
 @dataclass
@@ -88,6 +102,18 @@ class SymbolPrep:
         with self._lock:
             self._cache[symbol] = _CacheEntry(info, _monotonic() + _CACHE_TTL_S)
         return info
+
+    def tick(self, symbol: str) -> Any:
+        """Current tick, or None when there is no quote. Waits briefly for the
+        first quote of a newly selected symbol instead of returning zeros."""
+        deadline = _monotonic() + _FIRST_TICK_WAIT_S
+        while True:
+            tick = self._client.call(lambda m: m.symbol_info_tick(symbol))
+            if tick is not None and not _is_empty_tick(tick):
+                return tick
+            if _monotonic() >= deadline:
+                return None
+            _sleep(_FIRST_TICK_POLL_S)
 
     def validate_volume(self, symbol: str, volume: Decimal) -> None:
         info = self.get(symbol)

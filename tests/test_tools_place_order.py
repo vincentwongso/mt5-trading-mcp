@@ -250,3 +250,46 @@ def test_order_send_is_not_resent_after_ipc_error(server_and_mt5):
     again = _call(server, "place_order", **args)
     assert again["replayed"] is True
     assert len(fake.order_send_calls) == 1
+
+
+def test_market_order_refused_on_empty_first_tick(server_and_mt5):
+    """A zero price would make notional 0 and slip under every notional limit."""
+    server, fake = server_and_mt5
+    fake._symbol_info_tick["EURUSD"] = FakeTick(time=0, bid=0.0, ask=0.0)
+    out = _call(server, "place_order",
+                symbol="EURUSD", side="buy", type="market", volume="0.10")
+    assert out["error"]["code"] == "SYMBOL_NOT_ENABLED"
+    assert len(fake.order_send_calls) == 0
+
+
+@pytest.mark.parametrize("side,bid,ask", [("buy", 1.0823, 0.0), ("sell", 0.0, 1.0824)])
+def test_market_order_refused_on_one_sided_tick(server_and_mt5, side, bid, ask):
+    server, fake = server_and_mt5
+    fake._symbol_info_tick["EURUSD"] = FakeTick(time=1_745_000_000, bid=bid, ask=ask)
+    out = _call(server, "place_order",
+                symbol="EURUSD", side=side, type="market", volume="0.10")
+    assert out["error"]["code"] == "SYMBOL_NOT_ENABLED"
+    assert len(fake.order_send_calls) == 0
+
+
+def test_failed_order_result_is_an_is_error_result_on_the_wire(server_and_mt5):
+    """A trade result carries `error` beside its other fields; non-null means failure."""
+    import asyncio
+    import json
+
+    server, fake = server_and_mt5
+    fake._order_send = None
+    fake._last_error = (-10001, "IPC send failed")
+    res = asyncio.run(server.call_tool("place_order", {
+        "symbol": "EURUSD", "side": "buy", "type": "market", "volume": "0.10"}))
+    assert res.isError is True
+    assert json.loads(res.content[0].text)["error"]["code"] == "MT5_NULL_RESPONSE"
+
+
+def test_successful_order_result_is_not_an_error_on_the_wire(server_and_mt5):
+    import asyncio
+
+    server, fake = server_and_mt5
+    content = asyncio.run(server.call_tool("place_order", {
+        "symbol": "EURUSD", "side": "buy", "type": "market", "volume": "0.10"}))
+    assert '"success": true' in content[0].text

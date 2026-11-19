@@ -34,8 +34,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import pydantic_core
 from mcp.server.fastmcp import FastMCP
-from mcp.types import AnyUrl
+from mcp.types import AnyUrl, CallToolResult, TextContent
 
 from mt5_mcp.adapter.mt5_client import MT5Client
 from mt5_mcp.adapter.symbols import SymbolPrep
@@ -253,7 +254,7 @@ def build_server(
     # level (so its access log goes quiet at WARNING). stateless_http flips the
     # streamable-HTTP session manager into per-request-transport mode, which is
     # what stops the per-session transport accumulation (the memory leak).
-    mcp = FastMCP("mt5-mcp", log_level=level, stateless_http=stateless)
+    mcp = _MT5FastMCP("mt5-mcp", log_level=level, stateless_http=stateless)
     _quiet_noisy_loggers(level)
     from mt5_mcp.tools import register_tools
     from mt5_mcp.resources import register_resources
@@ -262,6 +263,25 @@ def build_server(
     register_resources(mcp)
     _wire_subscribe_hooks(mcp)
     return mcp
+
+
+class _MT5FastMCP(FastMCP):
+    """Returns any tool result with a non-null ``error`` as an isError result.
+
+    FastMCP validates results against the tool's return annotation, so an
+    envelope from a tool typed ``-> Quote`` reached clients as a pydantic
+    validation dump. A CallToolResult skips that check.
+    """
+
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        result = await self._tool_manager.call_tool(
+            name, arguments, context=self.get_context(), convert_result=False
+        )
+        # Trade results carry `error` beside their other fields; null means success.
+        if isinstance(result, dict) and result.get("error"):
+            text = pydantic_core.to_json(result, indent=2, fallback=str).decode()
+            return CallToolResult(content=[TextContent(type="text", text=text)], isError=True)
+        return self._tool_manager.get_tool(name).fn_metadata.convert_result(result)
 
 
 def _wire_subscribe_hooks(mcp: FastMCP) -> None:

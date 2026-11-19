@@ -66,6 +66,30 @@ def test_get_quote_no_tick_available(server_and_mt5):
     assert out["error"]["code"] == "SYMBOL_NOT_ENABLED"
 
 
+def test_get_quote_waits_for_first_tick_after_select(server_and_mt5, monkeypatch):
+    """A just-selected symbol reports zero prices and epoch-0 time until its
+    first quote arrives; get_quote must wait for it, not return zeros."""
+    server, fake = server_and_mt5
+    monkeypatch.setattr("mt5_mcp.adapter.symbols._FIRST_TICK_WAIT_S", 3.0)
+    monkeypatch.setattr("mt5_mcp.adapter.symbols._sleep", lambda s: None)
+    fake._symbol_info["XAUUSD"] = FakeSymbolInfo(name="XAUUSD")
+    real = FakeTick(time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp()),
+                    bid=2400.1, ask=2400.4)
+    ticks = iter([FakeTick(time=0, bid=0.0, ask=0.0), FakeTick(time=0, bid=0.0, ask=0.0), real])
+    fake.symbol_info_tick = lambda symbol: next(ticks)
+    q = _call(server, "get_quote", symbol="XAUUSD")
+    assert q.bid == Decimal("2400.1")
+
+
+def test_get_quote_empty_tick_is_an_error_not_zeros(server_and_mt5):
+    server, fake = server_and_mt5
+    fake._symbol_info["XAUUSD"] = FakeSymbolInfo(name="XAUUSD")
+    fake._symbol_info_tick["XAUUSD"] = FakeTick(time=0, bid=0.0, ask=0.0)
+    out = _call(server, "get_quote", symbol="XAUUSD")
+    assert out["error"]["code"] == "SYMBOL_NOT_ENABLED"
+    assert out["error"]["retryable"] is True
+
+
 def test_get_symbols_no_filter(server_and_mt5):
     server, fake = server_and_mt5
     fake._symbols_get = (
@@ -119,6 +143,16 @@ def test_get_market_hours_open_when_quote_is_fresh(server_and_mt5):
     fake._symbol_info_tick["XAUUSD"] = FakeTick(time=now - 2)
     fake._symbols_get = (FakeSymbolInfo(name="XAUUSD", time=now - 2), FakeSymbolInfo(name="BTCUSD", time=now))
     assert _call(server, "get_market_hours", symbol="XAUUSD").is_open is True
+
+
+def test_get_market_hours_closed_with_one_sided_stale_tick(server_and_mt5):
+    # Only the timestamp matters here; a one-sided tick must not skip the check.
+    server, fake = server_and_mt5
+    now = 1_800_000_000
+    fake._symbol_info["XAUUSD"] = FakeSymbolInfo(name="XAUUSD", trade_mode=4)
+    fake._symbol_info_tick["XAUUSD"] = FakeTick(time=now - 3600, bid=2400.0, ask=0.0)
+    fake._symbols_get = (FakeSymbolInfo(name="XAUUSD", time=now - 3600), FakeSymbolInfo(name="BTCUSD", time=now))
+    assert _call(server, "get_market_hours", symbol="XAUUSD").is_open is False
 
 
 # --- get_rates ----------------------------------------------------------
@@ -480,3 +514,33 @@ def test_get_chart_screenshot_no_viewport_passes_empty(server_and_mt5, monkeypat
     )
     _call(server, "get_chart_screenshot", symbol="EURUSD", timeframe="H1")
     assert seen["viewport_fields"] == []
+
+
+def test_errors_reach_the_wire_as_is_error_envelopes(server_and_mt5):
+    """FastMCP validates results against the return annotation; an error from
+    a typed tool must arrive as an isError envelope, not a validation dump."""
+    import asyncio
+    import json
+
+    server, fake = server_and_mt5
+    fake._symbol_info["XYZ"] = None
+    for name, args in [("get_quote", {"symbol": "XYZ"}),
+                       ("get_rates", {"symbol": "XYZ", "timeframe": "M1", "count": 5}),
+                       ("close_position", {"ticket": 1})]:
+        res = asyncio.run(server.call_tool(name, args))
+        assert res.isError is True
+        assert json.loads(res.content[0].text)["error"]["code"] in (
+            "SYMBOL_NOT_FOUND", "INVALID_TICKET")
+
+
+def test_success_keeps_its_flat_structured_shape(server_and_mt5):
+    import asyncio
+
+    server, fake = server_and_mt5
+    fake._symbol_info["EURUSD"] = FakeSymbolInfo(name="EURUSD")
+    fake._symbol_info_tick["EURUSD"] = FakeTick(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp()),
+        bid=1.0823, ask=1.0824,
+    )
+    _, structured = asyncio.run(server.call_tool("get_quote", {"symbol": "EURUSD"}))
+    assert structured["bid"] == "1.0823"

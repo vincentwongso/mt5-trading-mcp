@@ -1,0 +1,4 @@
+int Helper()
+  {
+   return(bar);
+  }

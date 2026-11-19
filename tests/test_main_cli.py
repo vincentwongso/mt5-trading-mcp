@@ -65,3 +65,9 @@ def test_serve_no_eager_connect_flag_sets_false(tmp_path, monkeypatch):
         rc = main(["serve", "--no-eager-connect"])
     assert rc == 0
     assert captured["eager"] is False
+
+
+def test_compile_routes_remaining_argv():
+    with patch("mt5_mcp.cli.compile.main", return_value=0) as m:
+        assert main(["compile", "a.mq5", "--no-install"]) == 0
+    m.assert_called_once_with(["a.mq5", "--no-install"])

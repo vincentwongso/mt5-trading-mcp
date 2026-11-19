@@ -108,6 +108,11 @@ void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES 
    // The bid itself can also be 0 for a symbol with no ticks, so callers must
    // still check this before using it.
    double   vlineLabelPrice = ChartGetDouble(cid, CHART_PRICE_MAX, 0);
+   double   priceMin        = ChartGetDouble(cid, CHART_PRICE_MIN, 0);
+   // The range is read from the chart window, not the taller screenshot, so a
+   // label hung from the very top can render past the edge. Drop it 3%.
+   if(vlineLabelPrice > 0 && priceMin > 0 && vlineLabelPrice > priceMin)
+      vlineLabelPrice -= (vlineLabelPrice - priceMin) * 0.03;
    if(vlineLabelPrice <= 0)
       vlineLabelPrice = SymbolInfoDouble(symbol, SYMBOL_BID);
 
@@ -236,6 +241,11 @@ int ApplyBarsScale(const long cid, const int targetBars, const int shotWidth)
    return(bestScale);
   }
 
+bool SamePrice(const double a, const double b)
+  {
+   return(MathAbs(a - b) <= MathMax(1e-8, MathAbs(b) * 1e-9));
+  }
+
 void ProcessRequest(const string reqName)
   {
    // reqName is just "<id>.req" (from FileFindFirst); prefix the subdir.
@@ -338,7 +348,9 @@ void ProcessRequest(const string reqName)
       ChartRedraw(cid);
       Sleep(50);
       if((wantScale < 0 || ChartGetInteger(cid, CHART_SCALE) == wantScale)
-         && (!band || ChartGetInteger(cid, CHART_SCALEFIX) != 0))
+         && (!band || (ChartGetInteger(cid, CHART_SCALEFIX) != 0
+                       && SamePrice(ChartGetDouble(cid, CHART_FIXED_MIN), StringToDouble(sPMin))
+                       && SamePrice(ChartGetDouble(cid, CHART_FIXED_MAX), StringToDouble(sPMax)))))
          break;
      }
 

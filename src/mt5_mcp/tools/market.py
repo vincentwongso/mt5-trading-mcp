@@ -104,7 +104,8 @@ def register(mcp: FastMCP) -> None:
         info = ctx.symbols.get(symbol)
         is_open = getattr(info, "trade_mode", 0) != 0
         if is_open:
-            tick = ctx.symbols.tick(symbol)
+            # Raw tick: only its timestamp matters here, even if one side is empty.
+            tick = ctx.client.call(lambda m: m.symbol_info_tick(symbol))
             last = getattr(tick, "time", 0) or 0
             newest = max((getattr(s, "time", 0) or 0 for s in ctx.client.call(lambda m: m.symbols_get()) or ()),
                          default=0)

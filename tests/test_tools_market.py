@@ -145,6 +145,16 @@ def test_get_market_hours_open_when_quote_is_fresh(server_and_mt5):
     assert _call(server, "get_market_hours", symbol="XAUUSD").is_open is True
 
 
+def test_get_market_hours_closed_with_one_sided_stale_tick(server_and_mt5):
+    # Only the timestamp matters here; a one-sided tick must not skip the check.
+    server, fake = server_and_mt5
+    now = 1_800_000_000
+    fake._symbol_info["XAUUSD"] = FakeSymbolInfo(name="XAUUSD", trade_mode=4)
+    fake._symbol_info_tick["XAUUSD"] = FakeTick(time=now - 3600, bid=2400.0, ask=0.0)
+    fake._symbols_get = (FakeSymbolInfo(name="XAUUSD", time=now - 3600), FakeSymbolInfo(name="BTCUSD", time=now))
+    assert _call(server, "get_market_hours", symbol="XAUUSD").is_open is False
+
+
 # --- get_rates ----------------------------------------------------------
 
 

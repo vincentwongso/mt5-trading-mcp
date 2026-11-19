@@ -801,3 +801,23 @@ def test_cached_tick_then_live_tick_resolves_from_the_live_one(
     client = MT5Client(mt5_module=fake_mt5)
     client.connect()
     assert client.broker_offset_minutes == 180
+
+
+def test_probe_keeps_polling_a_symbol_whose_first_tick_is_missing(
+    fake_mt5: FakeMT5, frozen_utc, monkeypatch,
+):
+    _no_time_terminal(fake_mt5)
+    ticks = iter([None, _broker_tick(13), _broker_tick(13)])
+    last = [None]
+
+    def read(sym):
+        if sym != "BTCUSD":
+            return None
+        last[0] = next(ticks, last[0])
+        return last[0]
+
+    monkeypatch.setattr(fake_mt5, "symbol_info_tick", read)
+    _live_ticks(fake_mt5, monkeypatch)
+    client = MT5Client(mt5_module=fake_mt5)
+    client.connect()
+    assert client.broker_offset_minutes == 180

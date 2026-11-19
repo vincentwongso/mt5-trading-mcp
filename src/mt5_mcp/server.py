@@ -27,7 +27,6 @@ publicly.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import threading
@@ -35,6 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import pydantic_core
 from mcp.server.fastmcp import FastMCP
 from mcp.types import AnyUrl, CallToolResult, TextContent
 
@@ -266,7 +266,7 @@ def build_server(
 
 
 class _MT5FastMCP(FastMCP):
-    """Returns a tool's ``{"error": ...}`` envelope as an isError result.
+    """Returns any tool result with a non-null ``error`` as an isError result.
 
     FastMCP validates results against the tool's return annotation, so an
     envelope from a tool typed ``-> Quote`` reached clients as a pydantic
@@ -277,11 +277,10 @@ class _MT5FastMCP(FastMCP):
         result = await self._tool_manager.call_tool(
             name, arguments, context=self.get_context(), convert_result=False
         )
-        if isinstance(result, dict) and set(result) == {"error"}:
-            return CallToolResult(
-                content=[TextContent(type="text", text=json.dumps(result, indent=2))],
-                isError=True,
-            )
+        # Trade results carry `error` beside their other fields; null means success.
+        if isinstance(result, dict) and result.get("error"):
+            text = pydantic_core.to_json(result, indent=2, fallback=str).decode()
+            return CallToolResult(content=[TextContent(type="text", text=text)], isError=True)
         return self._tool_manager.get_tool(name).fn_metadata.convert_result(result)
 
 

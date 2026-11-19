@@ -294,7 +294,7 @@ class MT5Client:
         if ti_time:
             return infer_broker_tz_offset(int(ti_time), now_utc)
 
-        first: dict[str, int] = {}
+        probes: list[str] = []
         for sym in _BROKER_TIME_PROBE_SYMBOLS:
             # A fresh terminal has no probe symbols in Market Watch, so their
             # ticks are None until selected.
@@ -302,16 +302,19 @@ class MT5Client:
                 self._mt5.symbol_select(sym, True)
             except Exception:
                 continue
-            tick_time = self._probe_tick_time(sym)
-            if tick_time:
-                first[sym] = tick_time
+            probes.append(sym)
 
-        for attempt in range(_LIVE_TICK_POLLS if first else 0):
+        # Baseline is each symbol's first nonzero tick; only a later, newer one counts.
+        seen: dict[str, int] = {}
+        for attempt in range(_LIVE_TICK_POLLS if probes else 0):
             if attempt:
                 _sleep(_LIVE_TICK_POLL_S)
-            for sym, seen in first.items():
+            for sym in probes:
                 tick_time = self._probe_tick_time(sym)
-                if tick_time <= seen:
+                if not tick_time:
+                    continue
+                if sym not in seen or tick_time <= seen[sym]:
+                    seen.setdefault(sym, tick_time)
                     continue
                 candidate = infer_broker_tz_offset(tick_time, now_utc)
                 # Bound to a plausible TZ range: a tick stale by a multiple of

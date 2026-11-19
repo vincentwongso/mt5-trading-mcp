@@ -35,6 +35,21 @@ run, follow this procedure.**
 
 Tool semantics and the full consent flow: **[docs/tools.md](tools.md)**.
 Under Claude Code, cloning this repo auto-loads the `.claude/skills/`
-(market-data + trading); you register the MCP server yourself (one
+(market-data, trading, and mql5-build); you register the MCP server yourself (one
 `claude mcp add` command) - see **[docs/clients.md](clients.md)** for how that
 fits together.
+
+## Building MQL5 (EAs, indicators, scripts)
+
+Asked to write or fix MQL5? Use `mt5-mcp compile <file.mq5>` on the machine
+that runs MetaTrader 5 (Windows) and follow the `mt5-mql5-build` skill:
+compile, fix each `file:line:col` error, repeat until exit code `0`. Exit code
+`2` is a setup problem (MetaEditor or data folder not found, timeout) - report
+it, do not edit the code. **Never attach or start an EA yourself, and ask
+before rebuilding one the human says is running on a live chart** (MT5 reloads
+it).
+
+Docker/Wine: you can run it inside the container with
+`docker exec -u abc -e WINEPREFIX=/config/.wine <container> wine 'C:\Python311\python.exe' -m mt5_mcp compile <Windows path to a file inside the container>`,
+but as of 1.7.0 MetaEditor hangs in the headless image and the command exits
+`2` after the timeout. Treat Docker compile as unsupported for now.

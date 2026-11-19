@@ -21,6 +21,7 @@ The full config schema is defined by the Pydantic models in
 ```toml
 [mt5]
 terminal_path = "C:\\Program Files\\MetaTrader 5\\terminal64.exe"
+# data_path = ""  # terminal data folder (holds MQL5\) for `mt5-mcp compile`; empty = auto-detect
 
 [policy]
 auto_approve_notional = "1000.00"      # arm the consent gate: at or above this, place_order returns an ApprovalPreview (0 = default = gate off, orders auto-execute)

@@ -146,6 +146,18 @@ volume that already has one, add `[screenshot]` `template = "agent_light.tpl"`
 by hand (an existing `config.toml` also ignores `MT5_MCP_AUTH_TOKEN`).
 Elsewhere (macOS, native Linux) the tool returns `SCREENSHOT_NOT_SUPPORTED`.
 
+## Build MQL5 with an agent
+
+`mt5-mcp compile <file.mq5>` compiles an Expert Advisor, indicator or script
+with your local MetaEditor (Windows) and prints one line per problem
+(`src/MyEA.mq5:42:7: error 256: ...`). An agent with a shell runs it, fixes
+the errors and reruns until it exits 0. Clean builds install to
+`MQL5\<Kind>\Agent\` in the terminal's data folder; you attach them
+yourself. Reinstalling an EA that is attached to a live chart reloads the new
+code on that chart. Agents get the loop from the `mt5-mql5-build` skill.
+Exit codes: `0` built, `1` compile errors, `2` could not run. Under
+Wine/Docker MetaEditor currently hangs, so this is Windows only for now.
+
 ## For AI agents
 
 **If you've been handed this repository to install and run, follow the runbook

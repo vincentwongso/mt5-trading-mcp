@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import functools
-import inspect
 import logging
 from typing import Any, Callable, TypeVar
 
 from mt5_mcp.errors import MT5Error, internal_error
 from mt5_mcp.server import AppContext, get_context
-from mt5_mcp.types import ErrorDetail, ErrorEnvelope
+from mt5_mcp.types import ErrorDetail
 
 
 logger = logging.getLogger(__name__)
@@ -54,10 +53,4 @@ def error_envelope(fn: Callable[..., R]) -> Callable[..., Any]:
             logger.exception("Unhandled exception in tool %s", fn.__name__)
             return {"error": internal_error(exc).model_dump(mode="json")}
 
-    # FastMCP validates results against the return annotation, so a tool typed
-    # `-> Quote` would turn the error dict into a pydantic dump on the wire.
-    sig = inspect.signature(fn, eval_str=True)
-    ret = sig.return_annotation
-    if ret is not inspect.Signature.empty and ret is not dict:
-        _wrapped.__signature__ = sig.replace(return_annotation=ret | ErrorEnvelope)
     return _wrapped

@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Fixed
-- **First quote of a symbol** - a symbol just added to Market Watch returned success with bid/ask 0.0 and a 1970 time; the order tools priced it at zero, under every notional limit. Quotes and order pricing now wait up to 3s for the first real tick, else return retryable `SYMBOL_NOT_ENABLED`.
+- **First quote of a symbol** - a symbol just added to Market Watch returned success with bid/ask 0.0 and a 1970 time; the order tools priced it at zero, under every notional limit. Quotes and order pricing now wait up to 3s for a tick with both bid and ask, else return retryable `SYMBOL_NOT_ENABLED`.
 - **`get_chart_screenshot` with a template** - `scale`, `bars` and the price band were overridden by the chart template, which MT5 applies asynchronously; `scale` was ignored and `bars` 80-140 zoomed fully out. The EA now frames the chart after the template lands. Requires the rebuilt EA.
 - **Errors from typed tools** - `get_quote`, `get_rates`, `calc_margin` and the other typed tools returned a pydantic validation dump instead of their `{"error": ...}` envelope. Their structured output now sits under `result` (text output is unchanged).
 

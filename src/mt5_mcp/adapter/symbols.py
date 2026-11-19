@@ -47,9 +47,8 @@ def _sleep(seconds: float) -> None:
 
 
 def _is_empty_tick(tick: Any) -> bool:
-    return not (getattr(tick, "time", 0) or 0) or not (
-        (getattr(tick, "bid", 0) or 0) or (getattr(tick, "ask", 0) or 0)
-    )
+    # Both sides required: a one-sided quote would price that side at zero.
+    return not all(getattr(tick, f, 0) for f in ("time", "bid", "ask"))
 
 
 @dataclass

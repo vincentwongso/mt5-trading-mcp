@@ -260,3 +260,13 @@ def test_market_order_refused_on_empty_first_tick(server_and_mt5):
                 symbol="EURUSD", side="buy", type="market", volume="0.10")
     assert out["error"]["code"] == "SYMBOL_NOT_ENABLED"
     assert len(fake.order_send_calls) == 0
+
+
+@pytest.mark.parametrize("side,bid,ask", [("buy", 1.0823, 0.0), ("sell", 0.0, 1.0824)])
+def test_market_order_refused_on_one_sided_tick(server_and_mt5, side, bid, ask):
+    server, fake = server_and_mt5
+    fake._symbol_info_tick["EURUSD"] = FakeTick(time=1_745_000_000, bid=bid, ask=ask)
+    out = _call(server, "place_order",
+                symbol="EURUSD", side=side, type="market", volume="0.10")
+    assert out["error"]["code"] == "SYMBOL_NOT_ENABLED"
+    assert len(fake.order_send_calls) == 0

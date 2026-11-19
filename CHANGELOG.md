@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-11-19
+
 ### Changed
 - **Docker chart template** - `agent_light.tpl` uses teal/salmon candles, teal volumes and a lighter grid, with trade markers off, matching the Windows setup.
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Literal
@@ -68,13 +69,18 @@ KIND_FOLDERS: dict[str, str] = {
     "library": "Libraries",
 }
 
-_COMMENTS = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
-# First match wins; anything else is an Expert Advisor.
+# One pass so "//" or "/*" inside a string literal is not taken as a comment.
+_NOISE = re.compile(
+    r'"(?:\\.|[^"\\\n])*"' r"|'(?:\\.|[^'\\\n])*'" r"|//[^\n]*|/\*.*?\*/",
+    re.DOTALL,
+)
+# First match wins; anything else is an Expert Advisor. Entry points must be
+# free functions: not `obj.OnStart(` or `CFoo::OnStart(`.
 _KIND_RULES = (
     (re.compile(r"#property\s+service\b"), "Services"),
     (re.compile(r"#property\s+library\b"), "Libraries"),
-    (re.compile(r"\bOnCalculate\s*\("), "Indicators"),
-    (re.compile(r"\bOnStart\s*\("), "Scripts"),
+    (re.compile(r"(?<![\w.:])OnCalculate\s*\("), "Indicators"),
+    (re.compile(r"(?<![\w.:])OnStart\s*\("), "Scripts"),
 )
 
 
@@ -84,7 +90,7 @@ def read_source(path: Path) -> str:
 
 
 def detect_kind(source_text: str) -> str:
-    code = _COMMENTS.sub("", source_text)
+    code = _NOISE.sub("", source_text)
     for pattern, folder in _KIND_RULES:
         if pattern.search(code):
             return folder
@@ -147,10 +153,15 @@ def run_metaeditor(
     the PID is enough. The exit code is returned but means nothing.
     """
     proc = popen(cmdline)
+    deadline = time.monotonic() + timeout_s
     try:
-        return proc.wait(timeout=timeout_s)
-    except subprocess.TimeoutExpired:
-        raise CompileTimeout(f"MetaEditor did not finish in {timeout_s:g}s; killed.") from None
+        # Short slices: on Windows one long wait blocks Ctrl+C until it returns.
+        while True:
+            try:
+                return proc.wait(timeout=max(0.0, min(0.25, deadline - time.monotonic())))
+            except subprocess.TimeoutExpired:
+                if time.monotonic() >= deadline:
+                    raise CompileTimeout(f"MetaEditor did not finish in {timeout_s:g}s; killed.") from None
     finally:
         if proc.poll() is None:
             proc.kill()

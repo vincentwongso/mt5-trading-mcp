@@ -28,6 +28,10 @@ currently hangs and the command times out). Backtesting is not available yet.
    point at the `.mqh`, not the `.mq5`.
 4. Repeat until it exits 0. Fix warnings too unless there is a reason not to.
 
+A compile takes about a second. MetaEditor is killed after `--timeout`
+seconds (default 60); keep your shell's own command timeout above that so the
+CLI, not your harness, does the killing.
+
 ## Exit codes
 
 - `0` - compiled (warnings allowed) and installed.
@@ -53,9 +57,13 @@ The program type is detected from the code (`--kind` overrides):
   root.
 - An EA that uses an agent-built indicator must name the subfolder:
   `iCustom(_Symbol, _Period, "Agent\\MyInd", ...)`.
-- Sources already inside the terminal's `MQL5` tree (including MQL5 Algo
-  Forge `Shared Projects`) are built where MetaEditor puts them; nothing is
-  copied.
+- A build that already lands in a kind folder (a source under `MQL5\Experts`,
+  `MQL5\Indicators`, ..., or an MQL5 Algo Forge `Shared Projects` source,
+  which MetaEditor builds into `MQL5\<Kind>\Shared Projects\`) stays where
+  it is; nothing is copied.
+- `replacing existing: <path>` on stderr means another build with the same
+  file name was already installed there (possibly from another project). If
+  that EA might be attached to a chart, tell the user.
 - `--no-install` leaves the `.ex5` next to the source only.
 
 ## Safety rules

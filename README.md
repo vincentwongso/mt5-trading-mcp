@@ -49,10 +49,10 @@ through it, over the Model Context Protocol.
   audit layer.
 - **3 subscribable resources**: live `account://`, `positions://`, and
   `quotes://{symbol}` snapshots that push change notifications.
-- **2 ready-to-use Claude Code skills** ship in
+- **3 ready-to-use Claude Code skills** ship in
   [`.claude/skills/`](https://github.com/vincentwongso/mt5-trading-mcp/tree/main/.claude/skills):
   `mt5-market-data` and `mt5-trading` teach an agent how to read the account and
-  run the consent flow safely.
+  run the consent flow safely; `mt5-mql5-build` teaches the MQL5 compile loop.
 
 Full catalogue and the consent flow: **[docs/tools.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/docs/tools.md)**.
 

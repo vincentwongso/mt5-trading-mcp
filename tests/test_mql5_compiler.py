@@ -96,6 +96,11 @@ def test_format_absolute_outside_cwd(tmp_path):
     ("void OnStart(){}", "Scripts"),
     ("int OnInit(){return 0;} void OnTick(){}", "Experts"),
     ("// OnCalculate( mentioned\n/* void OnStart() */\nvoid OnTick(){}", "Experts"),
+    ('void OnTick(){ Print("OnStart() called"); }', "Experts"),
+    ("void CFoo::OnStart(){} void OnTick(){ obj.OnStart(); }", "Experts"),
+    ('string s = "#property library"; void OnTick(){}', "Experts"),
+    ('string u = "http://x"; int OnCalculate(const int a){return a;}', "Indicators"),
+    ('string c = "/*"; int OnCalculate(const int a){return a;}', "Indicators"),
 ])
 def test_detect_kind(src, kind):
     assert detect_kind(src) == kind
@@ -226,3 +231,30 @@ def test_built_ex5_shared_projects_lands_in_kind_folder(tmp_path, kind):
 
 def test_built_ex5_missing(tmp_path):
     assert built_ex5(tmp_path / "a.mq5", tmp_path / "MQL5") is None
+
+
+def test_run_waits_in_short_slices():
+    seen = []
+
+    class Slow(FakeProc):
+        def wait(self, timeout=None):
+            seen.append(timeout)
+            if len(seen) < 3:
+                raise subprocess.TimeoutExpired("me", timeout)
+            return 0
+
+    assert run_metaeditor("cmd", timeout_s=60, popen=_popen(Slow())) == 0
+    assert len(seen) == 3 and all(t is not None and t <= 0.25 for t in seen)
+
+
+def test_run_kills_real_slow_child_on_timeout():
+    import sys
+    procs = []
+
+    def popen(cmdline):
+        procs.append(subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"]))
+        return procs[0]
+
+    with pytest.raises(CompileTimeout):
+        run_metaeditor("cmd", timeout_s=0.5, popen=popen)
+    assert procs[0].poll() is not None

@@ -137,3 +137,13 @@ def test_no_data_folder_raises(pf, appdata):
     inst = make_install(pf / "MetaTrader 5")
     with pytest.raises(LocateError, match="data_path"):
         locate_terminal(terminal_path=str(inst), program_files=[], appdata=appdata)
+
+
+def test_relative_paths_are_made_absolute(pf, appdata, monkeypatch, tmp_path):
+    inst = make_install(pf / "MetaTrader 5")
+    data = make_data(appdata, "A", str(inst))
+    monkeypatch.chdir(tmp_path)
+    got = locate_terminal(terminal_path=str(inst.relative_to(tmp_path)), program_files=[], appdata=appdata)
+    assert got.install_dir.is_absolute() and got.data_dir == data
+    rel = locate_terminal(terminal_path=str(inst), data_path=str(data.relative_to(tmp_path)), program_files=[], appdata=appdata)
+    assert rel.data_dir == data

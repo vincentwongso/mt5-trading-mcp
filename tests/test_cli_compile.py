@@ -180,3 +180,48 @@ def test_help_carries_live_reload_warning(capsys):
     with pytest.raises(SystemExit):
         cli.main(["--help"])
     assert "reloads the new code on that chart" in " ".join(capsys.readouterr().out.split())
+
+
+def test_non_encodable_output_does_not_crash(env, monkeypatch):
+    import io
+    import sys
+    buf = io.BytesIO()
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(buf, encoding="cp1252", errors="strict"))
+    monkeypatch.setattr(sys, "stderr", io.TextIOWrapper(io.BytesIO(), encoding="cp1252", errors="strict"))
+    data = env["data"].parent / "Иван"
+    (data / "MQL5").mkdir(parents=True)
+    env["data"] = data
+    monkeypatch.setattr(cli, "locate_terminal", lambda **kw: TerminalPaths(data, data / "metaeditor64.exe", data))
+    rc = run(env, "clean_ea.mq5")
+    sys.stdout.flush()
+    assert rc == 0
+    assert b"installed:" in buf.getvalue()
+
+
+def test_unexpected_error_exits_2_not_1(env, monkeypatch, capsys):
+    def broken(path):
+        raise OSError("disk gone")
+    monkeypatch.setattr(cli, "read_source", broken)
+    assert run(env, "clean_ea.mq5") == 2
+    err = capsys.readouterr().err
+    assert "disk gone" in err and "Traceback" not in err
+
+
+def test_replacing_existing_install_is_announced(env, capsys):
+    target = env["data"] / "MQL5" / "Experts" / "Agent" / "clean_ea.ex5"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"OLD")
+    assert run(env, "clean_ea.mq5") == 0
+    assert f"replacing existing: {target}" in capsys.readouterr().err
+    assert target.read_bytes() == b"EX5"
+
+
+def test_default_timeout_is_60(env):
+    seen = []
+    orig = cli.run_metaeditor
+    cli.run_metaeditor = lambda cmdline, *, timeout_s: (seen.append(timeout_s), orig(cmdline, timeout_s=timeout_s))[1]
+    try:
+        run(env, "clean_ea.mq5")
+    finally:
+        cli.run_metaeditor = orig
+    assert seen == [60.0]

@@ -50,6 +50,18 @@ def _fail(msg: str) -> int:
 
 
 def main(argv: list[str]) -> int:
+    # Windows pipes use the ANSI code page; a user name outside it must not
+    # turn a finished build into a traceback.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="backslashreplace")
+    try:
+        return _main(argv)
+    except Exception as exc:  # exit 1 means compile errors; anything else is 2
+        return _fail(f"{type(exc).__name__}: {exc}")
+
+
+def _main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         prog="mt5-mcp compile",
         description="Compile one MQL5 source file with the local MetaEditor.",
@@ -58,7 +70,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("source", help="Path to the .mq5 file.")
     parser.add_argument("--kind", choices=list(KIND_FOLDERS), help="Override program type detection.")
     parser.add_argument("--no-install", action="store_true", help="Leave the .ex5 next to the source only.")
-    parser.add_argument("--timeout", type=float, default=120.0, help="Seconds before MetaEditor is killed (default 120).")
+    parser.add_argument("--timeout", type=float, default=60.0, help="Seconds before MetaEditor is killed (default 60).")
     parser.add_argument("--terminal-path", default=None, help="terminal64.exe or its folder. Overrides [mt5] terminal_path.")
     parser.add_argument("--data-path", default=None, help="Terminal data folder (holds MQL5/). Overrides [mt5] data_path.")
     parser.add_argument("--config", default=None, help="Path to config TOML (default: per-OS user config dir).")
@@ -112,6 +124,8 @@ def main(argv: list[str]) -> int:
         return 0
     kind = KIND_FOLDERS[args.kind] if args.kind else detect_kind(read_source(source))
     target = install_target(paths.data_dir, kind, source.stem)
+    if target.exists():
+        print(f"replacing existing: {target}", file=sys.stderr)
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ex5, target)

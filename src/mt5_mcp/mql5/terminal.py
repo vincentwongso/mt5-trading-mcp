@@ -37,7 +37,7 @@ def _newest_log(d: Path) -> float:
 
 def _find_install(terminal_path: str, program_files: list[Path]) -> Path:
     if terminal_path:
-        p = Path(terminal_path)
+        p = Path(terminal_path).absolute()
         return p.parent if p.suffix.lower() == ".exe" else p
     found = sorted({m.parent for pf in program_files if pf.is_dir() for m in pf.glob("*/metaeditor64.exe")})
     if len(found) == 1:
@@ -81,7 +81,7 @@ def locate_terminal(
     if not metaeditor.is_file():
         raise LocateError(f"metaeditor64.exe not found in {install}. {_FIX}")
     if data_path:
-        data = Path(data_path)
+        data = Path(data_path).absolute()
         if not (data / "MQL5").is_dir():
             raise LocateError(f"{data} has no MQL5 folder. {_FIX}")
     else:

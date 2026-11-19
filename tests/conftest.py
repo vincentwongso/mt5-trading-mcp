@@ -34,6 +34,12 @@ def frozen_utc(monkeypatch: pytest.MonkeyPatch) -> datetime:
 
 
 @pytest.fixture(autouse=True)
+def _no_first_tick_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No-quote tests would otherwise each wait out the real first-tick grace."""
+    monkeypatch.setattr("mt5_mcp.adapter.symbols._FIRST_TICK_WAIT_S", 0.0)
+
+
+@pytest.fixture(autouse=True)
 def _reset_app_context():
     """Ensure each test starts with a clean app-context singleton.
 

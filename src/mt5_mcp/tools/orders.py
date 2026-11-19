@@ -106,7 +106,7 @@ def register(mcp: FastMCP) -> None:
             ref_price = req.price
             tick = None
         else:
-            tick = ctx.client.call(lambda m: m.symbol_info_tick(symbol))
+            tick = ctx.symbols.tick(symbol)
             if tick is None:
                 raise MT5Error(ErrorDetail(
                     code="SYMBOL_NOT_ENABLED",
@@ -139,7 +139,7 @@ def register(mcp: FastMCP) -> None:
         # build_preview dereference a None tick (turning it into INTERNAL_ERROR).
         preview_tick = tick
         if requires_approval and preview_tick is None:
-            preview_tick = ctx.client.call(lambda m: m.symbol_info_tick(symbol))
+            preview_tick = ctx.symbols.tick(symbol)
             if preview_tick is None:
                 raise MT5Error(ErrorDetail(
                     code="SYMBOL_NOT_ENABLED",
@@ -242,7 +242,7 @@ def register(mcp: FastMCP) -> None:
         symbol = target.symbol
         info = ctx.symbols.get(symbol)
 
-        tick = ctx.client.call(lambda m: m.symbol_info_tick(symbol))
+        tick = ctx.symbols.tick(symbol)
         if tick is not None:
             current_price = Decimal(str(tick.bid))
         else:

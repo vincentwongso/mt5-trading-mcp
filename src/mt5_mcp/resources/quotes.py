@@ -34,7 +34,7 @@ def register(mcp: FastMCP) -> None:
             ctx.symbols.get(symbol)
         except MT5Error:
             raise MT5Error(resource_not_found(f"quotes://{symbol}"))
-        tick = ctx.client.call(lambda m: m.symbol_info_tick(symbol))
+        tick = ctx.symbols.tick(symbol)
         if tick is None:
             raise MT5Error(resource_not_found(f"quotes://{symbol}"))
         return quote_from_tick(

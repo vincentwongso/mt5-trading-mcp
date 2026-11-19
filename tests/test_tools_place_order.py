@@ -250,3 +250,13 @@ def test_order_send_is_not_resent_after_ipc_error(server_and_mt5):
     again = _call(server, "place_order", **args)
     assert again["replayed"] is True
     assert len(fake.order_send_calls) == 1
+
+
+def test_market_order_refused_on_empty_first_tick(server_and_mt5):
+    """A zero price would make notional 0 and slip under every notional limit."""
+    server, fake = server_and_mt5
+    fake._symbol_info_tick["EURUSD"] = FakeTick(time=0, bid=0.0, ask=0.0)
+    out = _call(server, "place_order",
+                symbol="EURUSD", side="buy", type="market", volume="0.10")
+    assert out["error"]["code"] == "SYMBOL_NOT_ENABLED"
+    assert len(fake.order_send_calls) == 0

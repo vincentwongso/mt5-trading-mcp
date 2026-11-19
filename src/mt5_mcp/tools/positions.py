@@ -73,7 +73,7 @@ def register(mcp: FastMCP) -> None:
             ))
         is_buy_position = pos.type == mt5.POSITION_TYPE_BUY
 
-        tick = ctx.client.call(lambda m: m.symbol_info_tick(symbol))
+        tick = ctx.symbols.tick(symbol)
         if tick is None:
             # Fallback: use the position's last-known broker price so the
             # agent can still exit during transient quote outages

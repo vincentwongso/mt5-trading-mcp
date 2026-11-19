@@ -18,6 +18,7 @@ from mt5_mcp.mql5.compiler import (
     KIND_FOLDERS,
     CompileTimeout,
     build_command_line,
+    built_ex5,
     detect_kind,
     format_diagnostic,
     install_target,
@@ -102,13 +103,14 @@ def main(argv: list[str]) -> int:
     if args.no_install:
         return 0
 
-    ex5 = source.with_suffix(".ex5")
-    if not ex5.is_file():
-        return _fail(f"clean build but no .ex5 at {ex5}")
-    kind = KIND_FOLDERS[args.kind] if args.kind else detect_kind(read_source(source))
-    if ex5.is_relative_to(mql5 / kind):
+    ex5 = built_ex5(source, mql5)
+    if ex5 is None:
+        return _fail(f"clean build but no .ex5 found for {source}")
+    # Already inside a kind folder (source lives there, or a Shared Project).
+    if any(ex5.is_relative_to(mql5 / folder) for folder in KIND_FOLDERS.values()):
         print(f"installed: {ex5}")
         return 0
+    kind = KIND_FOLDERS[args.kind] if args.kind else detect_kind(read_source(source))
     target = install_target(paths.data_dir, kind, source.stem)
     try:
         target.parent.mkdir(parents=True, exist_ok=True)

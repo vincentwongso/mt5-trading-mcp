@@ -11,6 +11,7 @@ from mt5_mcp.mql5.compiler import (
     CompileTimeout,
     Diagnostic,
     build_command_line,
+    built_ex5,
     detect_kind,
     format_diagnostic,
     install_target,
@@ -205,3 +206,23 @@ def test_run_returns_exit_code_without_killing():
     proc = FakeProc(returncode=1)
     assert run_metaeditor("cmd", timeout_s=5, popen=_popen(proc)) == 1
     assert not proc.killed
+
+
+def test_built_ex5_next_to_source(tmp_path):
+    src = tmp_path / "a.mq5"
+    src.with_suffix(".ex5").write_bytes(b"")
+    assert built_ex5(src, tmp_path / "MQL5") == tmp_path / "a.ex5"
+
+
+@pytest.mark.parametrize("kind", ["Experts", "Indicators"])
+def test_built_ex5_shared_projects_lands_in_kind_folder(tmp_path, kind):
+    mql5 = tmp_path / "MQL5"
+    src = mql5 / "Shared Projects" / "p" / "sub" / "a.mq5"
+    out = mql5 / kind / "Shared Projects" / "p" / "sub" / "a.ex5"
+    out.parent.mkdir(parents=True)
+    out.write_bytes(b"")
+    assert built_ex5(src, mql5) == out
+
+
+def test_built_ex5_missing(tmp_path):
+    assert built_ex5(tmp_path / "a.mq5", tmp_path / "MQL5") is None

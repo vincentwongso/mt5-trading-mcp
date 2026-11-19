@@ -35,7 +35,13 @@ def env(tmp_path, monkeypatch):
         shutil.copy(FIX / "logs" / state["log"], log)
         src = Path(re.search(r'/compile:"([^"]+)"', cmdline)[1])
         if state["write_ex5"]:
-            src.with_suffix(".ex5").write_bytes(b"EX5")
+            # Like MetaEditor: Shared Projects builds land in MQL5/<Kind>/Shared Projects/.
+            mql5 = state["data"] / "MQL5"
+            out = src.with_suffix(".ex5")
+            if src.is_relative_to(mql5 / "Shared Projects"):
+                out = mql5 / "Experts" / out.relative_to(mql5)
+                out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(b"EX5")
         return 1
 
     monkeypatch.setattr(cli, "run_metaeditor", fake_run)
@@ -109,10 +115,12 @@ def test_source_inside_kind_folder_not_copied(env, capsys):
     assert f"installed: {experts / 'clean_ea.ex5'}" in capsys.readouterr().out
 
 
-def test_shared_project_source_is_copied(env):
+def test_shared_project_build_is_already_installed(env, capsys):
     shared = env["data"] / "MQL5" / "Shared Projects" / "proj"
     assert run(env, "clean_ea.mq5", src_dir=shared) == 0
-    assert (env["data"] / "MQL5" / "Experts" / "Agent" / "clean_ea.ex5").exists()
+    built = env["data"] / "MQL5" / "Experts" / "Shared Projects" / "proj" / "clean_ea.ex5"
+    assert f"installed: {built}" in capsys.readouterr().out
+    assert not (env["data"] / "MQL5" / "Experts" / "Agent").exists()
 
 
 def test_timeout_exit_2_message(env, monkeypatch, capsys):

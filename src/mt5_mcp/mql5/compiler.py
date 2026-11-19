@@ -91,6 +91,19 @@ def detect_kind(source_text: str) -> str:
     return "Experts"
 
 
+def built_ex5(source: Path, mql5: Path) -> Path | None:
+    """Where MetaEditor wrote the .ex5, or None.
+
+    Next to the source, except for MQL5/Shared Projects/<rel>, which builds
+    to MQL5/<Kind>/Shared Projects/<rel> (seen on Windows, 2026-11-20).
+    """
+    candidates = [source.with_suffix(".ex5")]
+    if source.is_relative_to(mql5 / "Shared Projects"):
+        rel = source.relative_to(mql5).with_suffix(".ex5")
+        candidates += [mql5 / folder / rel for folder in KIND_FOLDERS.values()]
+    return next((c for c in candidates if c.is_file()), None)
+
+
 def install_target(data_dir: Path, kind_folder: str, stem: str) -> Path:
     # Libraries skip Agent/: `#import "X.ex5"` only searches the caller's
     # folder and the Libraries root.

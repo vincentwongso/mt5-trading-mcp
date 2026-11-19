@@ -504,3 +504,30 @@ def test_get_chart_screenshot_no_viewport_passes_empty(server_and_mt5, monkeypat
     )
     _call(server, "get_chart_screenshot", symbol="EURUSD", timeframe="H1")
     assert seen["viewport_fields"] == []
+
+
+def test_errors_survive_output_validation_on_the_wire(server_and_mt5):
+    """FastMCP validates results against the return annotation; an error dict
+    from a typed tool must not come back as a pydantic validation dump."""
+    import asyncio
+    import json
+
+    server, fake = server_and_mt5
+    fake._symbol_info["XYZ"] = None
+    for name, args in [("get_quote", {"symbol": "XYZ"}),
+                       ("get_rates", {"symbol": "XYZ", "timeframe": "M1", "count": 5})]:
+        content, _ = asyncio.run(server.call_tool(name, args))
+        assert json.loads(content[0].text)["error"]["code"] == "SYMBOL_NOT_FOUND"
+
+
+def test_success_still_validates_on_the_wire(server_and_mt5):
+    import asyncio
+
+    server, fake = server_and_mt5
+    fake._symbol_info["EURUSD"] = FakeSymbolInfo(name="EURUSD")
+    fake._symbol_info_tick["EURUSD"] = FakeTick(
+        time=int(datetime(2026, 4, 21, 13, 0, tzinfo=timezone.utc).timestamp()),
+        bid=1.0823, ask=1.0824,
+    )
+    _, structured = asyncio.run(server.call_tool("get_quote", {"symbol": "EURUSD"}))
+    assert structured["result"]["bid"] == "1.0823"

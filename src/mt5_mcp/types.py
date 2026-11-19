@@ -68,6 +68,11 @@ class ErrorDetail(_Base):
     mt5_retcode: int | None = None
 
 
+class ErrorEnvelope(_Base):
+    """What error_envelope returns in place of a tool's normal result."""
+    error: ErrorDetail
+
+
 class AccountInfo(_Base):
     login: int
     name: str

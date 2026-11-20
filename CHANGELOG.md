@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.8.3] - 2026-11-21
+
 ### Added
 - **Docker backtests** - `mt5-mcp compile` and `mt5-mcp backtest` now work in the Linux image: `deploy/docker-compose.backtest.yml` runs a backtest-only container (no MCP server, CPU-limited, shared work folder) and the image's `mt5-mcp` wrapper takes and prints host paths.
 - **`mt5-mcp backtest --out DIR`** - copies the report and writes the JSON into DIR.
@@ -13,7 +15,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 - **Wine 11.10 staging** - the image runs current MT5 builds (Wine 10 failed on builds after 28 Sep 2026); the terminal is no longer pinned read-only, and new installs set `[mt5] terminal_path`.
-- **Tester refresh** - after an MT5 update a backtest refreshes the tester copy itself instead of exiting 2.
+- **Tester refresh** - after an MT5 update (terminal or tester agent) a backtest refreshes the tester copy itself instead of exiting 2.
+- **One-way volume upgrade** - Wine 11.10 upgrades an existing volume's Wine prefix, so it cannot go back to an older image.
 
 ### Fixed
 - **Repeated optimisations** - an identical re-run no longer exits 2 for a missing forward report (MT5 served it from its cache).

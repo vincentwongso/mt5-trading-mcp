@@ -71,3 +71,9 @@ def test_compile_routes_remaining_argv():
     with patch("mt5_mcp.cli.compile.main", return_value=0) as m:
         assert main(["compile", "a.mq5", "--no-install"]) == 0
     m.assert_called_once_with(["a.mq5", "--no-install"])
+
+
+def test_backtest_routes_remaining_argv():
+    with patch("mt5_mcp.cli.backtest.main", return_value=0) as m:
+        assert main(["backtest", "--setup"]) == 0
+    m.assert_called_once_with(["--setup"])

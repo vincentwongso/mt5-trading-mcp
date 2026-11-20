@@ -117,15 +117,15 @@ def check_inputs(set_file: SetFile, used: dict[str, str], *, optimized_names: li
     MT5 silently ignores unknown names (probe 9), which would otherwise give a
     fresh-looking result for inputs nobody asked for.
     """
-    if optimized_names is not None and sorted(optimized_names) != sorted(set_file.optimized):
-        return (f"optimised inputs in the report {sorted(optimized_names)} differ from the "
-                f".set's ||Y inputs {sorted(set_file.optimized)}")
-    expected = dict(set_file.fixed)
-    if optimized_names is None:
-        expected.update(set_file.optimized)
-    known = set(used) | set(optimized_names or ())
+    if optimized_names is not None:
+        # The optimisation XML lists only optimised inputs; fixed ones are not visible there.
+        if sorted(optimized_names) != sorted(set_file.optimized):
+            return (f"optimised inputs in the report {sorted(optimized_names)} differ from the "
+                    f".set's ||Y inputs {sorted(set_file.optimized)}")
+        return None
+    expected = {**set_file.fixed, **set_file.optimized}
     for name, value in expected.items():
-        if name not in known:
+        if name not in used:
             return f"input {name} from the .set is not an input of this EA (MT5 ignored it)"
         if name in used and not _same(value, used[name]):
             return f"input {name}: the .set says {value} but the run used {used[name]}"

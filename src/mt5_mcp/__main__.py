@@ -5,6 +5,7 @@ Commands:
   doctor                            Run read-tool health check.
   export-symbols                    Dump broker symbols to CSV.
   compile <file.mq5>                Compile MQL5 with the local MetaEditor.
+  backtest <ea.ex5>                 Run the MT5 Strategy Tester on a separate tester install.
   reload-config                     Touch the config file so a running server reloads.
 """
 
@@ -90,6 +91,10 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "compile":
         from mt5_mcp.cli.compile import main as compile_main
         return compile_main(argv[1:])
+
+    if cmd == "backtest":
+        from mt5_mcp.cli.backtest import main as backtest_main
+        return backtest_main(argv[1:])
 
     if cmd == "export-symbols":
         from mt5_mcp.cli.export_symbols import main as export_main

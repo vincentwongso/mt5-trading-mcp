@@ -127,3 +127,9 @@ def test_check_inputs_compares_non_numeric_case_insensitively():
     s = SetFile(fixed={"UseFilter": "False", "Note": "abc def"}, optimized={})
     assert check_inputs(s, {"UseFilter": "false", "Note": "abc def"}, optimized_names=None) is None
     assert check_inputs(s, {"UseFilter": "false", "Note": "abc"}, optimized_names=None) is not None
+
+
+def test_check_inputs_optimization_ignores_fixed_names():
+    # The optimisation XML lists only optimised inputs; fixed ones cannot be checked there.
+    s = SetFile(fixed={"MaximumRisk": "0.02"}, optimized={"MovingPeriod": "12"})
+    assert check_inputs(s, {}, optimized_names=["MovingPeriod"]) is None

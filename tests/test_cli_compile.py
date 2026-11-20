@@ -281,3 +281,10 @@ def test_fail_prints_host_paths(capsys, monkeypatch):
     monkeypatch.setenv("MT5_MCP_HOST_PATHS", "1")
     assert cli._fail(r"x Z:\a\b") == 2
     assert capsys.readouterr().err == "x /a/b\n"
+
+
+def test_no_install_prints_the_built_ex5(env, capsys):
+    assert run(env, "clean_ea.mq5", "--no-install") == 0
+    out = capsys.readouterr().out
+    built = [ln for ln in out.splitlines() if ln.startswith("built: ")]
+    assert len(built) == 1 and built[0].endswith(".ex5")

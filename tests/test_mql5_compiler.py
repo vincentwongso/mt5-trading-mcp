@@ -314,3 +314,15 @@ def test_diagnostic_from_drive_root_keeps_full_path():
     full = str(root / "w" / "src" / "a.mq5")
     d = Diagnostic(path=full, line=1, col=2, severity="error", code=157, message="m")
     assert format_diagnostic(d, root) == f"{full}:1:2: error 157: m"
+
+
+def test_relative_diagnostic_uses_slashes_for_host_paths(monkeypatch):
+    # docker exec -w <host dir>: the path is relative to the caller's folder and must read as a host path.
+    from pathlib import PureWindowsPath
+
+    import mt5_mcp.mql5.compiler as compiler
+
+    monkeypatch.setenv("MT5_MCP_HOST_PATHS", "1")
+    monkeypatch.setattr(compiler, "Path", PureWindowsPath)  # as under Wine
+    d = Diagnostic(path=r"Z:\w\src\a.mq5", line=1, col=2, severity="error", code=157, message="m")
+    assert format_diagnostic(d, PureWindowsPath(r"Z:\w")) == "src/a.mq5:1:2: error 157: m"

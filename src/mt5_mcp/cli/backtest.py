@@ -168,11 +168,11 @@ def _read_report(path: Path) -> int:
     return 0
 
 
-def _unreadable(exc: ReportError, journal: dict | None, tester: Path) -> int:
+def _unreadable(exc: ReportError, journal: dict | None, tester: Path, report: Path) -> int:
     """A report MT5 filled with 'n/a' (e.g. no tick history): the reason is in the tester log."""
     errors = (journal or {}).get("errors") or []
-    return _fail("\n".join([str(exc), *(f"  error: {e}" for e in errors[:5])]) if errors
-                 else f"{exc}\n{log_tail(tester)}")
+    why = "\n".join(f"  error: {e}" for e in errors[:5]) if errors else log_tail(tester)
+    return _fail(f"{exc}\n{why}\nreport: {report}")
 
 
 def _announce_wait() -> None:
@@ -184,7 +184,13 @@ def _deliver(out_dir: Path | None, reports: list[Path]) -> list[Path]:
     if out_dir is None:
         return reports
     out_dir.mkdir(parents=True, exist_ok=True)
-    return [Path(shutil.copy2(r, out_dir / r.name)) for r in reports]
+    delivered = []
+    for r in reports:
+        dest = out_dir / r.name
+        if not (dest.exists() and dest.samefile(r)):  # --out may be the tester's own reports folder
+            shutil.copy2(r, dest)
+        delivered.append(dest)
+    return delivered
 
 
 def _with_lines(text: str, *extra: str | None) -> str:
@@ -318,11 +324,11 @@ def _main(argv: list[str]) -> int:
         line += f" optimize={args.optimize} criterion={args.criterion} forward={args.forward}"
 
     if not args.optimize:
+        out = _deliver(out_dir, [out])[0]  # before parsing: an unreadable report is still the evidence
         try:
             result = parse_single_html(out.read_bytes())
         except ReportError as exc:
-            return _unreadable(exc, journal, tester)
-        out = _deliver(out_dir, [out])[0]
+            return _unreadable(exc, journal, tester, out)
         doc = single_document(settings, result, journal, out)
         write_document(doc, json_path)
         if args.json:
@@ -348,18 +354,20 @@ def _main(argv: list[str]) -> int:
             print(host_paths(_with_lines(format_single(result, out), show, f"json: {json_path}")))
         return 0
 
+    fwd = base.with_name(base.name + ".forward.xml")
+    want_fwd = args.forward != "off"
+    delivered = _deliver(out_dir, [out, fwd] if want_fwd and fwd.is_file() else [out])
+    out = delivered[0]
     try:
         back = parse_opt_xml(out.read_bytes())
+        forward = None
+        if want_fwd:
+            if len(delivered) < 2:
+                return _fail(f"no forward report written ({fwd.name}):\n{log_tail(tester)}\nreport: {out}")
+            forward = parse_opt_xml(delivered[1].read_bytes())
     except ReportError as exc:
-        return _unreadable(exc, journal, tester)
-    forward = None
-    if args.forward != "off":
-        fwd = base.with_name(base.name + ".forward.xml")
-        if not fwd.is_file():
-            return _fail(f"no forward report written ({fwd}):\n{log_tail(tester)}")
-        forward = parse_opt_xml(fwd.read_bytes())
+        return _unreadable(exc, journal, tester, out)
     rows = merge_passes(back, forward)
-    out = _deliver(out_dir, [out, fwd] if forward is not None else [out])[0]
     doc = optimization_document(settings, rows, journal, out)
     write_document(doc, json_path)
     if args.json:

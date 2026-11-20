@@ -616,3 +616,41 @@ def test_wait_through_an_automatic_refresh_sees_the_setup(env):
     locked.wait()
     assert bt(env, "--wait", setup_first=False) == 0
     t.join()
+
+
+def test_out_into_the_testers_own_reports_folder(env, capsys):
+    setup(env)
+    reports = env["tester"] / "reports"
+    assert bt(env, "--out", str(reports)) == 0
+    assert any(reports.glob("*.json")) and "json: " in capsys.readouterr().out
+
+
+def test_out_keeps_an_unreadable_report(env, monkeypatch, capsys):
+    out = env["tmp"] / "out"
+
+    def bad(_):
+        raise cli.ReportError("not a number in report: 'n/a'")
+
+    monkeypatch.setattr(cli, "parse_single_html", bad)
+    assert bt(env, "--out", str(out)) == 2
+    htm = list(out.glob("*.htm"))
+    assert len(htm) == 1 and f"report: {htm[0]}" in capsys.readouterr().err
+
+
+def test_out_keeps_the_back_report_when_the_forward_one_is_missing(env, capsys):
+    out = env["tmp"] / "out"
+    original = cli.run_supervised
+
+    def no_forward(cmdline, **kw):
+        rc = original(cmdline, **kw)
+        for f in env["tester"].glob("reports/*.forward.xml"):
+            f.unlink()
+        return rc
+
+    cli.run_supervised = no_forward
+    try:
+        assert bt(env, "--optimize", "full", "--set", write_set(env, OPT_SET), "--out", str(out)) == 2
+    finally:
+        cli.run_supervised = original
+    xml = [p for p in out.glob("*.xml") if not p.name.endswith(".forward.xml")]
+    assert len(xml) == 1 and f"report: {xml[0]}" in capsys.readouterr().err

@@ -95,8 +95,9 @@ Report labels must be in English: with another terminal language a run exits
    Prints a `settings:` line (symbol, period, dates, model, deposit,
    leverage), then `net_profit` (in the deposit currency), `profit_factor`,
    `max_drawdown_pct`, `trades`, `win_rate_pct`, `sharpe`, ... one
-   `key: value` per line, then `report:`. Quote the settings with the numbers.
-   Use the broker's real symbol name (check with the MCP `get_symbols` tool).
+   `key: value` per line, then `json:` and `report:`. Quote the settings with
+   the numbers. Use the broker's real symbol name (check with the MCP
+   `get_symbols` tool).
 3. Inputs go in an MT5 `.set` file (`--set file.set`): `Name=value` per
    line. To optimise an input use `Name=value||start||step||stop||Y`, e.g.
    `MovingPeriod=12||6||2||30||Y`, then add `--optimize full` (every
@@ -108,6 +109,26 @@ Report labels must be in English: with another terminal language a run exits
    columns: a pass that only shines in the back period is overfit.
    `--forward 1/2|1/4|YYYY-MM-DD` moves the split, `--forward off` disables it.
 
+The `json:` file (or `--json`, which prints it instead of the summary) holds
+everything about the run. Read it rather than the summary when you need to
+check where the result came from:
+- `settings` and `metrics`: as in the summary, plus the inputs used.
+- `deals`: every deal (time, type, in/out, volume, price, commission, swap,
+  profit, balance, comment). `sl`/`tp` are the stops set when the position
+  opened; later changes are not in the report. A closing deal's comment says
+  why it closed (`sl 1.15863`, `tp 1.15770`, `end of test`).
+- `balance` and `drawdowns`: the balance after each deal, and drawdown periods
+  (peak, lowest point, recovery or `null`, depth, days), deepest first.
+  These are closed-trade drawdowns; `metrics.max_drawdown_pct` is MT5's
+  equity figure and includes open trades.
+- `costs`: total commission and swap.
+- `journal`: this run's tester log: `started`, `crashed`, `errors`, and
+  `ea_lines` (the EA's own `Print` output). Read it whenever `trades` is 0 or
+  a result looks wrong.
+Times are the broker's time as the report prints it, not UTC.
+`mt5-mcp backtest --read <report.htm|.xml>` prints the JSON for an old report
+(no journal) and writes nothing.
+
 Where the EA and its compiled files come from:
 - An EA inside the live `MQL5\Experts` tree runs from its own folder in the
   tester, so a library kept next to it (`#import "MyLib.ex5"`) loads there too.
@@ -115,9 +136,8 @@ Where the EA and its compiled files come from:
 - Before each run the tester's compiled Experts, Indicators and Libraries are
   synced from the live terminal, and any `.ex5` there with no live original is
   deleted. Don't put files into the tester copy by hand; build them live.
-- The EA's `Print` output and init errors are not in the summary. They are in
-  the tester folder under `Tester\Agent-*\logs\`. Read them when `trades: 0`
-  or a run looks wrong.
+- When `trades` is 0 or the log has errors, the summary adds a `journal:`
+  block with the EA's last log lines; the full set is in the JSON.
 - Reports stay in the tester folder's `reports\` and are never pruned.
 
 `--model ohlc` (default, 1-minute OHLC) is fast enough to iterate; confirm a
@@ -131,10 +151,13 @@ If the terminal exits cleanly without writing a report (seen on the first
 run that downloads a symbol's history), the run is retried once and says so on
 stderr.
 
-Exit codes: `0` finished (zero trades is still `0`: read `trades`), `2` could
-not run. A `2` prints why, often with the tester's log tail: not set up, MT5
-updated (re-run `--setup`), another backtest running, timeout, no report
-written, or an input in your `.set` the EA does not have (MT5 silently
+Exit codes: `0` finished (zero trades is still `0`: read `trades` and the
+`journal:` block), `2` could not run or the EA failed. A `2` prints why, often
+with the tester's log: not set up, MT5 updated (re-run `--setup`), another
+backtest running, timeout, no report written, `EA failed to start` (`OnInit`
+returned an error), `EA hit a runtime error` (for example array out of range;
+the numbers only cover the part before the crash), or an input in your `.set`
+the EA does not have (MT5 silently
 ignores unknown names, so the run is refused instead). Optimisation reports
 list only the `||Y` inputs, so there the fixed inputs cannot be checked: a
 `note:` on stderr names them. Double-check their spelling.

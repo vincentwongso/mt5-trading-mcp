@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **Backtest JSON** - every `mt5-mcp backtest` run writes `<report>.json` (settings, metrics, every deal with its opening SL/TP, balance curve, drawdown periods, commission and swap, and that run's tester log) and prints `json: <path>`; `--json` prints it instead of the summary.
+- **`mt5-mcp backtest --read <report>`** - prints the JSON for an existing `.htm` or `.xml` report without running anything.
+
+### Changed
+- **EA failed to start or crashed** - a single run whose `OnInit` failed or that hit a runtime error now exits 2 with the log lines, instead of exit 0 and `trades: 0`. Zero-trade runs show the EA's own log lines.
+
 ## [1.8.1] - 2026-11-20
 
 ### Fixed

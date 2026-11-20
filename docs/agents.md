@@ -65,5 +65,8 @@ over ssh it also worked in testing (including the 1.8.0 end-to-end run), but
 that is best effort. The tester copy is logged into the user's own account,
 possibly real money, with algo trading switched off for every run; the
 terminal language must be English. The EA's `Print` output lands in the tester
-folder under `Tester\Agent-*\logs\`, not in the summary. A good backtest
+folder under `Tester\Agent-*\logs\`; each run also writes a JSON file
+(printed as `json:`, or to stdout with `--json`) with every deal, the balance
+curve, drawdown periods and that run's log lines. A single run whose EA fails
+to start or crashes exits `2`. A good backtest
 is never a reason to attach the EA live: report it to the human.

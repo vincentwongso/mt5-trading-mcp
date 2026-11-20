@@ -106,13 +106,25 @@ agent at `http://127.0.0.1:8765/mcp`. Wire it to OpenClaw in one command:
 openclaw mcp set mt5-mcp '{"url":"http://127.0.0.1:8765/mcp","transport":"streamable-http"}'
 ```
 
-Known issue: fresh installs. The current MT5 installer's terminal refuses to
-start under Wine ("A debugger has been found running", or a silent exit).
-Recovery: copy a working `terminal64.exe` (build 6230, 28 Sep 2026) into
-`/config/.wine/drive_c/Program Files/MetaTrader 5/` with `docker cp` (runs as
-root; the boot script makes the binary read-only, so a copy as `abc` fails),
-or `rm -f` the old file first. Then `chown abc:abc` it and restart the
-container.
+The image runs Wine 11.10 staging, which runs current MT5 builds (Wine 10 could
+not run builds newer than 28 Sep 2026). The terminal is no longer pinned, so
+MT5's LiveUpdate keeps it current. To build and backtest EAs on Linux, use the
+backtest container in `deploy/docker-compose.backtest.yml` (see
+[docs/agents.md](docs/agents.md)).
+
+Known issue: fresh volumes. A new terminal does not know your broker's server,
+and its Login dialog can draw as a black box under Wine, so it never logs in
+(the MCP server then reports IPC timeouts). Workaround, once per volume:
+1. Copy `servers.dat` (server addresses only) from a terminal that knows the
+   broker, e.g. a Windows install's `%APPDATA%\MetaQuotes\Terminal\<id>\config\`,
+   into `/config/.wine/drive_c/Program Files/MetaTrader 5/Config/` (owner `abc`).
+2. Log in with a one-off start config: stop the terminal and run
+   `terminal64.exe "/config:C:\autologin.ini"` as `abc`, where the ini has
+   `[Common]` `Login=`, `Password=`, `Server=` and `KeepPrivate=1`. Delete the
+   ini once the journal says `authorized`.
+3. So the login survives restarts, add `Login=` and `Server=` (no password)
+   under `[Common]` in `Config/common.ini` (UTF-16) while the terminal is
+   stopped.
 
 Full walkthrough:
 **[docs/installation.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/docs/installation.md)**.
@@ -155,14 +167,16 @@ the errors and reruns until it exits 0. Clean builds install to
 `MQL5\<Kind>\Agent\` in the terminal's data folder; you attach them
 yourself. Reinstalling an EA that is attached to a live chart reloads the new
 code on that chart. Agents get the loop from the `mt5-mql5-build` skill.
-Exit codes: `0` built, `1` compile errors, `2` could not run. Under
-Wine/Docker MetaEditor currently hangs, so this is Windows only for now.
+Exit codes: `0` built, `1` compile errors, `2` could not run. On Linux both
+commands run in the backtest container (`deploy/docker-compose.backtest.yml`)
+via `docker exec mt5-backtest mt5-mcp ...`.
 
 `mt5-mcp backtest <ea.ex5>` then runs the Strategy Tester on that build
 (single run, or `--optimize full|genetic` with a forward test on by default)
 and prints a short summary or a ranked table of input sets. It runs on a
 separate copy of MT5 made once with `mt5-mcp backtest --setup`, so your live
-terminal is never touched. Windows only, from a logged-in desktop session.
+terminal is never touched. Windows (from a logged-in desktop session) or the
+Linux backtest container.
 
 ## For AI agents
 

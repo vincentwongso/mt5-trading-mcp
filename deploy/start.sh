@@ -25,6 +25,7 @@
 #                           when the pin (MT5_MCP_VERSION or the image's) differs
 #   6. config.toml (first boot only) + socat bridge +
 #      `mt5_mcp serve --transport http`  (NEW)
+#                           (server + bridge skipped when MT5_MCP_SERVE=0)
 #
 # Credentials (MT5_LOGIN / MT5_PASSWORD / MT5_SERVER) are read by mt5-mcp from
 # the environment (see config.py / server.py). Two ways the terminal ends up
@@ -101,6 +102,8 @@ write_cfg() {
         mkdir -p "$(dirname "$cfg")" || exit 1
         {
             printf '[screenshot]\ntemplate = "agent_light.tpl"\n'
+            # Explicit, so the server never attaches to a backtest's tester terminal.
+            printf '\n[mt5]\nterminal_path = %s\n' "'C:\Program Files\MetaTrader 5\terminal64.exe'"
             if [ -n "${MT5_MCP_AUTH_TOKEN:-}" ]; then
                 printf '\n[transport.http]\nauth_token = "%s"\n' "$MT5_MCP_AUTH_TOKEN"
             fi
@@ -184,8 +187,8 @@ if [ -e "$mt5file" ]; then
     else
         log "WARNING: could not write startup.ini"
     fi
-    # LiveUpdate must not replace it: builds newer than 28 Sep do not start under Wine.
-    chmod a-w "$mt5file"
+    # Older images pinned it read-only; LiveUpdate must be able to replace it.
+    chmod u+w "$mt5file"
     log "terminal64.exe sha256 $(sha256sum "$mt5file" | cut -c1-8)"
     log "[3/6] Starting the MetaTrader 5 terminal supervisor..."
     while true; do
@@ -243,7 +246,12 @@ elif [ -e "$cfg" ]; then
     [ -n "${MT5_MCP_AUTH_TOKEN:-}" ] && log "WARNING: MT5_MCP_AUTH_TOKEN ignored because config.toml is present"
 fi
 
-if [ "$token_ok" = 1 ]; then
+# MT5_MCP_SERVE=0 (the backtest container): no server, no bridge. The CLI is
+# all it needs, and an unauthenticated server there could trade the account.
+serve=1
+[ "${MT5_MCP_SERVE:-1}" = 0 ] && serve=0
+
+if [ "$token_ok" = 1 ] && [ "$serve" = 1 ]; then
     container_ip="$(hostname -i 2>/dev/null | awk '{print $1}')"
     if [ -n "$container_ip" ] && [ "$container_ip" != "$mcp_host" ]; then
         log "[6/6] Bridging ${container_ip}:${mcp_port} -> ${mcp_host}:${mcp_port} (socat)"
@@ -270,9 +278,20 @@ if [ "$token_ok" = 1 ]; then
     done &
 fi
 
+if [ "$token_ok" = 1 ] && [ "$serve" = 0 ]; then
+    # The serve loop is what retries a failed or outdated install; without it the
+    # CLI (`docker exec ... mt5-mcp`) would stay missing until a restart.
+    while mt5_mcp_needs_install; do
+        sleep "$install_retry_secs"
+        install_mt5_mcp retry
+    done &
+fi
+
 # Match gmag11's pattern: the autostart script returns, leaving the terminal
 # supervisor, socat, and the serve supervisor running under the desktop session.
-if [ "$token_ok" = 1 ]; then
+if [ "$serve" = 0 ]; then
+    log "Bootstrap complete; terminal running, mt5-mcp server off (MT5_MCP_SERVE=0); CLI via mt5-mcp."
+elif [ "$token_ok" = 1 ]; then
     log "Bootstrap complete; terminal + mt5-mcp running. VNC web UI for one-time login."
 else
     log "Bootstrap complete; terminal running, mt5-mcp NOT started (invalid MT5_MCP_AUTH_TOKEN)."

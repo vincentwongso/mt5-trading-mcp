@@ -28,6 +28,7 @@ from mt5_mcp.mql5.compiler import (
     read_source,
     run_metaeditor,
 )
+from mt5_mcp.mql5.hostpath import host_paths
 from mt5_mcp.mql5.terminal import LocateError, locate_terminal
 
 _EPILOG = (
@@ -55,7 +56,7 @@ def _seconds(value: str) -> float:
 
 
 def _fail(msg: str) -> int:
-    print(msg, file=sys.stderr)
+    print(host_paths(msg), file=sys.stderr)
     return 2
 
 
@@ -98,13 +99,13 @@ def _main(argv: list[str]) -> int:
         )
     except (LocateError, ValueError, OSError) as exc:
         return _fail(str(exc))
-    print(f"data folder: {paths.data_dir}", file=sys.stderr)
+    print(host_paths(f"data folder: {paths.data_dir}"), file=sys.stderr)
 
     mql5 = paths.data_dir / "MQL5"
     previous = built_ex5(source, mql5, since=0)
     if previous is not None and any(previous.is_relative_to(mql5 / f) for f in KIND_FOLDERS.values()):
         # Announced before MetaEditor runs: it overwrites in place.
-        print(f"replacing existing: {previous}", file=sys.stderr)
+        print(host_paths(f"replacing existing: {previous}"), file=sys.stderr)
     started = time.time()
     tmp = Path(tempfile.mkdtemp(prefix="mt5-compile-"))
     try:
@@ -124,7 +125,7 @@ def _main(argv: list[str]) -> int:
         return _fail(f"MetaEditor log has no Result line:\n{tail}")
     cwd = Path.cwd()
     for d in log.diagnostics:
-        print(format_diagnostic(d, cwd))
+        print(host_paths(format_diagnostic(d, cwd)))
     print(f"Result: {_plural(log.errors, 'error')}, {_plural(log.warnings or 0, 'warning')}")
     if log.errors:
         return 1
@@ -136,16 +137,16 @@ def _main(argv: list[str]) -> int:
         return 0
     # Already inside a kind folder (source lives there, or a Shared Project).
     if any(ex5.is_relative_to(mql5 / f) for f in KIND_FOLDERS.values()):
-        print(f"installed: {ex5}")
+        print(host_paths(f"installed: {ex5}"))
         return 0
     kind = KIND_FOLDERS[args.kind] if args.kind else detect_kind(read_source(source))
     target = install_target(paths.data_dir, kind, source.stem)
     if target.exists():
-        print(f"replacing existing: {target}", file=sys.stderr)
+        print(host_paths(f"replacing existing: {target}"), file=sys.stderr)
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ex5, target)
     except OSError as exc:
         return _fail(f"install failed: {exc}")
-    print(f"installed: {target}")
+    print(host_paths(f"installed: {target}"))
     return 0

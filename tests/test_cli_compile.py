@@ -275,3 +275,9 @@ def test_non_positive_or_non_finite_timeout_rejected(env, bad):
         run(env, "clean_ea.mq5", "--timeout", bad)
     assert exc.value.code == 2
     assert env["cmdlines"] == []
+
+
+def test_fail_prints_host_paths(capsys, monkeypatch):
+    monkeypatch.setenv("MT5_MCP_HOST_PATHS", "1")
+    assert cli._fail(r"x Z:\a\b") == 2
+    assert capsys.readouterr().err == "x /a/b\n"

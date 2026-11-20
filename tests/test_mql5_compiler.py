@@ -306,3 +306,11 @@ def test_run_kills_real_slow_child_on_timeout():
     with pytest.raises(CompileTimeout):
         run_metaeditor("cmd", timeout_s=0.5, popen=popen)
     assert procs[0].poll() is not None
+
+
+def test_diagnostic_from_drive_root_keeps_full_path():
+    # docker exec runs from / (Z:\ under Wine); a root-relative path loses its drive and its host meaning.
+    root = Path(Path.cwd().anchor)
+    full = str(root / "w" / "src" / "a.mq5")
+    d = Diagnostic(path=full, line=1, col=2, severity="error", code=157, message="m")
+    assert format_diagnostic(d, root) == f"{full}:1:2: error 157: m"

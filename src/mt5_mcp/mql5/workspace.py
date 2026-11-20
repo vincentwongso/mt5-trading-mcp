@@ -12,7 +12,8 @@ import json
 import os
 import shutil
 import subprocess
-from collections.abc import Iterator
+import time
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -87,10 +88,22 @@ def is_set_up(tester: Path) -> bool:
     return all((tester / p).is_file() for p in ("terminal64.exe", "Config/accounts.dat", _ORIGIN))
 
 
+_TESTER_BINARIES = ("terminal64.exe", "metatester64.exe")
+
+
 def build_matches(install: Path, tester: Path) -> bool:
-    # copy2 keeps the mtime, so any LiveUpdate on either side shows up here.
-    a, b = (install / "terminal64.exe").stat(), (tester / "terminal64.exe").stat()
-    return (a.st_size, a.st_mtime_ns) == (b.st_size, b.st_mtime_ns)
+    # copy2 keeps the mtime, so any LiveUpdate on either side shows up here. The agent binary
+    # counts too: LiveUpdate can move it while the terminal stays (seen with a pinned terminal).
+    for name in _TESTER_BINARIES:
+        if not (install / name).exists() and name != "terminal64.exe":
+            continue
+        try:
+            a, b = (install / name).stat(), (tester / name).stat()
+        except FileNotFoundError:
+            return False
+        if (a.st_size, a.st_mtime_ns) != (b.st_size, b.st_mtime_ns):
+            return False
+    return True
 
 
 def stage_ea(ex5: Path, tester: Path) -> str:
@@ -139,25 +152,36 @@ def new_report_name(stem: str, now: datetime) -> str:
 
 
 @contextmanager
-def tester_lock(tester: Path) -> Iterator[None]:
+def tester_lock(tester: Path, *, wait: bool = False, on_wait: Callable[[], None] | None = None) -> Iterator[None]:
     tester.mkdir(parents=True, exist_ok=True)
     f = open(tester / ".backtest.lock", "a+b")
     try:
-        try:
-            if os.name == "nt":
-                import msvcrt
-
-                f.seek(0)
-                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            raise LockHeld("another backtest is running") from None
+        while True:
+            try:
+                _try_lock(f)
+                break
+            except OSError:
+                if not wait:
+                    raise LockHeld("another backtest is running") from None
+                if on_wait:
+                    on_wait()
+                    on_wait = None  # announce once
+                time.sleep(1.0)  # poll: msvcrt's blocking mode gives up after 10s
         yield  # the OS drops the lock when the file closes or the process dies
     finally:
         f.close()
+
+
+def _try_lock(f) -> None:  # noqa: ANN001
+    if os.name == "nt":
+        import msvcrt
+
+        f.seek(0)
+        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
 def _newest(folder: Path) -> Path | None:

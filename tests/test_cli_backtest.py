@@ -6,6 +6,8 @@ import json
 import os
 import re
 import shutil
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -79,7 +81,7 @@ def setup(env, *extra):
 def bt(env, *extra, setup_first=True):
     if setup_first and not (env["tester"] / "origin.json").exists():
         assert setup(env) == 0
-    base = [str(env["ea"]), "--symbol", "EURUSD.z", "--period", "H1", "--from", "2026-10-01",
+    base = [str(env["ea"]), "--symbol", "EURUSD", "--period", "H1", "--from", "2026-10-01",
             "--to", "2026-11-01", "--tester-path", str(env["tester"]), "--config", str(env["cfg"])]
     return cli.main([*base, *extra])
 
@@ -106,7 +108,7 @@ def test_optimize_prints_table_ranked_by_forward_exit0(env, capsys):
     capsys.readouterr()
     assert bt(env, "--optimize", "full", "--set", s, "--top", "3") == 0
     lines = capsys.readouterr().out.splitlines()
-    assert lines[0] == ("settings: EURUSD.z H1 2026-10-01..2026-11-01 model=ohlc deposit=10000 USD "
+    assert lines[0] == ("settings: EURUSD H1 2026-10-01..2026-11-01 model=ohlc deposit=10000 USD "
                         "leverage=1:100 optimize=full criterion=balance forward=1/3")
     assert lines[1].split()[:3] == ["rank", "pass", "fwd_result"]
     assert lines[2].split()[:2] == ["1", "68"]
@@ -145,13 +147,42 @@ def test_not_set_up_exit2(env, capsys):
     assert "--setup" in capsys.readouterr().err
 
 
-def test_build_mismatch_exit2(env, capsys):
-    setup(env)
+def _touch_live(env):
     exe = env["install"] / "terminal64.exe"
     st = exe.stat()
     os.utime(exe, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+
+
+def test_build_mismatch_refreshes_and_runs(env, capsys):
+    setup(env)
+    _touch_live(env)
+    assert bt(env) == 0
+    assert "MT5 was updated; refreshed the tester install" in capsys.readouterr().err
+    assert ws.build_matches(env["install"], env["tester"])
+
+
+def test_refresh_failure_exit2_with_hint(env, monkeypatch, capsys):
+    setup(env)
+    _touch_live(env)
+
+    def boom(*a):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(cli, "setup_tester", boom)
     assert bt(env) == 2
-    assert "re-run mt5-mcp backtest --setup" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "disk full" in err and "re-run mt5-mcp backtest --setup" in err
+
+
+def test_refresh_happens_after_waiting_for_the_lock(env, capsys):
+    setup(env)
+    _touch_live(env)
+    t = threading.Thread(target=_hold, args=(env["tester"], 1.0))
+    t.start()
+    time.sleep(0.2)
+    assert bt(env, "--wait") == 0
+    t.join()
+    assert "refreshed the tester install" in capsys.readouterr().err
 
 
 def test_lock_held_exit2(env, capsys):
@@ -331,7 +362,7 @@ def test_single_run_summary_starts_with_settings(env, capsys):
     capsys.readouterr()
     assert bt(env, "--deposit", "2500.5", "--currency", "EUR", "--leverage", "30") == 0
     first = capsys.readouterr().out.splitlines()[0]
-    assert first == "settings: EURUSD.z H1 2026-10-01..2026-11-01 model=ohlc deposit=2500.5 EUR leverage=1:30"
+    assert first == "settings: EURUSD H1 2026-10-01..2026-11-01 model=ohlc deposit=2500.5 EUR leverage=1:30"
 
 
 def test_settings_deposit_matches_the_ini(env, capsys):
@@ -348,7 +379,7 @@ def test_single_run_writes_json_and_prints_path(env, capsys):
     out = capsys.readouterr().out
     path = Path(re.search(r"^json: (.+)$", out, re.M)[1])
     doc = json.loads(path.read_text(encoding="utf-8"))
-    assert doc["kind"] == "single" and doc["settings"]["symbol"] == "EURUSD.z" and doc["journal"]["started"] is True
+    assert doc["kind"] == "single" and doc["settings"]["symbol"] == "EURUSD" and doc["journal"]["started"] is True
     assert doc["settings"]["deposit"] == 10000.0 and doc["settings"]["leverage"] == 100
     assert path.parent == env["tester"] / "reports" and path.name.endswith("Z-MyEA.json")
     assert out.index("json: ") < out.index("report: ")
@@ -474,3 +505,163 @@ def test_failed_run_text_mode_names_json_and_report(env, capsys):
     cap = capsys.readouterr()
     assert cap.out == ""
     assert re.search(r"^json: .+Z-MyEA\.json$", cap.err, re.M) and re.search(r"^report: .+Z-MyEA\.htm$", cap.err, re.M)
+
+
+OPT_SET = "MaximumRisk=0.02\nDecreaseFactor=3\nMovingPeriod=12||6||2||30||Y\nMovingShift=6||0||2||10||Y\n"
+
+
+def test_out_copies_report_and_json(env, capsys):
+    out = env["tmp"] / "out"
+    assert bt(env, "--out", str(out)) == 0
+    htm, js = list(out.glob("*.htm")), list(out.glob("*.json"))
+    assert len(htm) == 1 and len(js) == 1
+    assert json.loads(js[0].read_text(encoding="utf-8"))["report"] == str(htm[0])
+    text = capsys.readouterr().out
+    assert f"json: {js[0]}" in text and f"report: {htm[0]}" in text
+
+
+def test_out_optimization_copies_back_and_forward(env):
+    out = env["tmp"] / "out"
+    assert bt(env, "--optimize", "full", "--set", write_set(env, OPT_SET), "--out", str(out)) == 0
+    names = sorted(p.name for p in out.iterdir())
+    assert [n.endswith(".forward.xml") for n in names].count(True) == 1
+    assert [n.endswith(".xml") for n in names].count(True) == 2 and any(n.endswith(".json") for n in names)
+
+
+def test_out_failed_start_still_delivers_named_files(env, capsys):
+    env["single"], env["journal"] = "single_failinit.htm", "failinit.log"
+    out = env["tmp"] / "out"
+    assert bt(env, "--out", str(out)) == 2
+    named = [ln.split(": ", 1)[1] for ln in capsys.readouterr().err.splitlines() if ln.startswith(("json: ", "report: "))]
+    assert len(named) == 2 and all(Path(p).is_file() and Path(p).parent == out for p in named)
+
+
+def test_out_no_report_copies_nothing(env):
+    env["write"] = False
+    out = env["tmp"] / "out"
+    assert bt(env, "--out", str(out)) == 2
+    assert not out.exists() or not any(out.iterdir())
+
+
+@pytest.mark.parametrize("extra", [["--setup"], ["--read", "x.htm"]])
+def test_out_with_setup_or_read_is_usage_error(env, extra):
+    with pytest.raises(SystemExit) as e:
+        cli.main([*extra, "--out", str(env["tmp"] / "o"), "--tester-path", str(env["tester"])])
+    assert e.value.code == 2
+
+
+def _hold(tester, secs):
+    with ws.tester_lock(tester):
+        time.sleep(secs)
+
+
+def test_wait_runs_after_lock_released_exit0(env, capsys):
+    setup(env)
+    t = threading.Thread(target=_hold, args=(env["tester"], 1.5))
+    t.start()
+    time.sleep(0.2)
+    assert bt(env, "--wait") == 0
+    t.join()
+    assert capsys.readouterr().err.count("waiting for another backtest to finish...") == 1
+
+
+def test_optimization_clears_mt5_cache_before_run(env):
+    # An identical re-run is served from Tester/cache without a forward report (seen 2026-11-20).
+    setup(env)
+    cache = env["tester"] / "Tester" / "cache"
+    cache.mkdir(parents=True)
+    (cache / "EA.EURUSD.H1.1.2.10.ABC.opt").write_bytes(b"cached")
+    (cache / "EA.EURUSD.H1.1_2.1.DEF.tst").write_bytes(b"single")
+    assert bt(env, "--optimize", "full", "--set", write_set(env, OPT_SET)) == 0
+    assert not any(cache.glob("*.opt")) and any(cache.glob("*.tst"))
+
+
+def test_unreadable_report_shows_the_journal_errors(env, monkeypatch, capsys):
+    # A real-ticks run without history writes 'n/a' cells; the reason is in the tester log.
+    env["journal"] = "failinit.log"
+
+    def bad(_):
+        raise cli.ReportError("not a number in report: 'n/a'")
+
+    monkeypatch.setattr(cli, "parse_single_html", bad)
+    assert bt(env) == 2
+    err = capsys.readouterr().err
+    assert "not a number in report: 'n/a'" in err and "tester stopped because OnInit" in err
+
+
+def test_out_unusable_dir_fails_before_the_run(env, capsys):
+    setup(env)
+    not_a_dir = env["tmp"] / "file"
+    not_a_dir.write_text("x")
+    assert bt(env, "--out", str(not_a_dir)) == 2
+    assert env["calls"] == []  # the terminal never started
+
+
+def test_wait_through_an_automatic_refresh_sees_the_setup(env):
+    # A refresh deletes origin.json while it copies; a queued run must check after the lock, not before.
+    setup(env)
+    origin = env["tester"] / "origin.json"
+    saved = origin.read_bytes()
+    locked = threading.Event()
+
+    def refresh():
+        with ws.tester_lock(env["tester"]):
+            origin.unlink()
+            locked.set()
+            time.sleep(1.0)
+            origin.write_bytes(saved)
+
+    t = threading.Thread(target=refresh)
+    t.start()
+    locked.wait()
+    assert bt(env, "--wait", setup_first=False) == 0
+    t.join()
+
+
+def test_out_into_the_testers_own_reports_folder(env, capsys):
+    setup(env)
+    reports = env["tester"] / "reports"
+    assert bt(env, "--out", str(reports)) == 0
+    assert any(reports.glob("*.json")) and "json: " in capsys.readouterr().out
+
+
+def test_out_keeps_an_unreadable_report(env, monkeypatch, capsys):
+    out = env["tmp"] / "out"
+
+    def bad(_):
+        raise cli.ReportError("not a number in report: 'n/a'")
+
+    monkeypatch.setattr(cli, "parse_single_html", bad)
+    assert bt(env, "--out", str(out)) == 2
+    htm = list(out.glob("*.htm"))
+    assert len(htm) == 1 and f"report: {htm[0]}" in capsys.readouterr().err
+
+
+def test_out_keeps_the_back_report_when_the_forward_one_is_missing(env, capsys):
+    out = env["tmp"] / "out"
+    original = cli.run_supervised
+
+    def no_forward(cmdline, **kw):
+        rc = original(cmdline, **kw)
+        for f in env["tester"].glob("reports/*.forward.xml"):
+            f.unlink()
+        return rc
+
+    cli.run_supervised = no_forward
+    try:
+        assert bt(env, "--optimize", "full", "--set", write_set(env, OPT_SET), "--out", str(out)) == 2
+    finally:
+        cli.run_supervised = original
+    xml = [p for p in out.glob("*.xml") if not p.name.endswith(".forward.xml")]
+    assert len(xml) == 1 and f"report: {xml[0]}" in capsys.readouterr().err
+
+
+def test_tester_agent_update_alone_triggers_a_refresh(env, capsys):
+    # LiveUpdate can move metatester64.exe while terminal64.exe stays (the old Wine pin did exactly this).
+    agent = env["install"] / "metatester64.exe"
+    agent.write_bytes(b"agent v1")
+    setup(env)
+    agent.write_bytes(b"agent v2, newer build")
+    assert bt(env) == 0
+    assert "MT5 was updated; refreshed the tester install" in capsys.readouterr().err
+    assert (env["tester"] / "metatester64.exe").read_bytes() == b"agent v2, newer build"

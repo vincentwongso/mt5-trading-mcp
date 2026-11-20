@@ -100,7 +100,7 @@ it. The commands above use it as-is; add `--build` only when you've modified
 `deploy/` locally and want Compose to rebuild the image instead.
 
 > **Symbol names are broker-specific.** Some brokers suffix instruments - e.g.
-> `EURUSD.z`, `XAUUSD.z` (crypto such as `BTCUSD` is often unsuffixed). Always
+> `EURUSD.m`, `XAUUSD.pro` (crypto such as `BTCUSD` is often unsuffixed). Always
 > use the exact name returned by `get_symbols`; a bare `EURUSD` may come back
 > `SYMBOL_NOT_FOUND`.
 

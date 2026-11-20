@@ -6,8 +6,8 @@ description: Use when the user wants to write, compile, or fix MQL5 code for Met
 # Building MQL5 with `mt5-mcp compile`
 
 Compile one `.mq5` file with the user's local MetaEditor and get errors you can
-act on. Windows only for now (it needs MetaEditor; under Wine/Docker MetaEditor
-currently hangs and the command times out). Then backtest it with
+act on. On Windows run it directly; on Linux run it inside our Docker image
+with `docker exec` (see "Running in Docker" below). Then backtest it with
 `mt5-mcp backtest` (below).
 
 ## The loop
@@ -81,7 +81,8 @@ login.
 Report labels must be in English: with another terminal language a run exits
 `2` saying so.
 
-1. Once per machine (and again after an MT5 update, when a run says so):
+1. Once per machine (after an MT5 update the next run refreshes the copy by
+   itself and says so on stderr):
    ```
    mt5-mcp backtest --setup
    ```
@@ -141,6 +142,11 @@ Where the EA and its compiled files come from:
 - When `trades` is 0 or the log has errors, the summary adds a `journal:`
   block with the EA's last log lines; the full set is in the JSON.
 - Reports stay in the tester folder's `reports\` and are never pruned.
+  `--out DIR` copies the report (`.htm`, or `.xml` plus `.forward.xml`) into
+  DIR and writes the JSON there instead; `json:` and `report:` then name the
+  copies. Also on exit `2` when a report was written.
+- `--wait` queues behind another backtest on the same tester instead of
+  exiting `2` ("another backtest is running"); it prints one waiting line.
 
 `--model ohlc` (default, 1-minute OHLC) is fast enough to iterate; confirm a
 final candidate with `--model real` (real ticks). A month of H1 takes seconds;
@@ -155,14 +161,36 @@ stderr.
 
 Exit codes: `0` finished (zero trades is still `0`: read `trades` and the
 `journal:` block), `2` could not run or the EA failed. A `2` prints why, often
-with the tester's log: not set up, MT5 updated (re-run `--setup`), another
-backtest running, timeout, no report written, `EA failed to start` (`OnInit`
+with the tester's log: not set up, refreshing the tester after an MT5 update
+failed (re-run `--setup`), another backtest running (use `--wait`), timeout,
+no report written, a report MT5 filled with `n/a` (the tester log lines under
+it say why, e.g. `no history data` for real ticks), `EA failed to start` (`OnInit`
 returned an error), `EA hit a runtime error` (for example array out of range;
 the numbers only cover the part before the crash), or an input in your `.set`
 the EA does not have (MT5 silently
 ignores unknown names, so the run is refused instead). Optimisation reports
 list only the `||Y` inputs, so there the fixed inputs cannot be checked: a
 `note:` on stderr names them. Double-check their spelling.
+
+## Running in Docker (Linux)
+
+Our headless image has a backtest-only container (`deploy/docker-compose.backtest.yml`,
+usually named `mt5-backtest`) with a shared work folder mounted at the same
+path on the host and in the container. Use host paths only; output paths come
+back as host paths and files are owned by the host user:
+```
+docker exec mt5-backtest mt5-mcp compile /home/me/mt5-work/src/MyEA.mq5 --no-install
+docker exec mt5-backtest mt5-mcp backtest /home/me/mt5-work/src/MyEA.ex5 --symbol EURUSD \
+    --period H1 --from 2026-01-01 --to 2026-11-01 --out /home/me/mt5-work/out --json
+```
+Exit codes are the same as on Windows. `--setup` is run once by whoever set up
+the container. For runs longer than your tool timeout, start it in the
+background and wait for the exit file (`-u abc` makes the files yours):
+```
+docker exec -d -u abc mt5-backtest sh -c 'mt5-mcp backtest ... --out DIR --json > DIR/run.json 2> DIR/run.err; echo $? > DIR/run.exit'
+```
+Paths inside the container (`C:\users\abc\...`, `C:\Program Files\...`) are
+not on the host; use `--out` to get files out.
 
 ## Safety rules
 

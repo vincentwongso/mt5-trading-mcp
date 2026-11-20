@@ -1,0 +1,52 @@
+# Backtest-only container: `mt5-mcp compile` and `mt5-mcp backtest` for an
+# agent on this host, kept apart from the live MCP container so optimisation
+# agents never slow its quotes and screenshots.
+#
+#   cp deploy/.env.backtest.example deploy/.env.backtest   # fill it in
+#   docker compose -f deploy/docker-compose.backtest.yml --env-file deploy/.env.backtest up -d
+#   # first boot installs MT5 + Wine-Python (a few minutes). Log the terminal in
+#   # once (VNC at http://127.0.0.1:${VNC_PORT}, or the README's fresh-volume
+#   # steps); the env credentials alone do not log in here (no MCP server). Then:
+#   docker exec mt5-backtest mt5-mcp backtest --setup
+#   docker exec mt5-backtest mt5-mcp backtest "$MT5_WORK_DIR/src/MyEA.ex5" --symbol EURUSD \
+#       --period H1 --from 2026-01-01 --to 2026-06-01 --out "$MT5_WORK_DIR/out" --json
+#
+# MT5_WORK_DIR is mounted at the same path inside the container, so host paths
+# work as arguments and come back in the output. PUID/PGID make the files there
+# yours; they only take effect on a fresh volume (an existing one would need a
+# recursive chown).
+# Own project name: sharing "deploy" with docker-compose.yml makes compose call the live
+# container an orphan and suggest --remove-orphans, which would delete it.
+name: mt5-backtest
+
+services:
+  mt5-backtest:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: ghcr.io/vincentwongso/mt5-trading-mcp:headless
+    container_name: mt5-backtest
+    ports:
+      - "127.0.0.1:${VNC_PORT:-3006}:3000"   # KasmVNC web UI - one-time broker login; no MCP port
+    environment:
+      # No MCP server here: backtests only need the CLI.
+      - MT5_MCP_SERVE=0
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - MT5_LOGIN=${MT5_LOGIN:-}
+      - MT5_PASSWORD=${MT5_PASSWORD:-}
+      - MT5_SERVER=${MT5_SERVER:-}
+      - MT5_EA_SYMBOL=${MT5_EA_SYMBOL:-EURUSD}
+      - MT5_MCP_VERSION=${MT5_MCP_VERSION:-}
+      - CUSTOM_USER=${VNC_USER:-mt5}
+      - PASSWORD=${VNC_PASSWORD:-change-me}
+    volumes:
+      - mt5-backtest-config:/config
+      - ${MT5_WORK_DIR:?set MT5_WORK_DIR in the env file}:${MT5_WORK_DIR}
+    # Leave cores for the live container; the tester starts one agent per core.
+    cpuset: "${BT_CPUSET:-0-11}"
+    restart: unless-stopped
+
+volumes:
+  mt5-backtest-config:
+    name: mt5-backtest-config  # fixed, so a project rename never orphans the logged-in volume

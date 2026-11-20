@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import tempfile
 from datetime import date, datetime, timezone
@@ -19,6 +20,7 @@ from pathlib import Path
 from mt5_mcp.cli.compile import _fail, _program_files, _seconds
 from mt5_mcp.config import load_config
 from mt5_mcp.mql5.compiler import CompileTimeout, run_supervised
+from mt5_mcp.mql5.hostpath import host_paths
 from mt5_mcp.mql5.journal import journal_block, read_new, snapshot_logs, summarize
 from mt5_mcp.mql5.report import (
     ReportError,
@@ -116,6 +118,10 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--terminal-path", default=None, help="Live terminal64.exe or its folder. Overrides [mt5] terminal_path.")
     p.add_argument("--data-path", default=None, help="Live terminal data folder. Overrides [mt5] data_path.")
     p.add_argument("--config", default=None, help="Path to config TOML (default: per-OS user config dir).")
+    p.add_argument("--wait", action="store_true",
+                   help="If another backtest holds the tester, wait for it instead of exiting 2.")
+    p.add_argument("--out", default=None,
+                   help="Copy the report and write the JSON into this folder; printed paths name the copies.")
     p.add_argument("--json", action="store_true",
                    help="Print the run's JSON (settings, metrics, deals, balance, drawdowns, journal) instead of the summary.")
     p.add_argument("--read", metavar="REPORT", default=None,
@@ -162,6 +168,31 @@ def _read_report(path: Path) -> int:
     return 0
 
 
+def _unreadable(exc: ReportError, journal: dict | None, tester: Path, report: Path) -> int:
+    """A report MT5 filled with 'n/a' (e.g. no tick history): the reason is in the tester log."""
+    errors = (journal or {}).get("errors") or []
+    why = "\n".join(f"  error: {e}" for e in errors[:5]) if errors else log_tail(tester)
+    return _fail(f"{exc}\n{why}\nreport: {report}")
+
+
+def _announce_wait() -> None:
+    print("waiting for another backtest to finish...", file=sys.stderr)
+
+
+def _deliver(out_dir: Path | None, reports: list[Path]) -> list[Path]:
+    """Copy the reports into --out; the copies are what the caller is told about."""
+    if out_dir is None:
+        return reports
+    out_dir.mkdir(parents=True, exist_ok=True)
+    delivered = []
+    for r in reports:
+        dest = out_dir / r.name
+        if not (dest.exists() and dest.samefile(r)):  # --out may be the tester's own reports folder
+            shutil.copy2(r, dest)
+        delivered.append(dest)
+    return delivered
+
+
 def _with_lines(text: str, *extra: str | None) -> str:
     """Insert lines just before the final `report:` line."""
     lines = text.splitlines()
@@ -171,6 +202,9 @@ def _with_lines(text: str, *extra: str | None) -> str:
 def _main(argv: list[str]) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.out and (args.read or args.setup):
+        parser.error("--out goes with a run, not --setup or --read")
+    out_dir = Path(os.path.abspath(args.out)) if args.out else None
     if args.read:
         if args.ea or args.setup:
             parser.error("--read takes a report only, not an .ex5 or --setup")
@@ -181,10 +215,10 @@ def _main(argv: list[str]) -> int:
     if args.setup:
         paths = _locate(args, cfg)
         check_tester_path(tester, paths.install_dir, paths.data_dir)
-        with tester_lock(tester):
+        with tester_lock(tester, wait=args.wait, on_wait=_announce_wait):
             setup_tester(paths.install_dir, paths.data_dir, tester)
             write_origin(tester, paths.install_dir, paths.data_dir)
-        print(f"tester: {tester}")
+        print(host_paths(f"tester: {tester}"))
         if not cfg.mt5.terminal_path:
             # Probed: MetaTrader5.initialize() with no path attaches to a running tester terminal.
             print("warning: set [mt5] terminal_path, or the MCP server may attach to the tester "
@@ -204,11 +238,13 @@ def _main(argv: list[str]) -> int:
     if args.optimize and not (set_file and set_file.optimized):
         return _fail("nothing to optimise: mark inputs with ||Y in the .set (--set)")
 
-    if not is_set_up(tester):
-        return _fail(f"no tester install at {tester}: run mt5-mcp backtest --setup first")
+    if out_dir:
+        out_dir.mkdir(parents=True, exist_ok=True)  # an unusable --out must fail before a long run, not after
 
     ea = Path(os.path.abspath(args.ea))
-    with tester_lock(tester):  # held from the origin check on, so a --setup cannot swap it mid-run
+    with tester_lock(tester, wait=args.wait, on_wait=_announce_wait):  # held from the origin check on, so a --setup cannot swap it mid-run
+        if not is_set_up(tester):  # under the lock: a refresh removes origin.json while it copies
+            return _fail(f"no tester install at {tester}: run mt5-mcp backtest --setup first")
         install, data = read_origin(tester)  # no re-discovery: same tree setup copied from
         if args.terminal_path or args.data_path:
             # The tester keeps setup's logins, so other paths would mix two terminals.
@@ -217,7 +253,16 @@ def _main(argv: list[str]) -> int:
                 return _fail("--terminal-path/--data-path differ from the tester's setup; "
                              "re-run mt5-mcp backtest --setup with them")
         if not build_matches(install, tester):
-            return _fail("MT5 was updated; re-run mt5-mcp backtest --setup")
+            # LiveUpdate replaced the terminal; an unattended agent cannot be asked to re-run --setup.
+            try:
+                setup_tester(install, data, tester)
+                write_origin(tester, install, data)
+                if not build_matches(install, tester):
+                    raise WorkspaceError("the tester copy still differs from the live terminal")
+            except (OSError, WorkspaceError) as exc:
+                return _fail(f"MT5 was updated and refreshing the tester failed: {exc}; "
+                             "re-run mt5-mcp backtest --setup")
+            print("MT5 was updated; refreshed the tester install", file=sys.stderr)
         report = new_report_name(ea.stem, datetime.now(timezone.utc))
         (tester / "reports").mkdir(exist_ok=True)
         mirror_dependencies(data / "MQL5", tester / "MQL5")  # before staging: it deletes unknown .ex5s
@@ -237,6 +282,10 @@ def _main(argv: list[str]) -> int:
         base = tester / report.replace("\\", "/")
         # Success is this run's uniquely named report, never the exit code.
         out = base.with_name(base.name + (".xml" if args.optimize else ".htm"))
+        if args.optimize:
+            # An identical re-run is served from this cache and writes no forward report.
+            for cached in (tester / "Tester" / "cache").glob("*.opt"):
+                cached.unlink(missing_ok=True)
         before = snapshot_logs(tester)  # once, so a retried run's lines are kept too
         with tempfile.TemporaryDirectory(prefix="mt5-backtest-") as tmp:
             ini = Path(tmp) / "backtest.ini"
@@ -263,7 +312,7 @@ def _main(argv: list[str]) -> int:
     if not out.is_file():
         return _fail(f"no report written ({out}); the run failed:\n{log_tail(tester)}")
 
-    json_path = base.with_name(base.name + ".json")
+    json_path = (out_dir or base.parent) / (base.name + ".json")
 
     # Results are only comparable under the same settings, so every summary leads with them.
     settings = {"symbol": args.symbol, "period": args.period, "from": str(args.date_from), "to": str(args.date_to),
@@ -275,7 +324,11 @@ def _main(argv: list[str]) -> int:
         line += f" optimize={args.optimize} criterion={args.criterion} forward={args.forward}"
 
     if not args.optimize:
-        result = parse_single_html(out.read_bytes())
+        out = _deliver(out_dir, [out])[0]  # before parsing: an unreadable report is still the evidence
+        try:
+            result = parse_single_html(out.read_bytes())
+        except ReportError as exc:
+            return _unreadable(exc, journal, tester, out)
         doc = single_document(settings, result, journal, out)
         write_document(doc, json_path)
         if args.json:
@@ -298,16 +351,22 @@ def _main(argv: list[str]) -> int:
         if not args.json:
             show = block if result.metrics["trades"] == 0 or j["errors"] else None
             print(line)
-            print(_with_lines(format_single(result, out), show, f"json: {json_path}"))
+            print(host_paths(_with_lines(format_single(result, out), show, f"json: {json_path}")))
         return 0
 
-    back = parse_opt_xml(out.read_bytes())
-    forward = None
-    if args.forward != "off":
-        fwd = base.with_name(base.name + ".forward.xml")
-        if not fwd.is_file():
-            return _fail(f"no forward report written ({fwd}):\n{log_tail(tester)}")
-        forward = parse_opt_xml(fwd.read_bytes())
+    fwd = base.with_name(base.name + ".forward.xml")
+    want_fwd = args.forward != "off"
+    delivered = _deliver(out_dir, [out, fwd] if want_fwd and fwd.is_file() else [out])
+    out = delivered[0]
+    try:
+        back = parse_opt_xml(out.read_bytes())
+        forward = None
+        if want_fwd:
+            if len(delivered) < 2:
+                return _fail(f"no forward report written ({fwd.name}):\n{log_tail(tester)}\nreport: {out}")
+            forward = parse_opt_xml(delivered[1].read_bytes())
+    except ReportError as exc:
+        return _unreadable(exc, journal, tester, out)
     rows = merge_passes(back, forward)
     doc = optimization_document(settings, rows, journal, out)
     write_document(doc, json_path)
@@ -321,5 +380,5 @@ def _main(argv: list[str]) -> int:
         print(f"note: fixed inputs not checked in optimisation runs: {', '.join(set_file.fixed)}", file=sys.stderr)
     if not args.json:
         print(line)
-        print(_with_lines(format_table(rows, args.top, out), f"json: {json_path}"))
+        print(host_paths(_with_lines(format_table(rows, args.top, out), f"json: {json_path}")))
     return 0

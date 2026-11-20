@@ -34,6 +34,28 @@ RUN rm -f /etc/apt/sources.list.d/winehq*.sources /etc/apt/sources.list.d/winehq
 COPY deploy/start.sh /Metatrader/start.sh
 RUN chmod +x /Metatrader/start.sh
 
+# Wine 10 cannot run MT5 builds newer than 28 Sep 2026 (their anti-debug check
+# trips); WineHQ staging 11.10 runs the current build, MetaEditor and the tester
+# (probed 2026-11-20; MetaQuotes' own mt5linux.sh uses staging too). Pinned so a
+# rebuild cannot silently change Wine. Wine 10 is purged first: its i386
+# package owns files the new packages ship, which makes an in-place swap fail.
+ARG WINE_STAGING=11.10~bookworm-1
+RUN mkdir -pm755 /etc/apt/keyrings \
+    && curl -fsSL https://dl.winehq.org/wine-builds/winehq.key -o /etc/apt/keyrings/winehq-archive.key \
+    && curl -fsSL -o /etc/apt/sources.list.d/winehq-bookworm.sources \
+        https://dl.winehq.org/wine-builds/debian/dists/bookworm/winehq-bookworm.sources \
+    && apt-get update \
+    && dpkg --purge --force-depends winehq-stable wine-stable wine-stable-amd64 wine-stable-i386:i386 \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        "winehq-staging=${WINE_STAGING}" "wine-staging=${WINE_STAGING}" \
+        "wine-staging-amd64=${WINE_STAGING}" "wine-staging-i386:i386=${WINE_STAGING}" \
+    && rm -f /etc/apt/sources.list.d/winehq*.sources /etc/apt/keyrings/winehq-archive.key \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# `docker exec <container> mt5-mcp compile|backtest ...` with host paths.
+COPY --chmod=755 deploy/mt5-mcp /usr/local/bin/mt5-mcp
+
 # Screenshot EA, light chart template and startup ini; start.sh installs them
 # into the terminal data folder on every boot.
 COPY mql5/AgentScreenshot.ex5 deploy/agent_light.tpl deploy/startup.ini /opt/mt5-mcp/

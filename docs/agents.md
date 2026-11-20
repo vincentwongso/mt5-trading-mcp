@@ -49,18 +49,25 @@ it, do not edit the code. **Never attach or start an EA yourself, and ask
 before rebuilding one the human says is running on a live chart** (MT5 reloads
 it).
 
-Docker/Wine: you can run it inside the container with
-`docker exec -u abc -e WINEPREFIX=/config/.wine <container> wine 'C:\Python311\python.exe' -m mt5_mcp compile <Windows path to a file inside the container>`,
-but as of 1.7.0 MetaEditor hangs in the headless image and the command exits
-`2` after the timeout. Treat Docker compile as unsupported for now.
+Linux/Docker: run both commands in the backtest container from
+`deploy/docker-compose.backtest.yml` (MT5 under Wine, no MCP server, CPUs
+limited so the live container keeps headroom):
+`docker exec mt5-backtest mt5-mcp compile|backtest ...` with host paths inside
+the shared work folder (`MT5_WORK_DIR`, mounted at the same path). Setup:
+fill `deploy/.env.backtest` from the example, `docker compose -f
+deploy/docker-compose.backtest.yml --env-file deploy/.env.backtest up -d`, log
+the terminal in once (VNC on `VNC_PORT`), then
+`docker exec mt5-backtest mt5-mcp backtest --setup`. Use `--out <work>/out` to
+get the report and JSON on the host.
 
-To test an EA, use `mt5-mcp backtest` (Windows, same skill): run
+To test an EA, use `mt5-mcp backtest` (same skill; Windows or the Docker container above): run
 `mt5-mcp backtest --setup` once, then
 `mt5-mcp backtest <installed .ex5> --symbol ... --period H1 --from ... --to ...`.
 It runs on a separate copy of MT5, never the live terminal. `--optimize
 full|genetic` with a `.set` file of `Name=value||start||step||stop||Y` lines
 ranks input sets, scored on a held-out forward period by default. Exit `0`
-finished, `2` could not run. Supported from a logged-in desktop session;
+finished, `2` could not run. `--wait` queues behind a running backtest; after
+an MT5 update the tester copy refreshes itself. Supported from a logged-in desktop session;
 over ssh it also worked in testing (including the 1.8.0 end-to-end run), but
 that is best effort. The tester copy is logged into the user's own account,
 possibly real money, with algo trading switched off for every run; the

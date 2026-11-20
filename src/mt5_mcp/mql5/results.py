@@ -12,6 +12,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
+from mt5_mcp.mql5.hostpath import host_paths
 from mt5_mcp.mql5.report import Deal, PassRow, SingleResult
 
 SCHEMA = 1
@@ -82,7 +83,7 @@ def single_document(settings: dict, result: SingleResult, journal: dict | None, 
         "balance": curve,
         "drawdowns": drawdowns(curve),
         "journal": journal,
-        "report": str(report),
+        "report": host_paths(str(report)),
     }
 
 
@@ -90,7 +91,7 @@ def optimization_document(settings: dict, rows: list[PassRow], journal: dict | N
     passes = [{"rank": i, "pass": r.pass_no, "back": r.back, "forward": r.forward, "inputs": r.inputs}
               for i, r in enumerate(rows, 1)]
     return {"schema": SCHEMA, "kind": "optimization", "settings": settings, "passes": passes,
-            "journal": journal, "report": str(report)}
+            "journal": journal, "report": host_paths(str(report))}
 
 
 def write_document(doc: dict, path: Path) -> None:

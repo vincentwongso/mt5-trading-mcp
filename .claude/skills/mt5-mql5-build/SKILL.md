@@ -122,9 +122,11 @@ check where the result came from:
   These are closed-trade drawdowns; `metrics.max_drawdown_pct` is MT5's
   equity figure and includes open trades.
 - `costs`: total commission and swap.
-- `journal`: this run's tester log: `started`, `crashed`, `errors`, and
+- `journal`: this run's tester log: `started` (`null` if the log does not
+  say), `crashed` and `crash_error` (the line that stopped it), `errors`, and
   `ea_lines` (the EA's own `Print` output). Read it whenever `trades` is 0 or
-  a result looks wrong.
+  a result looks wrong. `--json` still prints the document when the run exits
+  `2` because the EA failed to start or crashed.
 Times are the broker's time as the report prints it, not UTC.
 `mt5-mcp backtest --read <report.htm|.xml>` prints the JSON for an old report
 (no journal) and writes nothing.

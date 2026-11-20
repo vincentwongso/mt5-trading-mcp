@@ -90,7 +90,7 @@ def read_source(path: Path) -> str:
 
 
 def detect_kind(source_text: str) -> str:
-    code = _NOISE.sub("", source_text)
+    code = _NOISE.sub(" ", source_text)  # a space keeps `void/*x*/OnStart` two tokens
     for pattern, folder in _KIND_RULES:
         for m in pattern.finditer(code):
             # Only global handlers count, not methods defined inside a class.

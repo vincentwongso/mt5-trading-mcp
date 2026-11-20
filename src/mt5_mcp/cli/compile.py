@@ -77,7 +77,8 @@ def _main(argv: list[str]) -> int:
     parser.add_argument("--config", default=None, help="Path to config TOML (default: per-OS user config dir).")
     args = parser.parse_args(argv)
 
-    source = Path(args.source).absolute()
+    # abspath folds `..` so the kind-folder containment checks below hold.
+    source = Path(os.path.abspath(args.source))
     try:
         cfg = load_config(Path(args.config) if args.config else None)
         paths = locate_terminal(
@@ -91,7 +92,10 @@ def _main(argv: list[str]) -> int:
     print(f"data folder: {paths.data_dir}", file=sys.stderr)
 
     mql5 = paths.data_dir / "MQL5"
-    previous = built_ex5(source, mql5, since=0)  # what a clean build will replace in place
+    previous = built_ex5(source, mql5, since=0)
+    if previous is not None and any(previous.is_relative_to(mql5 / f) for f in KIND_FOLDERS.values()):
+        # Announced before MetaEditor runs: it overwrites in place.
+        print(f"replacing existing: {previous}", file=sys.stderr)
     started = time.time()
     tmp = Path(tempfile.mkdtemp(prefix="mt5-compile-"))
     try:
@@ -117,16 +121,12 @@ def _main(argv: list[str]) -> int:
         return 1
 
     ex5 = built_ex5(source, mql5, since=started)
-    # Already inside a kind folder (source lives there, or a Shared Project):
-    # MetaEditor replaced it in place, even with --no-install.
-    in_place = ex5 is not None and any(ex5.is_relative_to(mql5 / f) for f in KIND_FOLDERS.values())
-    if in_place and previous == ex5:
-        print(f"replacing existing: {ex5}", file=sys.stderr)
-    if args.no_install:
-        return 0
     if ex5 is None:
         return _fail(f"clean build but no fresh .ex5 found for {source}")
-    if in_place:
+    if args.no_install:
+        return 0
+    # Already inside a kind folder (source lives there, or a Shared Project).
+    if any(ex5.is_relative_to(mql5 / f) for f in KIND_FOLDERS.values()):
         print(f"installed: {ex5}")
         return 0
     kind = KIND_FOLDERS[args.kind] if args.kind else detect_kind(read_source(source))

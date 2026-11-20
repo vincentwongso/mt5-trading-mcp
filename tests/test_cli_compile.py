@@ -241,3 +241,29 @@ def test_in_place_rebuild_with_no_install_still_announces(env, capsys):
     (experts / "clean_ea.ex5").write_bytes(b"OLD")
     assert run(env, "clean_ea.mq5", "--no-install", src_dir=experts) == 0
     assert f"replacing existing: {experts / 'clean_ea.ex5'}" in capsys.readouterr().err
+
+
+def test_replacement_announced_before_metaeditor_runs(env, monkeypatch, capsys):
+    experts = env["data"] / "MQL5" / "Experts" / "Mine"
+    experts.mkdir(parents=True)
+    (experts / "clean_ea.ex5").write_bytes(b"OLD")
+    env["log"], env["write_ex5"] = "errors.log", False
+    assert run(env, "clean_ea.mq5", src_dir=experts) == 1
+    assert f"replacing existing: {experts / 'clean_ea.ex5'}" in capsys.readouterr().err
+
+
+def test_no_install_without_fresh_ex5_exit_2(env, capsys):
+    env["write_ex5"] = False
+    assert run(env, "clean_ea.mq5", "--no-install") == 2
+    assert ".ex5" in capsys.readouterr().err
+
+
+def test_dotdot_source_path_is_normalised(env, monkeypatch, capsys):
+    experts = env["data"] / "MQL5" / "Experts"
+    experts.mkdir(parents=True)
+    src = env["work"] / "clean_ea.mq5"
+    shutil.copy(FIX / "src" / "clean_ea.mq5", src)
+    monkeypatch.chdir(experts)
+    dotted = Path("..") / ".." / ".." / "work" / "clean_ea.mq5"
+    assert cli.main([str(dotted), "--config", str(env["cfg"])]) == 0
+    assert (experts / "Agent" / "clean_ea.ex5").exists()

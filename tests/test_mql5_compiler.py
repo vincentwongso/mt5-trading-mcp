@@ -104,6 +104,8 @@ def test_format_absolute_outside_cwd(tmp_path):
     ("class CWorker { public: void OnStart() {} }; void OnTick() {}", "Experts"),
     ("class CInd { int OnCalculate(const int a) { return a; } }; void OnTick() {}", "Experts"),
     ("class C { void f() {} };\nvoid OnStart() {}", "Scripts"),
+    ("void/* event handler */OnStart() {}", "Scripts"),
+    ("#property/* exported */library\nint f() { return 0; }", "Libraries"),
 ])
 def test_detect_kind(src, kind):
     assert detect_kind(src) == kind

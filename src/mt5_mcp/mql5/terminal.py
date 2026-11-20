@@ -8,6 +8,7 @@ backtest command.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,7 +38,7 @@ def _newest_log(d: Path) -> float:
 
 def _find_install(terminal_path: str, program_files: list[Path]) -> Path:
     if terminal_path:
-        p = Path(terminal_path).absolute()
+        p = Path(os.path.abspath(terminal_path))  # abspath also folds `..`
         return p.parent if p.suffix.lower() == ".exe" else p
     found = sorted({m.parent for pf in program_files if pf.is_dir() for m in pf.glob("*/metaeditor64.exe")})
     if len(found) == 1:
@@ -81,7 +82,7 @@ def locate_terminal(
     if not metaeditor.is_file():
         raise LocateError(f"metaeditor64.exe not found in {install}. {_FIX}")
     if data_path:
-        data = Path(data_path).absolute()
+        data = Path(os.path.abspath(data_path))
         if not (data / "MQL5").is_dir():
             raise LocateError(f"{data} has no MQL5 folder. {_FIX}")
     else:

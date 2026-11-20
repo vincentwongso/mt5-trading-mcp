@@ -147,3 +147,10 @@ def test_relative_paths_are_made_absolute(pf, appdata, monkeypatch, tmp_path):
     assert got.install_dir.is_absolute() and got.data_dir == data
     rel = locate_terminal(terminal_path=str(inst), data_path=str(data.relative_to(tmp_path)), program_files=[], appdata=appdata)
     assert rel.data_dir == data
+
+
+def test_dotdot_terminal_path_matches_origin(pf, appdata):
+    inst = make_install(pf / "MetaTrader 5")
+    data = make_data(appdata, "A", str(inst))
+    dotted = str(inst / ".." / "MetaTrader 5")
+    assert locate_terminal(terminal_path=dotted, program_files=[], appdata=appdata).data_dir == data

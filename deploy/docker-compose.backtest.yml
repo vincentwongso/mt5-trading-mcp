@@ -24,6 +24,8 @@ services:
     ports:
       - "127.0.0.1:${VNC_PORT:-3006}:3000"   # KasmVNC web UI - one-time broker login; no MCP port
     environment:
+      # No MCP server here: backtests only need the CLI.
+      - MT5_MCP_SERVE=0
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - MT5_LOGIN=${MT5_LOGIN:-}

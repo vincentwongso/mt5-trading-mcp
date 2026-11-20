@@ -25,6 +25,7 @@
 #                           when the pin (MT5_MCP_VERSION or the image's) differs
 #   6. config.toml (first boot only) + socat bridge +
 #      `mt5_mcp serve --transport http`  (NEW)
+#                           (server + bridge skipped when MT5_MCP_SERVE=0)
 #
 # Credentials (MT5_LOGIN / MT5_PASSWORD / MT5_SERVER) are read by mt5-mcp from
 # the environment (see config.py / server.py). Two ways the terminal ends up
@@ -245,7 +246,12 @@ elif [ -e "$cfg" ]; then
     [ -n "${MT5_MCP_AUTH_TOKEN:-}" ] && log "WARNING: MT5_MCP_AUTH_TOKEN ignored because config.toml is present"
 fi
 
-if [ "$token_ok" = 1 ]; then
+# MT5_MCP_SERVE=0 (the backtest container): no server, no bridge. The CLI is
+# all it needs, and an unauthenticated server there could trade the account.
+serve=1
+[ "${MT5_MCP_SERVE:-1}" = 0 ] && serve=0
+
+if [ "$token_ok" = 1 ] && [ "$serve" = 1 ]; then
     container_ip="$(hostname -i 2>/dev/null | awk '{print $1}')"
     if [ -n "$container_ip" ] && [ "$container_ip" != "$mcp_host" ]; then
         log "[6/6] Bridging ${container_ip}:${mcp_port} -> ${mcp_host}:${mcp_port} (socat)"
@@ -274,7 +280,9 @@ fi
 
 # Match gmag11's pattern: the autostart script returns, leaving the terminal
 # supervisor, socat, and the serve supervisor running under the desktop session.
-if [ "$token_ok" = 1 ]; then
+if [ "$serve" = 0 ]; then
+    log "Bootstrap complete; terminal running, mt5-mcp server off (MT5_MCP_SERVE=0); CLI via mt5-mcp."
+elif [ "$token_ok" = 1 ]; then
     log "Bootstrap complete; terminal + mt5-mcp running. VNC web UI for one-time login."
 else
     log "Bootstrap complete; terminal running, mt5-mcp NOT started (invalid MT5_MCP_AUTH_TOKEN)."

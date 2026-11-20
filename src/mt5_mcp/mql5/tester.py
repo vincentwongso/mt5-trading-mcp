@@ -46,7 +46,7 @@ def build_ini(spec: RunSpec, *, disable_live: bool = True) -> str:
         f"Model={MODELS[spec.model]}",
         f"FromDate={spec.date_from:%Y.%m.%d}",
         f"ToDate={spec.date_to:%Y.%m.%d}",
-        f"Deposit={spec.deposit:g}",
+        f"Deposit={spec.deposit:.2f}".rstrip("0").rstrip("."),
         f"Currency={spec.currency}",
         f"Leverage={spec.leverage}",
     ]
@@ -69,6 +69,14 @@ def build_ini(spec: RunSpec, *, disable_live: bool = True) -> str:
 
 def write_ini(path: Path, text: str) -> None:
     path.write_bytes(b"\xff\xfe" + text.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-16-le"))
+
+
+def ini_value(value: str) -> str:
+    """argparse type for free text that lands in the launch ini (symbol, currency)."""
+    # A newline or "[" would start a new ini section, e.g. one that loads a chart with an EA.
+    if not value or "[" in value or "]" in value or any(ord(c) < 32 for c in value):
+        raise argparse.ArgumentTypeError(f"invalid value {value!r}")
+    return value
 
 
 def parse_forward(value: str) -> str:

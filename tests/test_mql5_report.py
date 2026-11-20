@@ -149,3 +149,17 @@ def test_format_table_top_n_and_forward_columns():
 def test_format_table_without_forward_has_no_fwd_columns():
     out = format_table(merge_passes(parse_opt_xml(_read("opt_full.xml")), None), 3, Path("r.xml"))
     assert "fwd_result" not in out.splitlines()[0]
+
+
+def test_parse_number_real_ticks_history_quality():
+    assert parse_number("100% real ticks", pct=True) == 100.0
+    assert parse_number("98.5% real ticks", pct=True) == 98.5
+
+
+def test_format_keeps_cents_and_avoids_exponents():
+    rows = merge_passes(parse_opt_xml(_read("opt_full.xml")), None)
+    head, first = format_table(rows, 1, Path("r.xml")).splitlines()[:2]
+    assert first.split()[2] == "10190.69"
+    from mt5_mcp.mql5.report import SingleResult
+    out = format_single(SingleResult({"net_profit": 1000190.5, "trades": 51.0}, {}), Path("r.htm"))
+    assert "net_profit: 1000190.5" in out and "trades: 51" in out

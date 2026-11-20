@@ -186,3 +186,33 @@ def test_log_tail_reads_utf16_logs_and_handles_missing(tmp_path):
     (tmp_path / "logs" / "20261120.log").write_bytes(lines.encode("utf-16"))
     out = log_tail(tmp_path, n=5)
     assert "== " in out and "line 29" in out and "line 24" not in out
+
+
+@pytest.mark.parametrize("where", ["data", "data/sub", "install", "install/sub", "parent"])
+def test_check_tester_path_refuses_live_folders(live, tmp_path, where):
+    install, data = live
+    tester = tmp_path if where == "parent" else tmp_path / where
+    with pytest.raises(WorkspaceError):
+        ws.check_tester_path(tester, install, data)
+
+
+def test_check_tester_path_refuses_foreign_non_empty_folder(live, tmp_path):
+    install, data = live
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / "doc.txt").write_text("x")
+    with pytest.raises(WorkspaceError, match="not empty"):
+        ws.check_tester_path(other, install, data)
+    ws.check_tester_path(tmp_path / "fresh", install, data)
+    write_origin(other, install, data)
+    ws.check_tester_path(other, install, data)  # an existing tester is fine
+
+
+def test_check_tester_path_allows_rerun_after_failed_setup(live, tmp_path):
+    install, data = live
+    (data / "config" / "accounts.dat").unlink()
+    tester = tmp_path / "tester"
+    with ws.tester_lock(tester):
+        with pytest.raises(WorkspaceError):
+            setup_tester(install, data, tester)
+    ws.check_tester_path(tester, install, data)  # our own half-made folder

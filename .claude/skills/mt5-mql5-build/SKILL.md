@@ -107,7 +107,9 @@ Exit codes: `0` finished (zero trades is still `0`: read `trades`), `2` could
 not run. A `2` prints why, often with the tester's log tail: not set up, MT5
 updated (re-run `--setup`), another backtest running, timeout, no report
 written, or an input in your `.set` the EA does not have (MT5 silently
-ignores unknown names, so the run is refused instead).
+ignores unknown names, so the run is refused instead). Optimisation reports
+list only the `||Y` inputs, so there the fixed inputs cannot be checked: a
+`note:` on stderr names them. Double-check their spelling.
 
 ## Safety rules
 

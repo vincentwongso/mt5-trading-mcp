@@ -133,3 +133,20 @@ def test_check_inputs_optimization_ignores_fixed_names():
     # The optimisation XML lists only optimised inputs; fixed ones cannot be checked there.
     s = SetFile(fixed={"MaximumRisk": "0.02"}, optimized={"MovingPeriod": "12"})
     assert check_inputs(s, {}, optimized_names=["MovingPeriod"]) is None
+
+
+@pytest.mark.parametrize(("deposit", "want"), [(10000.0, "10000"), (1000000.0, "1000000"), (123456.78, "123456.78")])
+def test_build_ini_deposit_has_no_exponent(deposit, want):
+    assert f"Deposit={want}" in _lines(build_ini(_spec(deposit=deposit)))
+
+
+@pytest.mark.parametrize("value", ["EURUSD\n[StartUp]", "EUR[USD", "USD\r"])
+def test_ini_value_rejects_section_injection(value):
+    from mt5_mcp.mql5.tester import ini_value
+    with pytest.raises(argparse.ArgumentTypeError):
+        ini_value(value)
+
+
+def test_ini_value_accepts_broker_symbols():
+    from mt5_mcp.mql5.tester import ini_value
+    assert ini_value("EURUSD.z") == "EURUSD.z" and ini_value("US500#") == "US500#"

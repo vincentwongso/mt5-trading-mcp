@@ -40,6 +40,17 @@ def default_tester_dir() -> Path:
     return Path(_user_data_path("tester"))
 
 
+def check_tester_path(tester: Path, install: Path, live_data: Path) -> None:
+    """Refuse a tester folder that overlaps the live install or data folder."""
+    t = Path(os.path.abspath(tester))
+    for live in (Path(os.path.abspath(install)), Path(os.path.abspath(live_data))):
+        if t == live or t.is_relative_to(live) or live.is_relative_to(t):
+            raise WorkspaceError(f"tester path {t} overlaps the live MT5 folder {live}; pick a separate folder.")
+    ours = (t / _ORIGIN).is_file() or (t / ".backtest.lock").is_file()  # lock file: a setup that failed midway
+    if t.is_dir() and any(t.iterdir()) and not ours:
+        raise WorkspaceError(f"tester path {t} is not empty and is not a tester install; pick an empty folder.")
+
+
 def setup_tester(install: Path, live_data: Path, tester: Path) -> None:
     tester.mkdir(parents=True, exist_ok=True)
     for f in install.iterdir():

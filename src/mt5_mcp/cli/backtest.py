@@ -35,6 +35,7 @@ from mt5_mcp.mql5.tester import (
     RunSpec,
     build_ini,
     check_inputs,
+    ini_value,
     parse_forward,
     parse_set,
     write_ini,
@@ -42,6 +43,7 @@ from mt5_mcp.mql5.tester import (
 from mt5_mcp.mql5.workspace import (
     WorkspaceError,
     build_matches,
+    check_tester_path,
     default_tester_dir,
     is_set_up,
     kill_tree,
@@ -90,13 +92,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     p.add_argument("ea", nargs="?", help="The .ex5 to test (the path `mt5-mcp compile` prints).")
     p.add_argument("--setup", action="store_true", help="Create or refresh the tester install, then exit.")
-    p.add_argument("--symbol")
+    p.add_argument("--symbol", type=ini_value)
     p.add_argument("--period", choices=PERIODS)
     p.add_argument("--from", dest="date_from", type=_date, help="YYYY-MM-DD")
     p.add_argument("--to", dest="date_to", type=_date, help="YYYY-MM-DD")
     p.add_argument("--set", help="MT5 .set file: Name=value, or Name=value||start||step||stop||Y to optimise.")
     p.add_argument("--deposit", type=float, default=10000.0)
-    p.add_argument("--currency", default="USD")
+    p.add_argument("--currency", type=ini_value, default="USD")
     p.add_argument("--leverage", type=int, default=100)
     p.add_argument("--model", choices=list(MODELS), default="ohlc", help="ohlc = 1-minute OHLC (default), ticks, real = real ticks.")
     p.add_argument("--optimize", choices=list(OPTIMIZE))
@@ -129,6 +131,7 @@ def _main(argv: list[str]) -> int:
 
     if args.setup:
         paths = _locate(args, cfg)
+        check_tester_path(tester, paths.install_dir, paths.data_dir)
         with tester_lock(tester):
             setup_tester(paths.install_dir, paths.data_dir, tester)
             write_origin(tester, paths.install_dir, paths.data_dir)
@@ -209,5 +212,8 @@ def _main(argv: list[str]) -> int:
     problem = check_inputs(set_file, {}, optimized_names=back.inputs) if set_file else None
     if problem:
         return _fail(problem)
+    if set_file and set_file.fixed:
+        # The optimisation report lists only optimised inputs.
+        print(f"note: fixed inputs not checked in optimisation runs: {', '.join(set_file.fixed)}", file=sys.stderr)
     print(format_table(merge_passes(back, forward), args.top, out))
     return 0

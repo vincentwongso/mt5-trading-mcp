@@ -43,6 +43,8 @@ def parse_number(s: str, *, pct: bool = False) -> float:
     if "(" in t and ")" in t:
         inner, outer = t[t.index("(") + 1:t.index(")")], t[:t.index("(")]
         t = inner if pct else outer
+    if pct and "%" in t:
+        t = t[:t.index("%")]  # real-tick runs print "100% real ticks"
     t = t.replace(" ", "").rstrip("%")
     try:
         return float(t)
@@ -159,8 +161,13 @@ def merge_passes(back: OptTable, forward: OptTable | None) -> list[PassRow]:
     return out
 
 
+def _num(v: float) -> str:
+    # Not :g, which rounds 10190.69 to 10190.7 and prints 1e+06.
+    return f"{v:.6f}".rstrip("0").rstrip(".")
+
+
 def format_single(r: SingleResult, report: Path) -> str:
-    lines = [f"{k}: {v:g}" for k, v in r.metrics.items()]
+    lines = [f"{k}: {_num(v)}" for k, v in r.metrics.items()]
     return "\n".join([*lines, f"report: {report}"])
 
 
@@ -175,8 +182,8 @@ def format_table(rows: list[PassRow], top: int, report: Path) -> str:
     for i, p in enumerate(rows[:top], 1):
         line = [str(i), str(p.pass_no)]
         if p.forward is not None:
-            line += [f"{p.forward[k]:g}" for k in ("result", "profit", "pf", "trades")]
-        line += [f"{p.back[k]:g}" for k in ("result", "profit", "pf", "dd_pct", "trades")]
+            line += [_num(p.forward[k]) for k in ("result", "profit", "pf", "trades")]
+        line += [_num(p.back[k]) for k in ("result", "profit", "pf", "dd_pct", "trades")]
         line += [p.inputs[n] for n in inputs]
         body.append(line)
     widths = [max(len(r[c]) for r in [head, *body]) for c in range(len(head))]

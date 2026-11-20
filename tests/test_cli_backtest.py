@@ -216,3 +216,24 @@ def test_run_uses_recorded_origin_not_rediscovery(env, monkeypatch):
 
     monkeypatch.setattr(cli, "locate_terminal", ambiguous)
     assert bt(env) == 0
+
+
+def test_optimize_notes_unverified_fixed_inputs(env, capsys):
+    s = write_set(env, "MaximumRisk=0.02\nMovingPeriod=12||6||2||30||Y\nMovingShift=6||0||2||10||Y\n")
+    assert bt(env, "--optimize", "full", "--set", s) == 0
+    err = capsys.readouterr().err
+    assert "not checked" in err and "MaximumRisk" in err
+
+
+def test_setup_refuses_tester_path_in_live_data(env, capsys):
+    assert cli.main(["--setup", "--tester-path", str(env["data"]), "--config", str(env["cfg"])]) == 2
+    assert not (env["data"] / "terminal64.exe").exists()
+    assert not (env["data"] / ".backtest.lock").exists()
+
+
+def test_symbol_with_newline_rejected(env):
+    setup(env)
+    with pytest.raises(SystemExit) as e:
+        cli.main([str(env["ea"]), "--symbol", "EURUSD\n[StartUp]", "--period", "H1", "--from", "2026-10-01",
+                  "--to", "2026-11-01", "--tester-path", str(env["tester"]), "--config", str(env["cfg"])])
+    assert e.value.code == 2

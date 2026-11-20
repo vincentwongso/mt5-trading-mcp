@@ -10,7 +10,6 @@ tester ran, the JSON's `error` says why (null on success).
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import shutil
 import sys
@@ -188,7 +187,8 @@ class _Run:
         write_document(doc, self.json_path)
         if self.args.json:
             _dump(doc)
-        return _fail("\n".join(x for x in (error, detail, report and f"report: {report}") if x))
+        paths = (None if self.args.json else f"json: {self.json_path}", report and f"report: {report}")
+        return _fail("\n".join(x for x in (error, detail, *paths) if x))
 
     def unreadable(self, exc: ReportError, report: Path) -> int:
         """A report MT5 filled with 'n/a' (e.g. no tick history): the reason is in the tester's logs."""
@@ -196,6 +196,14 @@ class _Run:
         why = "\n".join(f"  error: {e}" for e in errors[:5]) if errors else self.tail
         error = self.cause or (errors[0] if errors else str(exc))
         return self.fail(error, "\n".join(x for x in (str(exc) if error != str(exc) else None, why) if x), report)
+
+
+def _diagnostics(tester: Path, since: dict[Path, int]) -> tuple[str | None, str]:
+    """This run's reason and log tail from the terminal logs; optional, so never fatal."""
+    try:
+        return run_cause(read_new(tester, since, terminal_logs(tester))[0]), log_tail(tester, since=since)
+    except OSError:
+        return None, ""
 
 
 def _announce_wait() -> None:
@@ -265,6 +273,15 @@ def _main(argv: list[str]) -> int:
     if out_dir:
         out_dir.mkdir(parents=True, exist_ok=True)  # an unusable --out must fail before a long run, not after
 
+    # Results are only comparable under the same settings, so every summary leads with them.
+    settings = {"symbol": args.symbol, "period": args.period, "from": str(args.date_from), "to": str(args.date_to),
+                "model": args.model, "deposit": float(deposit_text(args.deposit)), "currency": args.currency, "leverage": args.leverage}
+    line = (f"settings: {args.symbol} {args.period} {args.date_from}..{args.date_to} model={args.model} "
+            f"deposit={deposit_text(args.deposit)} {args.currency} leverage=1:{args.leverage}")
+    if args.optimize:
+        settings.update(optimize=args.optimize, criterion=args.criterion, forward=args.forward)
+        line += f" optimize={args.optimize} criterion={args.criterion} forward={args.forward}"
+
     ea = Path(os.path.abspath(args.ea))
     with tester_lock(tester, wait=args.wait, on_wait=_announce_wait):  # held from the origin check on, so a --setup cannot swap it mid-run
         if not is_set_up(tester):  # under the lock: a refresh removes origin.json while it copies
@@ -304,6 +321,7 @@ def _main(argv: list[str]) -> int:
             set_name=set_name, report=report,
         )
         base = tester / report.replace("\\", "/")
+        json_path = (out_dir or base.parent) / (base.name + ".json")
         # Success is this run's uniquely named report, never the exit code.
         out = base.with_name(base.name + (".xml" if args.optimize else ".htm"))
         if args.optimize:
@@ -320,7 +338,8 @@ def _main(argv: list[str]) -> int:
                 try:
                     code = run_supervised(cmdline, timeout_s=args.timeout, label="terminal", kill=kill_tree)
                 except CompileTimeout as exc:
-                    return _fail(f"{exc}\n{log_tail(tester, since=term_before)}")
+                    cause, tail = _diagnostics(tester, term_before)
+                    return _Run(args, settings, json_path, None, cause, tail).fail(str(exc), tail, None)
                 if out.is_file() or code != 0 or attempt == 2:
                     break
                 # Seen on Windows: the first run that downloads M1 history finishes the test
@@ -333,22 +352,8 @@ def _main(argv: list[str]) -> int:
         except OSError as exc:  # the report is the result; a missing journal must not lose it
             print(f"note: could not read the tester log ({exc}); the JSON has no journal", file=sys.stderr)
             journal = None
-        try:
-            cause = run_cause(read_new(tester, term_before, terminal_logs(tester))[0])
-        except OSError:
-            cause = None
-        tail = log_tail(tester, since=term_before)
+        cause, tail = _diagnostics(tester, term_before)
 
-    json_path = (out_dir or base.parent) / (base.name + ".json")
-
-    # Results are only comparable under the same settings, so every summary leads with them.
-    settings = {"symbol": args.symbol, "period": args.period, "from": str(args.date_from), "to": str(args.date_to),
-                "model": args.model, "deposit": float(deposit_text(args.deposit)), "currency": args.currency, "leverage": args.leverage}
-    line = (f"settings: {args.symbol} {args.period} {args.date_from}..{args.date_to} model={args.model} "
-            f"deposit={deposit_text(args.deposit)} {args.currency} leverage=1:{args.leverage}")
-    if args.optimize:
-        settings.update(optimize=args.optimize, criterion=args.criterion, forward=args.forward)
-        line += f" optimize={args.optimize} criterion={args.criterion} forward={args.forward}"
     run = _Run(args, settings, json_path, journal, cause, tail)
 
     if not out.is_file():
@@ -399,9 +404,9 @@ def _main(argv: list[str]) -> int:
                 return run.fail(f"no forward report written ({fwd.name})" + (f": {cause}" if cause else ""),
                                 tail, out)
             forward = parse_opt_xml(delivered[1].read_bytes())
+        rows = merge_passes(back, forward)  # converts cells too, so an 'n/a' can surface here
     except ReportError as exc:
         return run.unreadable(exc, out)
-    rows = merge_passes(back, forward)
     problem = check_inputs(set_file, {}, optimized_names=back.inputs) if set_file else None
     doc = optimization_document(settings, rows, journal, out, error=problem)
     write_document(doc, json_path)

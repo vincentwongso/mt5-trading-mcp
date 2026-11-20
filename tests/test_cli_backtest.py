@@ -803,3 +803,39 @@ def test_read_with_run_flags_is_an_error(tmp_path):
     with pytest.raises(SystemExit) as e:
         cli.main(["--read", str(tmp_path / "r.htm"), "--symbol", "EURUSD"])
     assert e.value.code == 2
+
+
+def test_timeout_writes_and_prints_the_error_document(env, capsys):
+    setup(env)
+    env["write"] = "timeout"
+    capsys.readouterr()
+    assert bt(env, "--json", "--timeout", "5") == 2
+    doc = json.loads(capsys.readouterr().out)
+    assert "did not finish" in doc["error"]
+    assert json.loads(next((env["tester"] / "reports").glob("*.json")).read_text(encoding="utf-8"))["error"]
+
+
+def test_failure_in_text_mode_names_the_json(env, capsys):
+    env["write"] = False
+    assert bt(env) == 2
+    path = Path(re.search(r"^json: (.+)$", capsys.readouterr().err, re.M)[1])
+    assert json.loads(path.read_text(encoding="utf-8"))["error"].startswith("no report written")
+
+
+def test_unreadable_terminal_log_keeps_a_finished_run(env, monkeypatch):
+    def broken(*a, **kw):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(cli, "log_tail", broken)
+    assert bt(env) == 0
+
+
+def test_optimization_report_with_na_cells_gives_the_error_document(env, monkeypatch, capsys):
+    def bad(*a):
+        raise cli.ReportError("not a number in report: 'n/a'")
+
+    monkeypatch.setattr(cli, "merge_passes", bad)
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--json", "--optimize", "full", "--set", write_set(env, OPT_SET)) == 2
+    assert json.loads(capsys.readouterr().out)["kind"] == "optimization"

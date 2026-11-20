@@ -128,8 +128,8 @@ check where the result came from:
   say), `crashed` and `crash_error` (the line that stopped it), `errors`, and
   `ea_lines` (the EA's own `Print` output). Read it whenever `trades` is 0 or
   a result looks wrong.
-- `error`: `null` when the run succeeded, otherwise the same reason as the
-  first stderr line. On every exit `2` after the tester ran (failed start,
+- `error`: `null` when the run succeeded, otherwise the same reason stderr leads
+  with. On every exit `2` after the tester ran (failed start,
   crash, `.set` mismatch, no report, unreadable report) `--json` still prints
   a document and writes it; with no usable report it has only `settings`,
   `error`, `journal` and `report`. Check `error` before reading `metrics`.
@@ -165,11 +165,12 @@ run that downloads a symbol's history), the run is retried once and says so on
 stderr.
 
 Exit codes: `0` finished (zero trades is still `0`: read `trades` and the
-`journal:` block), `2` could not run or the EA failed. A `2` prints why on its
-first line, then this run's tester log lines: not set up, refreshing the tester after an MT5 update
+`journal:` block), `2` could not run or the EA failed. A `2` prints why (after any
+`note:`, `waiting` or `MT5 was updated` lines), then this run's tester log
+lines and the `json:` path: not set up, refreshing the tester after an MT5 update
 failed (re-run `--setup`), another backtest running (use `--wait`), timeout,
-no report written, a report MT5 filled with `n/a` (the first line is the
-tester's reason, e.g. `no history data, stop testing (... ticks canceled;
+no report written, a report MT5 filled with `n/a` (the message starts with
+the tester's reason, e.g. `no history data, stop testing (... ticks canceled;
 connection to the trade server was lost)` for real ticks), `EA failed to start` (`OnInit`
 returned an error), `EA hit a runtime error` (for example array out of range;
 the numbers only cover the part before the crash), or an input in your `.set`

@@ -334,6 +334,7 @@ def test_lock_wait_retries_wines_errno_zero(tmp_path, monkeypatch):
 def test_lock_of_a_killed_holder_is_free(tmp_path):
     import subprocess
     import sys
+    import time
 
     code = ("import sys, time; from pathlib import Path; from mt5_mcp.mql5 import workspace as ws\n"
             "with ws.tester_lock(Path(sys.argv[1])):\n    print('locked', flush=True); time.sleep(60)")
@@ -346,7 +347,14 @@ def test_lock_of_a_killed_holder_is_free(tmp_path):
                 pass
         p.kill()
         p.wait()
-        with ws.tester_lock(tmp_path):
-            pass
+        deadline = time.monotonic() + 10  # Windows frees a dead process's lock asynchronously
+        while True:
+            try:
+                with ws.tester_lock(tmp_path):
+                    break
+            except ws.LockHeld:
+                if time.monotonic() > deadline:
+                    raise
+                time.sleep(0.1)
     finally:
         p.kill()

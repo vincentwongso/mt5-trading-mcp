@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.8.2] - 2026-11-20
+
 ### Added
 - **Backtest JSON** - every `mt5-mcp backtest` run writes `<report>.json` (settings, metrics, every deal with its opening SL/TP, balance curve, drawdown periods, commission and swap, and that run's tester log) and prints `json: <path>`; `--json` prints it instead of the summary.
 - **`mt5-mcp backtest --read <report>`** - prints the JSON for an existing `.htm` or `.xml` report without running anything.

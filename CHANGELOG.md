@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **`mt5-mcp compile <file.mq5>`** - compiles an EA, indicator, script, service or library with the local MetaEditor and prints one `file:line:col: error|warning code: message` line per problem. Exit 0 built, 1 compile errors, 2 could not run. Clean builds install to `MQL5\<Kind>\Agent\` (libraries: `MQL5\Libraries\`). Windows only for now; under Wine/Docker MetaEditor hangs and the command times out. Backtesting comes next.
+- **`mt5-mql5-build` skill** - teaches agents the compile loop, where builds land, and to never attach an EA or rebuild one running live without asking (MT5 reloads it).
+- **`[mt5] data_path`** - pins the terminal data folder for `compile` when auto-detection finds several.
+
 ## [1.6.4] - 2026-11-19
 
 ### Changed

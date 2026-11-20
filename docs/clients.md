@@ -56,7 +56,8 @@ Cloning the repo auto-loads the project-scoped skills:
 ```
 .claude/skills/
 ├── mt5-market-data/SKILL.md   # what each read tool does + output conventions
-└── mt5-trading/SKILL.md       # consent flow, idempotency, error taxonomy, demo framing
+├── mt5-trading/SKILL.md       # consent flow, idempotency, error taxonomy, demo framing
+└── mt5-mql5-build/SKILL.md    # mt5-mcp compile loop for EAs, indicators, scripts
 ```
 
 The MCP server itself is not committed - register it yourself from the repo root:

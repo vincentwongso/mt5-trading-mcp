@@ -395,3 +395,11 @@ def test_screenshot_override_and_extra_forbidden():
 
     with pytest.raises(ValidationError):
         Config.model_validate({"screenshot": {"bogus": 1}})
+
+
+def test_mt5_data_path_loads_and_defaults_empty(tmp_path: Path):
+    p = tmp_path / "config.toml"
+    p.write_text(MINIMAL_TOML)
+    assert load_config(p).mt5.data_path == ""
+    p.write_text(MINIMAL_TOML.replace('terminal_path = ""', 'terminal_path = ""\ndata_path = "C:\\\\data"'))
+    assert load_config(p).mt5.data_path == "C:\\data"

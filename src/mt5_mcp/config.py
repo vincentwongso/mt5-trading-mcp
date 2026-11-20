@@ -44,6 +44,8 @@ class BridgeConfig(_Sub):
 
 class MT5Section(_Sub):
     terminal_path: str = ""
+    # MQL5 data folder for `mt5-mcp compile`; empty = discover.
+    data_path: str = ""
     # Programmatic-login credentials for headless / container deployments.
     # When `login` is set, the adapter authenticates via initialize(login=,
     # password=, server=) instead of attaching to an already-logged-in

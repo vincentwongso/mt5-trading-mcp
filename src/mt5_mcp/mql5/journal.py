@@ -60,20 +60,40 @@ def read_new(tester: Path, before: dict[Path, int]) -> tuple[list[LogLine], list
     return lines, files
 
 
+def _fmt(x: LogLine) -> str:
+    return f"{x.source}: {x.message}"
+
+
+def _crash_error(lines: list[LogLine], ea_stem: str) -> str | None:
+    """The line that killed the run: the last error before the first Tester 'critical error'."""
+    for i, x in enumerate(lines):
+        if x.source == "Tester" and "critical error" in x.message:
+            before = [y for y in lines[:i] if y.level != 0]
+            own = [y for y in before if y.source.startswith(f"{ea_stem} (")]
+            return _fmt((own or before or [x])[-1])
+    return None
+
+
 def summarize(lines: list[LogLine], files: list[str], *, ea_stem: str, optimization: bool) -> dict:
-    errors = [f"{x.source}: {x.message}" for x in lines if x.level != 0][:_MAX_ERRORS]
+    errors = [_fmt(x) for x in lines if x.level != 0]
+    if len(errors) > _MAX_ERRORS:
+        # Keep both ends: early non-fatal errors must not push out the fatal one.
+        errors = errors[:_MAX_ERRORS // 2] + errors[-(_MAX_ERRORS // 2):]
     if optimization:
         # Several agents and passes; EAs reject input sets on purpose, so nothing here is judged.
-        return {"started": None, "crashed": False, "errors": errors, "ea_lines": [],
+        return {"started": None, "crashed": False, "crash_error": None, "errors": errors, "ea_lines": [],
                 "lines": len(lines), "log_files": files}
     tester = [x.message for x in lines if x.source == "Tester"]
     # "returns non-zero code" (INIT_FAILED) and "reports incorrect input parameters" share this prefix.
     stopped = any("tester stopped because OnInit" in m for m in tester)
     began = any("testing of " in m and " started" in m for m in tester)
     ea = [x.message for x in lines if x.source.startswith(f"{ea_stem} (")]
+    crash = _crash_error(lines, ea_stem)
     return {
-        "started": began and not stopped,
-        "crashed": any("critical error" in m for m in tester),
+        # None: no start line at all (log unreadable or reworded), so it is unknown, not a failure.
+        "started": False if stopped else (True if began else None),
+        "crashed": crash is not None,
+        "crash_error": crash,
         "errors": errors,
         "ea_lines": ea[-_MAX_EA_LINES:],
         "lines": len(lines),

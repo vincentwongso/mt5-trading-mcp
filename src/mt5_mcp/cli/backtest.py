@@ -256,8 +256,12 @@ def _main(argv: list[str]) -> int:
     if not out.is_file():
         return _fail(f"no report written ({out}); the run failed:\n{log_tail(tester)}")
 
-    lines, files = read_new(tester, before)
-    journal = summarize(lines, files, ea_stem=ea.stem, optimization=bool(args.optimize))
+    try:
+        lines, files = read_new(tester, before)
+        journal = summarize(lines, files, ea_stem=ea.stem, optimization=bool(args.optimize))
+    except OSError as exc:  # the report is the result; a missing journal must not lose it
+        print(f"note: could not read the tester log ({exc}); the JSON has no journal", file=sys.stderr)
+        journal = None
     json_path = base.with_name(base.name + ".json")
 
     # Results are only comparable under the same settings, so every summary leads with them.
@@ -276,18 +280,20 @@ def _main(argv: list[str]) -> int:
         if args.json:
             _dump(doc)  # also on exit 2 below, so the agent gets the journal either way
         problem = check_inputs(set_file, result.inputs, optimized_names=None) if set_file else None
-        block = journal_block(journal)
-        if not problem and journal["started"] is False:
-            first = journal["errors"][0] if journal["errors"] else "the test never started"
+        j = journal or {"started": None, "crashed": False, "crash_error": None, "errors": [], "ea_lines": []}
+        block = journal_block(j)
+        if not problem and j["started"] is False:
+            first = j["errors"][0] if j["errors"] else "the test never started"
             problem = f"EA failed to start: {first}"
-        elif not problem and journal["crashed"]:
-            ea_errors = [e for e in journal["errors"] if e.startswith(f"{ea.stem} (")]
-            first = (ea_errors or journal["errors"] or ["critical error"])[0]
-            problem = f"EA hit a runtime error: {first}"
+        elif not problem and j["crashed"]:
+            problem = f"EA hit a runtime error: {j['crash_error']}"
         if problem:
-            return _fail("\n".join(x for x in (problem, block if journal["started"] is False or journal["crashed"] else None) if x))
+            return _fail("\n".join(x for x in (problem, block if j["started"] is False or j["crashed"] else None) if x))
+        if journal is not None and j["started"] is None:
+            print("note: the tester log has no 'testing of ... started' line, so whether the EA started "
+                  "is unknown; check trades and the journal", file=sys.stderr)
         if not args.json:
-            show = block if result.metrics["trades"] == 0 or journal["errors"] else None
+            show = block if result.metrics["trades"] == 0 or j["errors"] else None
             print(line)
             print(_with_lines(format_single(result, out), show, f"json: {json_path}"))
         return 0

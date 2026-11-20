@@ -130,8 +130,11 @@ _DEAL_COLS = ("Time", "Deal", "Symbol", "Type", "Direction", "Volume", "Price", 
 _ORDER_COLS = ("Order", "S / L", "T / P")
 
 
-def _table(rows: list[list[str]], title: str, required: tuple[str, ...]) -> list[dict[str, str]]:
-    """Data rows of the table under a title row, keyed by header name."""
+def _table(rows: list[list[str]], title: str, required: tuple[str, ...]) -> tuple[list[dict[str, str]] | None, list[str] | None]:
+    """Data rows of the table under a title row, keyed by header name, and the row that ended it.
+
+    (None, None) when there is no such table.
+    """
     for i, row in enumerate(rows):
         if [c for c in row if c] == [title] and i + 1 < len(rows):
             header = rows[i + 1]
@@ -140,12 +143,19 @@ def _table(rows: list[list[str]], title: str, required: tuple[str, ...]) -> list
                 raise ReportError(f"{title} table has no {', '.join(missing)} column: "
                                   "the tester terminal's language is not English")
             out = []
-            for r in rows[i + 2:]:
-                if len(r) != len(header):
-                    break
-                out.append(dict(zip(header, r)))
-            return out
-    return []
+            j = i + 2
+            while j < len(rows) and len(rows[j]) == len(header):
+                out.append(dict(zip(header, rows[j])))
+                j += 1
+            return out, (rows[j] if j < len(rows) else None)
+    return None, None
+
+
+def _int(s: str) -> int:
+    try:
+        return int(s)
+    except ValueError:
+        raise ReportError(f"not a whole number in report: {s!r}") from None
 
 
 def _iso(ts: str) -> str:
@@ -156,19 +166,32 @@ def _opt(s: str) -> float | None:
     return parse_number(s) if s.strip() else None
 
 
-def _deals(rows: list[list[str]]) -> list[Deal]:
-    stops = {int(o["Order"]): (_opt(o["S / L"]), _opt(o["T / P"]))
-             for o in _table(rows, "Orders", _ORDER_COLS) if o["Order"].strip()}
+def _deals(rows: list[list[str]], trades: float) -> list[Deal]:
+    # A row with a cell too many or too few ends a table early; fail rather than return part of it.
+    orders, end = _table(rows, "Orders", _ORDER_COLS)
+    if orders is not None and (end is None or (end and end[0] and [c for c in end if c] != ["Deals"])):
+        raise ReportError("Orders table ended early: a row does not match its header")
+    stops = {_int(o["Order"]): (_opt(o["S / L"]), _opt(o["T / P"])) for o in orders or [] if o["Order"].strip()}
+    table, end = _table(rows, "Deals", _DEAL_COLS)
+    if table is None:
+        if trades:
+            raise ReportError("report has no Deals table but lists trades")
+        return []
+    # The table ends at its totals row: blank first cell, then commission, swap, profit, balance.
+    if end is None or len(end) != 6 or end[0]:
+        raise ReportError("Deals table ended early: a row does not match its header")
     deals = []
-    for d in _table(rows, "Deals", _DEAL_COLS):
-        order = int(d["Order"]) if d["Order"].strip() else None
+    for d in table:
+        order = _int(d["Order"]) if d["Order"].strip() else None
         sl, tp = stops.get(order, (None, None)) if order is not None else (None, None)
         deals.append(Deal(
-            time=_iso(d["Time"]), deal=int(d["Deal"]), symbol=d["Symbol"], type=d["Type"],
+            time=_iso(d["Time"]), deal=_int(d["Deal"]), symbol=d["Symbol"], type=d["Type"],
             direction=d["Direction"], volume=_opt(d["Volume"]) or 0.0, price=_opt(d["Price"]), order=order,
             sl=sl, tp=tp, commission=_opt(d["Commission"]) or 0.0, swap=_opt(d["Swap"]) or 0.0,
             profit=_opt(d["Profit"]) or 0.0, balance=parse_number(d["Balance"]), comment=d["Comment"],
         ))
+    if deals and parse_number(end[4]) != deals[-1].balance:
+        raise ReportError("Deals table is incomplete: its totals row does not match the last deal's balance")
     return deals
 
 
@@ -220,7 +243,7 @@ def parse_single_html(raw: bytes) -> SingleResult:
                     name, value = cell.split("=", 1)
                     inputs[name] = value
             break
-    return SingleResult(metrics, inputs, _deals(rows), _header(values))
+    return SingleResult(metrics, inputs, _deals(rows, metrics["trades"]), _header(values))
 
 
 @dataclass(frozen=True)

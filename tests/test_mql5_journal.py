@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from mt5_mcp.mql5.journal import journal_block, parse_lines, read_new, snapshot_logs, summarize
+from mt5_mcp.mql5.journal import LogLine, journal_block, parse_lines, read_new, snapshot_logs, summarize
 
 J = Path(__file__).parent / "fixtures" / "mql5" / "journal"
 
@@ -81,3 +81,17 @@ def test_journal_block_failinit():
 
 def test_journal_block_none_when_nothing_to_say():
     assert journal_block({"started": True, "crashed": False, "errors": [], "ea_lines": []}) is None
+
+
+def test_no_start_line_is_unknown_not_failed():
+    lines = [x for x in _lines("normal.log") if "testing of " not in x.message]
+    j = summarize(lines, [], ea_stem="MA", optimization=False)
+    assert j["started"] is None and j["crashed"] is False
+
+
+def test_crash_error_found_behind_many_earlier_errors():
+    noise = [LogLine(2, "ArrayErr (EURUSD,H1)", "2026.09.01 00:10:00   failed market buy 0.1 EURUSD [No money]")] * 60
+    lines = _lines("arrayerr.log")
+    j = summarize(noise + lines, [], ea_stem="ArrayErr", optimization=False)
+    assert j["crashed"] is True and "array out of range" in j["crash_error"]
+    assert len(j["errors"]) == 50 and any("critical error" in e for e in j["errors"])

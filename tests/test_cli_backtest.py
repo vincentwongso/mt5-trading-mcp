@@ -430,3 +430,17 @@ def test_read_with_ea_is_an_error(env):
     with pytest.raises(SystemExit) as e:
         cli.main([str(env["ea"]), "--read", str(FIX / "single_deals.htm")])
     assert e.value.code == 2
+
+
+def test_unreadable_journal_keeps_a_finished_run(env, monkeypatch, capsys):
+    def boom(*a, **k):
+        raise OSError(13, "Permission denied")
+
+    monkeypatch.setattr(cli, "read_new", boom)
+    setup(env)
+    capsys.readouterr()
+    assert bt(env) == 0
+    cap = capsys.readouterr()
+    assert "net_profit:" in cap.out and "could not read the tester log" in cap.err
+    doc = json.loads(next((env["tester"] / "reports").glob("*.json")).read_text(encoding="utf-8"))
+    assert doc["journal"] is None

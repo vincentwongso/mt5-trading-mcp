@@ -231,3 +231,37 @@ def test_failed_runs_still_parse_with_zero_metrics():
     for name, types in (("single_failinit.htm", []), ("single_arrayerr.htm", ["balance"])):
         r = parse_single_html(_read(name))
         assert r.metrics["trades"] == 0 and [d.type for d in r.deals] == types
+
+
+def _sltp_text():
+    return _read("single_sltp.htm").decode("utf-16")
+
+
+def test_deals_table_cut_short_raises():
+    # One deal row losing a cell must not silently drop the deals after it.
+    t = _sltp_text().replace("<td>-0.70</td><td>0.00</td><td>0.00</td><td>9 998.95</td>", "<td>-0.70</td><td>0.00</td><td>9 998.95</td>", 1)
+    with pytest.raises(ReportError, match="Deals"):
+        parse_single_html(t.encode("utf-16"))
+
+
+def test_missing_deals_title_with_trades_raises():
+    t = _read("single_deals.htm").decode("utf-16").replace("<b>Deals</b>", "<b>Something</b>")
+    with pytest.raises(ReportError, match="Deals"):
+        parse_single_html(t.encode("utf-16"))
+
+
+def test_odd_orders_row_raises():
+    t = _sltp_text().replace("<td>filled</td><td>sltp open</td>", "<td>filled</td>", 1)
+    with pytest.raises(ReportError, match="Orders"):
+        parse_single_html(t.encode("utf-16"))
+
+
+def test_non_integer_deal_number_is_reporterror():
+    t = _sltp_text().replace("<td>2026.09.01 00:04:30</td><td>2</td>", "<td>2026.09.01 00:04:30</td><td>x</td>", 1)
+    with pytest.raises(ReportError):
+        parse_single_html(t.encode("utf-16"))
+
+
+def test_single_en_has_all_its_deals():
+    r = parse_single_html(_read("single_en.htm"))
+    assert len(r.deals) == 47 and r.deals[-1].balance == 10109.31

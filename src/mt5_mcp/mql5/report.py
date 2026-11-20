@@ -9,9 +9,12 @@ Labels follow the terminal language and no setting to pin English was found
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
+
+from mt5_mcp.mql5.tester import deposit_text
 
 
 class ReportError(Exception):
@@ -52,32 +55,68 @@ def parse_number(s: str, *, pct: bool = False) -> float:
         raise ReportError(f"not a number in report: {s!r}") from None
 
 
-class _Cells(HTMLParser):
+class _Rows(HTMLParser):
+    """Table rows as lists of cell texts. Empty cells are kept: columns are positional."""
+
     def __init__(self) -> None:
         super().__init__()
-        self.cells: list[str] = []
+        self.rows: list[list[str]] = []
+        self._row: list[str] | None = None
         self._buf: list[str] | None = None
 
     def handle_starttag(self, tag: str, attrs: object) -> None:
-        if tag == "td":
+        if tag == "tr":
+            self._end_row()
+            self._row = []
+        elif tag in ("td", "th") and self._row is not None:
             self._buf = []
 
     def handle_endtag(self, tag: str) -> None:
-        if tag == "td" and self._buf is not None:
-            text = "".join(self._buf).strip()  # inner spaces kept: they can be part of an input value
-            if text:
-                self.cells.append(text)
+        if tag in ("td", "th") and self._buf is not None and self._row is not None:
+            self._row.append("".join(self._buf).strip())  # inner spaces kept: they can be part of an input value
             self._buf = None
+        elif tag in ("tr", "table"):
+            self._end_row()
 
     def handle_data(self, data: str) -> None:
         if self._buf is not None:
             self._buf.append(data)
+
+    def _end_row(self) -> None:
+        if self._row is not None:
+            self.rows.append(self._row)
+        self._row = None
+
+    def close(self) -> None:
+        super().close()
+        self._end_row()
+
+
+@dataclass(frozen=True)
+class Deal:
+    time: str  # broker time, ISO 8601 without zone
+    deal: int
+    symbol: str
+    type: str
+    direction: str
+    volume: float
+    price: float | None
+    order: int | None
+    sl: float | None  # the order's initial stop; later modifications are not in the report
+    tp: float | None
+    commission: float
+    swap: float
+    profit: float
+    balance: float
+    comment: str
 
 
 @dataclass(frozen=True)
 class SingleResult:
     metrics: dict[str, float]
     inputs: dict[str, str]
+    deals: list[Deal] = field(default_factory=list)
+    header: dict[str, str | None] = field(default_factory=dict)
 
 
 def _decode(raw: bytes) -> str:
@@ -86,14 +125,102 @@ def _decode(raw: bytes) -> str:
     return raw.decode("utf-8-sig", errors="replace")
 
 
+_DEAL_COLS = ("Time", "Deal", "Symbol", "Type", "Direction", "Volume", "Price", "Order",
+              "Commission", "Swap", "Profit", "Balance", "Comment")
+_ORDER_COLS = ("Order", "S / L", "T / P")
+
+
+def _table(rows: list[list[str]], title: str, required: tuple[str, ...]) -> tuple[list[dict[str, str]] | None, list[str] | None]:
+    """Data rows of the table under a title row, keyed by header name, and the row that ended it.
+
+    (None, None) when there is no such table.
+    """
+    for i, row in enumerate(rows):
+        if [c for c in row if c] == [title] and i + 1 < len(rows):
+            header = rows[i + 1]
+            missing = [c for c in required if c not in header]
+            if missing:
+                raise ReportError(f"{title} table has no {', '.join(missing)} column: "
+                                  "the tester terminal's language is not English")
+            out = []
+            j = i + 2
+            while j < len(rows) and len(rows[j]) == len(header):
+                out.append(dict(zip(header, rows[j])))
+                j += 1
+            return out, (rows[j] if j < len(rows) else None)
+    return None, None
+
+
+def _int(s: str) -> int:
+    try:
+        return int(s)
+    except ValueError:
+        raise ReportError(f"not a whole number in report: {s!r}") from None
+
+
+def _iso(ts: str) -> str:
+    return ts.replace(".", "-").replace(" ", "T")
+
+
+def _opt(s: str) -> float | None:
+    return parse_number(s) if s.strip() else None
+
+
+def _deals(rows: list[list[str]], trades: float) -> list[Deal]:
+    # A row with a cell too many or too few ends a table early; fail rather than return part of it.
+    orders, end = _table(rows, "Orders", _ORDER_COLS)
+    if orders is not None and (end is None or (end and end[0] and [c for c in end if c] != ["Deals"])):
+        raise ReportError("Orders table ended early: a row does not match its header")
+    stops = {_int(o["Order"]): (_opt(o["S / L"]), _opt(o["T / P"])) for o in orders or [] if o["Order"].strip()}
+    table, end = _table(rows, "Deals", _DEAL_COLS)
+    if table is None:
+        if trades:
+            raise ReportError("report has no Deals table but lists trades")
+        return []
+    # The table ends at its totals row: blank first cell, then commission, swap, profit, balance.
+    if end is None or len(end) != 6 or end[0]:
+        raise ReportError("Deals table ended early: a row does not match its header")
+    deals = []
+    for d in table:
+        order = _int(d["Order"]) if d["Order"].strip() else None
+        sl, tp = stops.get(order, (None, None)) if order is not None else (None, None)
+        deals.append(Deal(
+            time=_iso(d["Time"]), deal=_int(d["Deal"]), symbol=d["Symbol"], type=d["Type"],
+            direction=d["Direction"], volume=_opt(d["Volume"]) or 0.0, price=_opt(d["Price"]), order=order,
+            sl=sl, tp=tp, commission=_opt(d["Commission"]) or 0.0, swap=_opt(d["Swap"]) or 0.0,
+            profit=_opt(d["Profit"]) or 0.0, balance=parse_number(d["Balance"]), comment=d["Comment"],
+        ))
+    if deals and parse_number(end[4]) != deals[-1].balance:
+        raise ReportError("Deals table is incomplete: its totals row does not match the last deal's balance")
+    return deals
+
+
+def _header(values: dict[str, str]) -> dict[str, str | None]:
+    period = values.get("Period", "")
+    m = re.match(r"(\S+) \((\d{4})\.(\d\d)\.(\d\d) - (\d{4})\.(\d\d)\.(\d\d)\)", period)
+    deposit = values.get("Initial Deposit")
+    return {
+        "expert": values.get("Expert"),
+        "symbol": values.get("Symbol"),
+        "period": m[1] if m else (period or None),
+        "from": f"{m[2]}-{m[3]}-{m[4]}" if m else None,
+        "to": f"{m[5]}-{m[6]}-{m[7]}" if m else None,
+        "currency": values.get("Currency"),
+        "deposit": deposit_text(parse_number(deposit)) if deposit else None,
+        "leverage": values.get("Leverage"),
+    }
+
+
 def parse_single_html(raw: bytes) -> SingleResult:
-    p = _Cells()
+    p = _Rows()
     p.feed(_decode(raw))
-    cells = p.cells
+    p.close()
+    rows = p.rows
     values: dict[str, str] = {}
-    for label, value in zip(cells, cells[1:]):
-        if label.endswith(":"):
-            values.setdefault(" ".join(label[:-1].split()), value)
+    for row in rows:
+        for label, value in zip(row, row[1:]):
+            if label.endswith(":"):
+                values.setdefault(" ".join(label[:-1].split()), value)
     missing = [label for label, _ in _SINGLE.values() if label not in values]
     if missing:
         raise ReportError(
@@ -102,13 +229,21 @@ def parse_single_html(raw: bytes) -> SingleResult:
         )
     metrics = {k: parse_number(values[label], pct=pct) for k, (label, pct) in _SINGLE.items()}
     inputs: dict[str, str] = {}
-    if "Inputs:" in cells:
-        for cell in cells[cells.index("Inputs:") + 1:]:
-            if "=" not in cell:  # next label; a value may itself end in ":"
-                break
-            name, value = cell.split("=", 1)
-            inputs[name] = value
-    return SingleResult(metrics, inputs)
+    for i, row in enumerate(rows):
+        if "Inputs:" in row:
+            cells = [row[row.index("Inputs:") + 1]] if row.index("Inputs:") + 1 < len(row) else []
+            for nxt in rows[i + 1:]:
+                filled = [c for c in nxt if c]
+                # Continuation rows have no label cell; a value may itself end in ":".
+                if not nxt or nxt[0] or len(filled) != 1 or "=" not in filled[0]:
+                    break
+                cells.append(filled[0])
+            for cell in cells:
+                if "=" in cell:
+                    name, value = cell.split("=", 1)
+                    inputs[name] = value
+            break
+    return SingleResult(metrics, inputs, _deals(rows, metrics["trades"]), _header(values))
 
 
 @dataclass(frozen=True)

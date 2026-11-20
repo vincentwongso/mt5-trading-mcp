@@ -1,0 +1,28 @@
+#!/bin/bash
+# mt5-mcp inside the Docker image: runs the CLI under Wine-Python, so callers
+# use it as `docker exec <container> mt5-mcp compile|backtest ...` with host
+# paths. Absolute paths become Z: paths (Wine maps Z: to /); the CLI prints
+# Z: paths back as host paths.
+set -uo pipefail
+
+# Wine refuses a prefix owned by another user, and docker exec runs as root.
+if [ "$(id -u)" = 0 ]; then
+    exec s6-setuidgid abc "$0" "$@"
+fi
+
+export WINEPREFIX=/config/.wine WINEDEBUG=-all DISPLAY=:1
+
+args=()
+for a in "$@"; do
+    case "$a" in
+        /*) a="Z:${a//\//\\}" ;;
+        --*=/*) v="${a#*=}"; a="${a%%=*}=Z:${v//\//\\}" ;;
+    esac
+    args+=("$a")
+done
+
+# Windows Python writes CRLF; strip CR from each stream so stdout stays clean JSON.
+wine 'C:\Python311\python.exe' -m mt5_mcp "${args[@]}" 2> >(tr -d '\r' >&2) | tr -d '\r'
+rc=${PIPESTATUS[0]}
+wait  # let the stderr filter drain
+exit "$rc"

@@ -42,8 +42,9 @@ def default_tester_dir() -> Path:
 
 def check_tester_path(tester: Path, install: Path, live_data: Path) -> None:
     """Refuse a tester folder that overlaps the live install or data folder."""
-    t = Path(os.path.abspath(tester))
-    for live in (Path(os.path.abspath(install)), Path(os.path.abspath(live_data))):
+    # realpath: a symlink or junction must not lead back into a live folder.
+    t = Path(os.path.realpath(tester))
+    for live in (Path(os.path.realpath(install)), Path(os.path.realpath(live_data))):
         if t == live or t.is_relative_to(live) or live.is_relative_to(t):
             raise WorkspaceError(f"tester path {t} overlaps the live MT5 folder {live}; pick a separate folder.")
     ours = (t / _ORIGIN).is_file() or (t / ".backtest.lock").is_file()  # lock file: a setup that failed midway
@@ -116,7 +117,9 @@ def mirror_dependencies(live_mql5: Path, tester_mql5: Path) -> int:
             continue
         for src in root.rglob("*.ex5"):
             dst = tester_mql5 / src.relative_to(live_mql5)
-            if not dst.exists() or src.stat().st_mtime_ns > dst.stat().st_mtime_ns:
+            s = src.stat()
+            # Any difference, not just newer: a restored older build must be copied too.
+            if not dst.exists() or (s.st_size, s.st_mtime_ns) != (dst.stat().st_size, dst.stat().st_mtime_ns):
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, dst)
                 copied += 1

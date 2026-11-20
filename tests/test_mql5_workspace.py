@@ -216,3 +216,27 @@ def test_check_tester_path_allows_rerun_after_failed_setup(live, tmp_path):
         with pytest.raises(WorkspaceError):
             setup_tester(install, data, tester)
     ws.check_tester_path(tester, install, data)  # our own half-made folder
+
+
+def test_mirror_dependencies_recopies_when_live_build_is_older(tmp_path):
+    live, tester = tmp_path / "live", tmp_path / "tester"
+    src = live / "Indicators" / "ind.ex5"
+    src.parent.mkdir(parents=True)
+    src.write_bytes(b"new")
+    mirror_dependencies(live, tester)
+    src.write_bytes(b"old")
+    st = src.stat()
+    os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns - 10**10))  # a restored, older build
+    assert mirror_dependencies(live, tester) == 1
+    assert (tester / "Indicators" / "ind.ex5").read_bytes() == b"old"
+
+
+def test_check_tester_path_refuses_link_into_live_data(live, tmp_path):
+    install, data = live
+    alias = tmp_path / "alias"
+    try:
+        alias.symlink_to(data, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlinks not permitted here")
+    with pytest.raises(WorkspaceError):
+        ws.check_tester_path(alias / "tester", install, data)

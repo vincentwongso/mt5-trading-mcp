@@ -104,7 +104,7 @@ def parse_single_html(raw: bytes) -> SingleResult:
     inputs: dict[str, str] = {}
     if "Inputs:" in cells:
         for cell in cells[cells.index("Inputs:") + 1:]:
-            if cell.endswith(":") or "=" not in cell:
+            if "=" not in cell:  # next label; a value may itself end in ":"
                 break
             name, value = cell.split("=", 1)
             inputs[name] = value

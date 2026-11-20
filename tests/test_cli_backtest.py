@@ -237,3 +237,27 @@ def test_symbol_with_newline_rejected(env):
         cli.main([str(env["ea"]), "--symbol", "EURUSD\n[StartUp]", "--period", "H1", "--from", "2026-10-01",
                   "--to", "2026-11-01", "--tester-path", str(env["tester"]), "--config", str(env["cfg"])])
     assert e.value.code == 2
+
+
+def test_run_override_differing_from_setup_exit2(env, monkeypatch, capsys):
+    setup(env)
+    other = env["tmp"] / "other-data"
+    other.mkdir()
+    monkeypatch.setattr(cli, "locate_terminal", lambda **kw: TerminalPaths(env["install"], env["install"] / "metaeditor64.exe", other))
+    assert bt(env, "--data-path", str(other)) == 2
+    assert "--setup" in capsys.readouterr().err
+
+
+def test_run_override_matching_setup_is_fine(env):
+    setup(env)
+    assert bt(env, "--data-path", str(env["data"])) == 0
+
+
+def test_build_check_waits_for_the_lock(env, capsys):
+    setup(env)
+    exe = env["install"] / "terminal64.exe"
+    st = exe.stat()
+    os.utime(exe, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+    with ws.tester_lock(env["tester"]):
+        assert bt(env) == 2
+    assert "another backtest is running" in capsys.readouterr().err

@@ -163,3 +163,9 @@ def test_format_keeps_cents_and_avoids_exponents():
     from mt5_mcp.mql5.report import SingleResult
     out = format_single(SingleResult({"net_profit": 1000190.5, "trades": 51.0}, {}), Path("r.htm"))
     assert "net_profit: 1000190.5" in out and "trades: 51" in out
+
+
+def test_single_input_value_ending_in_colon_is_kept():
+    raw = _read("single_types.htm").decode("utf-16").replace("Note=abc def", "Note=prefix:")
+    r = parse_single_html(raw.encode("utf-16"))
+    assert r.inputs["Note"] == "prefix:" and r.inputs["Span"] == "7"

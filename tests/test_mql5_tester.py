@@ -150,3 +150,13 @@ def test_ini_value_rejects_section_injection(value):
 def test_ini_value_accepts_broker_symbols():
     from mt5_mcp.mql5.tester import ini_value
     assert ini_value("EURUSD.z") == "EURUSD.z" and ini_value("US500#") == "US500#"
+
+
+def test_check_inputs_ignores_repeated_spaces_in_text():
+    assert check_inputs(SetFile({"Note": "abc  def"}, {}), {"Note": "abc def"}, optimized_names=None) is None
+
+
+def test_check_inputs_compares_large_integers_exactly():
+    s = SetFile({"Big": "9007199254740993", "N": "3"}, {})
+    assert check_inputs(s, {"Big": "9007199254740992", "N": "3.0"}, optimized_names=None) is not None
+    assert check_inputs(s, {"Big": "9007199254740993", "N": "3.0"}, optimized_names=None) is None

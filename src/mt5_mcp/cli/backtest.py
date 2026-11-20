@@ -123,6 +123,10 @@ def _locate(args: argparse.Namespace, cfg):  # noqa: ANN001
     )
 
 
+def _same_dir(a: Path, b: Path) -> bool:
+    return os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
+
+
 def _main(argv: list[str]) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -157,16 +161,18 @@ def _main(argv: list[str]) -> int:
 
     if not is_set_up(tester):
         return _fail(f"no tester install at {tester}: run mt5-mcp backtest --setup first")
-    if args.terminal_path or args.data_path:
-        paths = _locate(args, cfg)
-        install, data = paths.install_dir, paths.data_dir
-    else:
-        install, data = read_origin(tester)  # no re-discovery: same tree setup copied from
-    if not build_matches(install, tester):
-        return _fail("MT5 was updated; re-run mt5-mcp backtest --setup")
 
     ea = Path(os.path.abspath(args.ea))
-    with tester_lock(tester):
+    with tester_lock(tester):  # held from the origin check on, so a --setup cannot swap it mid-run
+        install, data = read_origin(tester)  # no re-discovery: same tree setup copied from
+        if args.terminal_path or args.data_path:
+            # The tester keeps setup's logins, so other paths would mix two terminals.
+            paths = _locate(args, cfg)
+            if not (_same_dir(paths.install_dir, install) and _same_dir(paths.data_dir, data)):
+                return _fail("--terminal-path/--data-path differ from the tester's setup; "
+                             "re-run mt5-mcp backtest --setup with them")
+        if not build_matches(install, tester):
+            return _fail("MT5 was updated; re-run mt5-mcp backtest --setup")
         report = new_report_name(ea.stem, datetime.now(timezone.utc))
         (tester / "reports").mkdir(exist_ok=True)
         expert = stage_ea(ea, tester)

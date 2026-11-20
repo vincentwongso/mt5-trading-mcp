@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 PERIODS = ("M1", "M2", "M3", "M4", "M5", "M6", "M10", "M12", "M15", "M20", "M30",
@@ -113,10 +114,11 @@ def parse_set(raw: bytes) -> SetFile:
 
 def _same(a: str, b: str) -> bool:
     try:
-        return float(a) == float(b)
-    except ValueError:
+        return Decimal(a.strip()) == Decimal(b.strip())  # exact for long ints; 3 == 3.0
+    except InvalidOperation:
         # Reports print .set text verbatim (probe 11): bool, enum number, string, epoch.
-        return a.strip().casefold() == b.strip().casefold()
+        # The report parser collapses runs of spaces, so compare collapsed text.
+        return " ".join(a.split()).casefold() == " ".join(b.split()).casefold()
 
 
 def check_inputs(set_file: SetFile, used: dict[str, str], *, optimized_names: list[str] | None) -> str | None:

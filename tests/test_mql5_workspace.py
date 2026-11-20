@@ -240,3 +240,39 @@ def test_check_tester_path_refuses_link_into_live_data(live, tmp_path):
         pytest.skip("symlinks not permitted here")
     with pytest.raises(WorkspaceError):
         ws.check_tester_path(alias / "tester", install, data)
+
+
+def test_failed_setup_rerun_clears_origin(live, tmp_path):
+    install, data = live
+    tester = tmp_path / "tester"
+    setup_tester(install, data, tester)
+    write_origin(tester, install, data)
+    (data / "config" / "common.ini").unlink()
+    with pytest.raises(WorkspaceError):
+        setup_tester(install, data, tester)
+    assert not is_set_up(tester)
+
+
+def test_mirror_dependencies_removes_copies_whose_source_is_gone(tmp_path):
+    live, tester = tmp_path / "live", tmp_path / "tester"
+    (live / "Indicators" / "Agent").mkdir(parents=True)
+    (live / "Libraries").mkdir(parents=True)
+    (live / "Indicators" / "Agent" / "a.ex5").write_bytes(b"a")
+    (live / "Indicators" / "Agent" / "b.ex5").write_bytes(b"b")
+    (live / "Libraries" / "lib.ex5").write_bytes(b"l")
+    mirror_dependencies(live, tester)
+    (live / "Indicators" / "Agent" / "b.ex5").unlink()
+    (live / "Libraries" / "lib.ex5").unlink()
+    (live / "Libraries").rmdir()
+    mirror_dependencies(live, tester)
+    assert (tester / "Indicators" / "Agent" / "a.ex5").is_file()
+    assert not (tester / "Indicators" / "Agent" / "b.ex5").exists()
+    assert not (tester / "Libraries" / "lib.ex5").exists()
+
+
+def test_mirror_dependencies_includes_experts(tmp_path):
+    live, tester = tmp_path / "live", tmp_path / "tester"
+    (live / "Experts" / "Project").mkdir(parents=True)
+    (live / "Experts" / "Project" / "X.ex5").write_bytes(b"x")
+    mirror_dependencies(live, tester)
+    assert (tester / "Experts" / "Project" / "X.ex5").is_file()

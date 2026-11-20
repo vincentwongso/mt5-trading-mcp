@@ -54,6 +54,8 @@ def check_tester_path(tester: Path, install: Path, live_data: Path) -> None:
 
 def setup_tester(install: Path, live_data: Path, tester: Path) -> None:
     tester.mkdir(parents=True, exist_ok=True)
+    # Not ready until write_origin: a refresh that fails midway must not look set up.
+    (tester / _ORIGIN).unlink(missing_ok=True)
     for f in install.iterdir():
         if f.is_file():
             shutil.copy2(f, tester / f.name)
@@ -110,13 +112,19 @@ def stage_set(src: Path, tester: Path, name: str) -> str:
 
 
 def mirror_dependencies(live_mql5: Path, tester_mql5: Path) -> int:
+    """Make the tester's compiled programs match the live tree; returns files copied.
+
+    Experts too: `#import "X.ex5"` also searches the EA's own folder. Copies
+    whose source is gone are deleted, so a backtest never loads a stale build.
+    """
     copied = 0
-    for folder in ("Indicators", "Libraries"):
-        root = live_mql5 / folder
-        if not root.is_dir():
-            continue
-        for src in root.rglob("*.ex5"):
-            dst = tester_mql5 / src.relative_to(live_mql5)
+    for folder in ("Experts", "Indicators", "Libraries"):
+        live = {p.relative_to(live_mql5): p for p in (live_mql5 / folder).rglob("*.ex5")}
+        for old in (tester_mql5 / folder).rglob("*.ex5"):
+            if old.relative_to(tester_mql5) not in live:
+                old.unlink()
+        for rel, src in live.items():
+            dst = tester_mql5 / rel
             s = src.stat()
             # Any difference, not just newer: a restored older build must be copied too.
             if not dst.exists() or (s.st_size, s.st_mtime_ns) != (dst.stat().st_size, dst.stat().st_mtime_ns):

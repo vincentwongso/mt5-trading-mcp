@@ -175,8 +175,12 @@ def _main(argv: list[str]) -> int:
             return _fail("MT5 was updated; re-run mt5-mcp backtest --setup")
         report = new_report_name(ea.stem, datetime.now(timezone.utc))
         (tester / "reports").mkdir(exist_ok=True)
-        expert = stage_ea(ea, tester)
-        mirror_dependencies(data / "MQL5", tester / "MQL5")
+        mirror_dependencies(data / "MQL5", tester / "MQL5")  # before staging: it deletes unknown .ex5s
+        live_experts = data / "MQL5" / "Experts"
+        if ea.suffix.lower() == ".ex5" and ea.is_file() and ea.is_relative_to(live_experts):
+            expert = "\\".join(ea.relative_to(live_experts).parts)  # mirrored with its folder's siblings
+        else:
+            expert = stage_ea(ea, tester)
         set_name = stage_set(Path(args.set), tester, report.rsplit("\\", 1)[-1]) if args.set else None
         spec = RunSpec(
             expert=expert, symbol=args.symbol, period=args.period,

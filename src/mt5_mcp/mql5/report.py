@@ -64,7 +64,7 @@ class _Cells(HTMLParser):
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "td" and self._buf is not None:
-            text = " ".join("".join(self._buf).split())
+            text = "".join(self._buf).strip()  # inner spaces kept: they can be part of an input value
             if text:
                 self.cells.append(text)
             self._buf = None
@@ -93,7 +93,7 @@ def parse_single_html(raw: bytes) -> SingleResult:
     values: dict[str, str] = {}
     for label, value in zip(cells, cells[1:]):
         if label.endswith(":"):
-            values.setdefault(label[:-1], value)
+            values.setdefault(" ".join(label[:-1].split()), value)
     missing = [label for label, _ in _SINGLE.values() if label not in values]
     if missing:
         raise ReportError(
@@ -115,7 +115,9 @@ def parse_single_html(raw: bytes) -> SingleResult:
 class OptTable:
     metrics: list[str]  # fixed columns, Pass..Trades
     inputs: list[str]  # one column per optimised input
-    rows: list[dict[str, str]]
+    rows: list[dict[str, str]]  # metric columns only
+    # Separate from rows: an input may be named like a metric (e.g. "Profit").
+    input_rows: list[dict[str, str]]
 
 
 def parse_opt_xml(raw: bytes) -> OptTable:
@@ -129,7 +131,9 @@ def parse_opt_xml(raw: bytes) -> OptTable:
         raise ReportError("optimisation report has no Trades column: unfinished run, or terminal language not English")
     header = table[0]
     split = header.index("Trades") + 1
-    return OptTable(header[:split], header[split:], [dict(zip(header, r)) for r in table[1:]])
+    metrics, inputs = header[:split], header[split:]
+    return OptTable(metrics, inputs, [dict(zip(metrics, r[:split])) for r in table[1:]],
+                    [dict(zip(inputs, r[split:])) for r in table[1:]])
 
 
 @dataclass(frozen=True)
@@ -148,14 +152,14 @@ def _pick(row: dict[str, str], result_col: str) -> dict[str, float]:
 def merge_passes(back: OptTable, forward: OptTable | None) -> list[PassRow]:
     fwd = {r["Pass"]: r for r in forward.rows} if forward else {}
     out = []
-    for r in back.rows:
+    for r, ins in zip(back.rows, back.input_rows):
         if forward and r["Pass"] not in fwd:
             continue  # MT5 may forward-test only some passes
         out.append(PassRow(
             int(r["Pass"]),
             _pick(r, "Result"),
             _pick(fwd[r["Pass"]], "Forward Result") if forward else None,
-            {name: r[name] for name in back.inputs},
+            dict(ins),
         ))
     out.sort(key=lambda p: (p.forward or p.back)["result"], reverse=True)
     return out

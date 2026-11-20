@@ -107,7 +107,8 @@ def test_merge_without_forward_ranks_by_back_result():
 def _table(rows, extra_metrics=()):
     metrics = ["Pass", *extra_metrics, "Result", "Profit", "Expected Payoff", "Profit Factor",
                "Recovery Factor", "Sharpe Ratio", "Custom", "Equity DD %", "Trades"]
-    return OptTable(metrics=metrics, inputs=["P"], rows=rows)
+    return OptTable(metrics=metrics, inputs=["P"], rows=[{k: v for k, v in r.items() if k != "P"} for r in rows],
+                    input_rows=[{"P": r["P"]} for r in rows])
 
 
 def _row(p, result, **kw):
@@ -169,3 +170,18 @@ def test_single_input_value_ending_in_colon_is_kept():
     raw = _read("single_types.htm").decode("utf-16").replace("Note=abc def", "Note=prefix:")
     r = parse_single_html(raw.encode("utf-16"))
     assert r.inputs["Note"] == "prefix:" and r.inputs["Span"] == "7"
+
+
+def test_opt_input_named_like_a_metric_does_not_overwrite_it():
+    raw = _read("opt_full.xml").replace(b">MovingPeriod<", b">Profit<")
+    t = parse_opt_xml(raw)
+    assert t.inputs == ["Profit", "MovingShift"]
+    rows = merge_passes(t, None)
+    plain = merge_passes(parse_opt_xml(_read("opt_full.xml")), None)
+    assert rows[0].back == plain[0].back
+    assert rows[0].inputs["Profit"] == plain[0].inputs["MovingPeriod"]
+
+
+def test_single_input_keeps_repeated_spaces():
+    raw = _read("single_types.htm").decode("utf-16").replace("Note=abc def", "Note=abc  def")
+    assert parse_single_html(raw.encode("utf-16")).inputs["Note"] == "abc  def"

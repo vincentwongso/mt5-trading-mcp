@@ -261,3 +261,20 @@ def test_build_check_waits_for_the_lock(env, capsys):
     with ws.tester_lock(env["tester"]):
         assert bt(env) == 2
     assert "another backtest is running" in capsys.readouterr().err
+
+
+def test_ea_inside_live_experts_keeps_its_folder_and_siblings(env):
+    project = env["data"] / "MQL5" / "Experts" / "Project"
+    project.mkdir(parents=True)
+    (project / "X.ex5").write_bytes(b"lib")  # #import "X.ex5" searches the EA's own folder
+    env["ea"] = project / "MyEA.ex5"
+    env["ea"].write_bytes(b"EX5")
+    assert bt(env) == 0
+    assert env["inis"][-1]["Expert"] == "Project\\MyEA.ex5"
+    assert (env["tester"] / "MQL5" / "Experts" / "Project" / "X.ex5").is_file()
+    assert not (env["tester"] / "MQL5" / "Experts" / "Agent" / "MyEA.ex5").exists()
+
+
+def test_ea_outside_live_tree_is_staged_after_mirroring(env):
+    assert bt(env) == 0
+    assert (env["tester"] / "MQL5" / "Experts" / "Agent" / "MyEA.ex5").is_file()

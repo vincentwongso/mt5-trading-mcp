@@ -153,14 +153,16 @@ the errors and reruns until it exits 0. Clean builds install to
 `MQL5\<Kind>\Agent\` in the terminal's data folder; you attach them
 yourself. Reinstalling an EA that is attached to a live chart reloads the new
 code on that chart. Agents get the loop from the `mt5-mql5-build` skill.
-Exit codes: `0` built, `1` compile errors, `2` could not run. Under
-Wine/Docker MetaEditor currently hangs, so this is Windows only for now.
+Exit codes: `0` built, `1` compile errors, `2` could not run. On Linux both
+commands run in the backtest container (`deploy/docker-compose.backtest.yml`)
+via `docker exec mt5-backtest mt5-mcp ...`.
 
 `mt5-mcp backtest <ea.ex5>` then runs the Strategy Tester on that build
 (single run, or `--optimize full|genetic` with a forward test on by default)
 and prints a short summary or a ranked table of input sets. It runs on a
 separate copy of MT5 made once with `mt5-mcp backtest --setup`, so your live
-terminal is never touched. Windows only, from a logged-in desktop session.
+terminal is never touched. Windows (from a logged-in desktop session) or the
+Linux backtest container.
 
 ## For AI agents
 

@@ -60,7 +60,7 @@ the terminal in once (VNC on `VNC_PORT`), then
 `docker exec mt5-backtest mt5-mcp backtest --setup`. Use `--out <work>/out` to
 get the report and JSON on the host.
 
-To test an EA, use `mt5-mcp backtest` (Windows, same skill): run
+To test an EA, use `mt5-mcp backtest` (same skill; Windows or the Docker container above): run
 `mt5-mcp backtest --setup` once, then
 `mt5-mcp backtest <installed .ex5> --symbol ... --period H1 --from ... --to ...`.
 It runs on a separate copy of MT5, never the live terminal. `--optimize

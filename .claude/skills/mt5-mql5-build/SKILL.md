@@ -180,7 +180,7 @@ path on the host and in the container. Use host paths only; output paths come
 back as host paths and files are owned by the host user:
 ```
 docker exec mt5-backtest mt5-mcp compile /home/me/mt5-work/src/MyEA.mq5 --no-install
-docker exec mt5-backtest mt5-mcp backtest /home/me/mt5-work/src/MyEA.ex5 --symbol EURUSD.z \
+docker exec mt5-backtest mt5-mcp backtest /home/me/mt5-work/src/MyEA.ex5 --symbol EURUSD \
     --period H1 --from 2026-01-01 --to 2026-11-01 --out /home/me/mt5-work/out --json
 ```
 Exit codes are the same as on Windows. `--setup` is run once by whoever set up

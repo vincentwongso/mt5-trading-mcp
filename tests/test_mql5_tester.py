@@ -16,7 +16,7 @@ from mt5_mcp.mql5.tester import (
 
 def _spec(**kw):
     base = dict(
-        expert="Agent\\MyEA.ex5", symbol="EURUSD.z", period="H1",
+        expert="Agent\\MyEA.ex5", symbol="EURUSD", period="H1",
         date_from=date(2026, 10, 1), date_to=date(2026, 11, 1),
         deposit=10000.0, currency="USD", leverage=100, model="ohlc",
         optimize=None, criterion="balance", forward="1/3", set_name=None,
@@ -33,7 +33,7 @@ def _lines(text):
 def test_build_ini_single_run():
     lines = _lines(build_ini(_spec()))
     assert lines[0] == "[Tester]"
-    for want in ("Expert=Agent\\MyEA.ex5", "Symbol=EURUSD.z", "Period=H1", "Model=1",
+    for want in ("Expert=Agent\\MyEA.ex5", "Symbol=EURUSD", "Period=H1", "Model=1",
                  "FromDate=2026.10.01", "ToDate=2026.11.01", "Deposit=10000", "Currency=USD",
                  "Leverage=100", "Optimization=0", "ForwardMode=0", "Report=reports\\x",
                  "ReplaceReport=1", "ShutdownTerminal=1", "[Experts]", "AllowLiveTrading=0", "Enabled=0"):
@@ -149,7 +149,7 @@ def test_ini_value_rejects_section_injection(value):
 
 def test_ini_value_accepts_broker_symbols():
     from mt5_mcp.mql5.tester import ini_value
-    assert ini_value("EURUSD.z") == "EURUSD.z" and ini_value("US500#") == "US500#"
+    assert ini_value("EURUSD.m") == "EURUSD.m" and ini_value("US500#") == "US500#"
 
 
 def test_check_inputs_ignores_repeated_spaces_in_text():

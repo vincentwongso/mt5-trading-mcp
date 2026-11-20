@@ -587,7 +587,7 @@ Same class of trap exists in `place_order` for any of `volume`, `price`,
 ## [1.0.8] - 2026-05-08
 
 Bugfix release. Surfaced when a downstream agent doing position
-management against a live MT5 demo attempted to trail an XAGUSD.z
+management against a live MT5 demo attempted to trail an XAGUSD
 stop-loss to breakeven and the mutating tool returned `INTERNAL_ERROR:
 NoneType object has no attribute retcode` instead of a typed broker envelope.
 Same trap fires for any caller of `place_order`, `modify_order`,

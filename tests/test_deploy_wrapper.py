@@ -46,9 +46,9 @@ def run(tmp_path):
 
 
 def test_translates_absolute_paths_only(run):
-    r = run(["backtest", "/home/v/w/src/My EA.ex5", "--out=/home/v/w/out", "--symbol", "EURUSD.z", "rel/x.set"])
+    r = run(["backtest", "/home/v/w/src/My EA.ex5", "--out=/home/v/w/out", "--symbol", "EURUSD", "rel/x.set"])
     assert r.args == ["C:\\Python311\\python.exe", "-m", "mt5_mcp", "backtest",
-                      "Z:\\home\\v\\w\\src\\My EA.ex5", "--out=Z:\\home\\v\\w\\out", "--symbol", "EURUSD.z",
+                      "Z:\\home\\v\\w\\src\\My EA.ex5", "--out=Z:\\home\\v\\w\\out", "--symbol", "EURUSD",
                       "rel/x.set"]
 
 

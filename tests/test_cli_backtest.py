@@ -81,7 +81,7 @@ def setup(env, *extra):
 def bt(env, *extra, setup_first=True):
     if setup_first and not (env["tester"] / "origin.json").exists():
         assert setup(env) == 0
-    base = [str(env["ea"]), "--symbol", "EURUSD.z", "--period", "H1", "--from", "2026-10-01",
+    base = [str(env["ea"]), "--symbol", "EURUSD", "--period", "H1", "--from", "2026-10-01",
             "--to", "2026-11-01", "--tester-path", str(env["tester"]), "--config", str(env["cfg"])]
     return cli.main([*base, *extra])
 
@@ -108,7 +108,7 @@ def test_optimize_prints_table_ranked_by_forward_exit0(env, capsys):
     capsys.readouterr()
     assert bt(env, "--optimize", "full", "--set", s, "--top", "3") == 0
     lines = capsys.readouterr().out.splitlines()
-    assert lines[0] == ("settings: EURUSD.z H1 2026-10-01..2026-11-01 model=ohlc deposit=10000 USD "
+    assert lines[0] == ("settings: EURUSD H1 2026-10-01..2026-11-01 model=ohlc deposit=10000 USD "
                         "leverage=1:100 optimize=full criterion=balance forward=1/3")
     assert lines[1].split()[:3] == ["rank", "pass", "fwd_result"]
     assert lines[2].split()[:2] == ["1", "68"]
@@ -362,7 +362,7 @@ def test_single_run_summary_starts_with_settings(env, capsys):
     capsys.readouterr()
     assert bt(env, "--deposit", "2500.5", "--currency", "EUR", "--leverage", "30") == 0
     first = capsys.readouterr().out.splitlines()[0]
-    assert first == "settings: EURUSD.z H1 2026-10-01..2026-11-01 model=ohlc deposit=2500.5 EUR leverage=1:30"
+    assert first == "settings: EURUSD H1 2026-10-01..2026-11-01 model=ohlc deposit=2500.5 EUR leverage=1:30"
 
 
 def test_settings_deposit_matches_the_ini(env, capsys):
@@ -379,7 +379,7 @@ def test_single_run_writes_json_and_prints_path(env, capsys):
     out = capsys.readouterr().out
     path = Path(re.search(r"^json: (.+)$", out, re.M)[1])
     doc = json.loads(path.read_text(encoding="utf-8"))
-    assert doc["kind"] == "single" and doc["settings"]["symbol"] == "EURUSD.z" and doc["journal"]["started"] is True
+    assert doc["kind"] == "single" and doc["settings"]["symbol"] == "EURUSD" and doc["journal"]["started"] is True
     assert doc["settings"]["deposit"] == 10000.0 and doc["settings"]["leverage"] == 100
     assert path.parent == env["tester"] / "reports" and path.name.endswith("Z-MyEA.json")
     assert out.index("json: ") < out.index("report: ")
@@ -570,8 +570,8 @@ def test_optimization_clears_mt5_cache_before_run(env):
     setup(env)
     cache = env["tester"] / "Tester" / "cache"
     cache.mkdir(parents=True)
-    (cache / "EA.EURUSD.z.H1.1.2.10.ABC.opt").write_bytes(b"cached")
-    (cache / "EA.EURUSD.z.H1.1_2.1.DEF.tst").write_bytes(b"single")
+    (cache / "EA.EURUSD.H1.1.2.10.ABC.opt").write_bytes(b"cached")
+    (cache / "EA.EURUSD.H1.1_2.1.DEF.tst").write_bytes(b"single")
     assert bt(env, "--optimize", "full", "--set", write_set(env, OPT_SET)) == 0
     assert not any(cache.glob("*.opt")) and any(cache.glob("*.tst"))
 

@@ -40,7 +40,7 @@ def test_happy_path_returns_png_and_cleans_up(tmp_path):
 
     out = capture_chart(
         _StubClient(tmp_path),
-        symbol="XAUUSD.z",
+        symbol="XAUUSD",
         timeframe_name="H1",
         width=800,
         height=600,
@@ -63,7 +63,7 @@ def test_bom_prefixed_ok_status_is_tolerated(tmp_path):
 
     out = capture_chart(
         _StubClient(tmp_path),
-        symbol="XAUUSD.z",
+        symbol="XAUUSD",
         timeframe_name="H1",
         width=800,
         height=600,
@@ -93,7 +93,7 @@ def test_request_payload_is_written(tmp_path):
 
     out = capture_chart(
         _StubClient(tmp_path),
-        symbol="EURUSD.z",
+        symbol="EURUSD",
         timeframe_name="M15",
         width=1280,
         height=720,
@@ -104,7 +104,7 @@ def test_request_payload_is_written(tmp_path):
         sleep=fake_sleep,
     )
     assert out == b"X"
-    assert seen["payload"] == "fixedid|EURUSD.z|M15|1280|720|agent.tpl"
+    assert seen["payload"] == "fixedid|EURUSD|M15|1280|720|agent.tpl"
 
 
 def test_timeout_raises(tmp_path):
@@ -112,7 +112,7 @@ def test_timeout_raises(tmp_path):
     with pytest.raises(MT5Error) as ei:
         capture_chart(
             _StubClient(tmp_path),
-            symbol="EURUSD.z",
+            symbol="EURUSD",
             timeframe_name="H1",
             width=800,
             height=600,
@@ -155,7 +155,7 @@ def test_stale_orphans_are_swept(tmp_path):
 
     out = capture_chart(
         _StubClient(tmp_path),
-        symbol="EURUSD.z",
+        symbol="EURUSD",
         timeframe_name="H1",
         width=800,
         height=600,
@@ -186,7 +186,7 @@ def test_sweep_ttl_respects_long_timeout(tmp_path):
 
     out = capture_chart(
         _StubClient(tmp_path),
-        symbol="EURUSD.z",
+        symbol="EURUSD",
         timeframe_name="H1",
         width=800,
         height=600,
@@ -209,7 +209,7 @@ def test_missing_data_path_raises_failed(tmp_path):
     with pytest.raises(MT5Error) as ei:
         capture_chart(
             _NoPath(),
-            symbol="EURUSD.z",
+            symbol="EURUSD",
             timeframe_name="H1",
             width=800,
             height=600,
@@ -236,7 +236,7 @@ def _capture_capturing_payload(tmp_path, **kwargs):
 
     capture_chart(
         _StubClient(tmp_path),
-        symbol="EURUSD.z",
+        symbol="EURUSD",
         timeframe_name="M15",
         width=1280,
         height=720,
@@ -253,13 +253,13 @@ def _capture_capturing_payload(tmp_path, **kwargs):
 def test_no_annotations_payload_is_unchanged_single_line(tmp_path):
     # Backward compatibility: an already-deployed 1.5.0 .ex5 must keep working.
     payload = _capture_capturing_payload(tmp_path, annotation_lines=None)
-    assert payload == "fixedid|EURUSD.z|M15|1280|720|agent.tpl"
+    assert payload == "fixedid|EURUSD|M15|1280|720|agent.tpl"
     assert "\n" not in payload
 
 
 def test_empty_annotation_list_is_also_a_single_line(tmp_path):
     payload = _capture_capturing_payload(tmp_path, annotation_lines=[])
-    assert payload == "fixedid|EURUSD.z|M15|1280|720|agent.tpl"
+    assert payload == "fixedid|EURUSD|M15|1280|720|agent.tpl"
 
 
 def test_annotation_lines_are_appended_after_the_header(tmp_path):
@@ -268,7 +268,7 @@ def test_annotation_lines_are_appended_after_the_header(tmp_path):
         annotation_lines=["A|hline|2650|255|0|R", "A|label|0|10|20|65535|note"],
     )
     assert payload.split("\r\n") == [
-        "fixedid|EURUSD.z|M15|1280|720|agent.tpl",
+        "fixedid|EURUSD|M15|1280|720|agent.tpl",
         "A|hline|2650|255|0|R",
         "A|label|0|10|20|65535|note",
     ]
@@ -276,7 +276,7 @@ def test_annotation_lines_are_appended_after_the_header(tmp_path):
 
 def test_viewport_fields_none_keeps_six_field_header(tmp_path):
     payload = _capture_capturing_payload(tmp_path, viewport_fields=None)
-    assert payload == "fixedid|EURUSD.z|M15|1280|720|agent.tpl"
+    assert payload == "fixedid|EURUSD|M15|1280|720|agent.tpl"
 
 
 def test_all_empty_viewport_fields_stay_six_field_header(tmp_path):
@@ -286,14 +286,14 @@ def test_all_empty_viewport_fields_stay_six_field_header(tmp_path):
     payload = _capture_capturing_payload(
         tmp_path, viewport_fields=["", "", "", "", ""]
     )
-    assert payload == "fixedid|EURUSD.z|M15|1280|720|agent.tpl"
+    assert payload == "fixedid|EURUSD|M15|1280|720|agent.tpl"
 
 
 def test_viewport_fields_are_appended_after_template(tmp_path):
     payload = _capture_capturing_payload(
         tmp_path, viewport_fields=["3", "", "", "", ""]
     )
-    assert payload == "fixedid|EURUSD.z|M15|1280|720|agent.tpl|3||||"
+    assert payload == "fixedid|EURUSD|M15|1280|720|agent.tpl|3||||"
 
 
 def test_viewport_and_annotation_lines_coexist(tmp_path):
@@ -303,7 +303,7 @@ def test_viewport_and_annotation_lines_coexist(tmp_path):
         annotation_lines=["A|hline|2650|2237106|0|"],
     )
     lines = payload.split("\r\n")
-    assert lines[0] == "fixedid|EURUSD.z|M15|1280|720|agent.tpl|||150||"
+    assert lines[0] == "fixedid|EURUSD|M15|1280|720|agent.tpl|||150||"
     assert lines[1] == "A|hline|2650|2237106|0|"
 
 
@@ -315,7 +315,7 @@ def test_no_bars_at_time_maps_to_dedicated_code(tmp_path):
     with pytest.raises(MT5Error) as ei:
         capture_chart(
             _StubClient(tmp_path),
-            symbol="EURUSD.z",
+            symbol="EURUSD",
             timeframe_name="H1",
             width=800,
             height=600,

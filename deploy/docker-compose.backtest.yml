@@ -7,7 +7,7 @@
 #   # first boot installs MT5 + Wine-Python (a few minutes); log the terminal in
 #   # once at http://127.0.0.1:${VNC_PORT} unless the env file has the password, then:
 #   docker exec mt5-backtest mt5-mcp backtest --setup
-#   docker exec mt5-backtest mt5-mcp backtest "$MT5_WORK_DIR/src/MyEA.ex5" --symbol EURUSD.z \
+#   docker exec mt5-backtest mt5-mcp backtest "$MT5_WORK_DIR/src/MyEA.ex5" --symbol EURUSD \
 #       --period H1 --from 2026-01-01 --to 2026-06-01 --out "$MT5_WORK_DIR/out" --json
 #
 # MT5_WORK_DIR is mounted at the same path inside the container, so host paths
@@ -35,7 +35,7 @@ services:
       - MT5_LOGIN=${MT5_LOGIN:-}
       - MT5_PASSWORD=${MT5_PASSWORD:-}
       - MT5_SERVER=${MT5_SERVER:-}
-      - MT5_EA_SYMBOL=${MT5_EA_SYMBOL:-EURUSD.z}
+      - MT5_EA_SYMBOL=${MT5_EA_SYMBOL:-EURUSD}
       - MT5_MCP_VERSION=${MT5_MCP_VERSION:-}
       - CUSTOM_USER=${VNC_USER:-mt5}
       - PASSWORD=${VNC_PASSWORD:-change-me}

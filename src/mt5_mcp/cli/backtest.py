@@ -238,7 +238,16 @@ def _main(argv: list[str]) -> int:
                 return _fail("--terminal-path/--data-path differ from the tester's setup; "
                              "re-run mt5-mcp backtest --setup with them")
         if not build_matches(install, tester):
-            return _fail("MT5 was updated; re-run mt5-mcp backtest --setup")
+            # LiveUpdate replaced the terminal; an unattended agent cannot be asked to re-run --setup.
+            try:
+                setup_tester(install, data, tester)
+                write_origin(tester, install, data)
+                if not build_matches(install, tester):
+                    raise WorkspaceError("the tester copy still differs from the live terminal")
+            except (OSError, WorkspaceError) as exc:
+                return _fail(f"MT5 was updated and refreshing the tester failed: {exc}; "
+                             "re-run mt5-mcp backtest --setup")
+            print("MT5 was updated; refreshed the tester install", file=sys.stderr)
         report = new_report_name(ea.stem, datetime.now(timezone.utc))
         (tester / "reports").mkdir(exist_ok=True)
         mirror_dependencies(data / "MQL5", tester / "MQL5")  # before staging: it deletes unknown .ex5s

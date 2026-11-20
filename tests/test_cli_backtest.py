@@ -147,13 +147,42 @@ def test_not_set_up_exit2(env, capsys):
     assert "--setup" in capsys.readouterr().err
 
 
-def test_build_mismatch_exit2(env, capsys):
-    setup(env)
+def _touch_live(env):
     exe = env["install"] / "terminal64.exe"
     st = exe.stat()
     os.utime(exe, ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+
+
+def test_build_mismatch_refreshes_and_runs(env, capsys):
+    setup(env)
+    _touch_live(env)
+    assert bt(env) == 0
+    assert "MT5 was updated; refreshed the tester install" in capsys.readouterr().err
+    assert ws.build_matches(env["install"], env["tester"])
+
+
+def test_refresh_failure_exit2_with_hint(env, monkeypatch, capsys):
+    setup(env)
+    _touch_live(env)
+
+    def boom(*a):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(cli, "setup_tester", boom)
     assert bt(env) == 2
-    assert "re-run mt5-mcp backtest --setup" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "disk full" in err and "re-run mt5-mcp backtest --setup" in err
+
+
+def test_refresh_happens_after_waiting_for_the_lock(env, capsys):
+    setup(env)
+    _touch_live(env)
+    t = threading.Thread(target=_hold, args=(env["tester"], 1.0))
+    t.start()
+    time.sleep(0.2)
+    assert bt(env, "--wait") == 0
+    t.join()
+    assert "refreshed the tester install" in capsys.readouterr().err
 
 
 def test_lock_held_exit2(env, capsys):

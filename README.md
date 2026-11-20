@@ -112,6 +112,20 @@ MT5's LiveUpdate keeps it current. To build and backtest EAs on Linux, use the
 backtest container in `deploy/docker-compose.backtest.yml` (see
 [docs/agents.md](docs/agents.md)).
 
+Known issue: fresh volumes. A new terminal does not know your broker's server,
+and its Login dialog can draw as a black box under Wine, so it never logs in
+(the MCP server then reports IPC timeouts). Workaround, once per volume:
+1. Copy `servers.dat` (server addresses only) from a terminal that knows the
+   broker, e.g. a Windows install's `%APPDATA%\MetaQuotes\Terminal\<id>\config\`,
+   into `/config/.wine/drive_c/Program Files/MetaTrader 5/Config/` (owner `abc`).
+2. Log in with a one-off start config: stop the terminal and run
+   `terminal64.exe "/config:C:\autologin.ini"` as `abc`, where the ini has
+   `[Common]` `Login=`, `Password=`, `Server=` and `KeepPrivate=1`. Delete the
+   ini once the journal says `authorized`.
+3. So the login survives restarts, add `Login=` and `Server=` (no password)
+   under `[Common]` in `Config/common.ini` (UTF-16) while the terminal is
+   stopped.
+
 Full walkthrough:
 **[docs/installation.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/docs/installation.md)**.
 

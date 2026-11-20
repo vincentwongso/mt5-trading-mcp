@@ -6,6 +6,8 @@ import json
 import os
 import re
 import shutil
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -517,3 +519,18 @@ def test_out_with_setup_or_read_is_usage_error(env, extra):
     with pytest.raises(SystemExit) as e:
         cli.main([*extra, "--out", str(env["tmp"] / "o"), "--tester-path", str(env["tester"])])
     assert e.value.code == 2
+
+
+def _hold(tester, secs):
+    with ws.tester_lock(tester):
+        time.sleep(secs)
+
+
+def test_wait_runs_after_lock_released_exit0(env, capsys):
+    setup(env)
+    t = threading.Thread(target=_hold, args=(env["tester"], 1.5))
+    t.start()
+    time.sleep(0.2)
+    assert bt(env, "--wait") == 0
+    t.join()
+    assert capsys.readouterr().err.count("waiting for another backtest to finish...") == 1

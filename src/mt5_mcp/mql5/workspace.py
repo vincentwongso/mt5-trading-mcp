@@ -12,7 +12,8 @@ import json
 import os
 import shutil
 import subprocess
-from collections.abc import Iterator
+import time
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -139,25 +140,36 @@ def new_report_name(stem: str, now: datetime) -> str:
 
 
 @contextmanager
-def tester_lock(tester: Path) -> Iterator[None]:
+def tester_lock(tester: Path, *, wait: bool = False, on_wait: Callable[[], None] | None = None) -> Iterator[None]:
     tester.mkdir(parents=True, exist_ok=True)
     f = open(tester / ".backtest.lock", "a+b")
     try:
-        try:
-            if os.name == "nt":
-                import msvcrt
-
-                f.seek(0)
-                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            raise LockHeld("another backtest is running") from None
+        while True:
+            try:
+                _try_lock(f)
+                break
+            except OSError:
+                if not wait:
+                    raise LockHeld("another backtest is running") from None
+                if on_wait:
+                    on_wait()
+                    on_wait = None  # announce once
+                time.sleep(1.0)  # poll: msvcrt's blocking mode gives up after 10s
         yield  # the OS drops the lock when the file closes or the process dies
     finally:
         f.close()
+
+
+def _try_lock(f) -> None:  # noqa: ANN001
+    if os.name == "nt":
+        import msvcrt
+
+        f.seek(0)
+        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
 def _newest(folder: Path) -> Path | None:

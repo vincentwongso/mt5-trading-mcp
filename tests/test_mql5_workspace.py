@@ -276,3 +276,23 @@ def test_mirror_dependencies_includes_experts(tmp_path):
     (live / "Experts" / "Project" / "X.ex5").write_bytes(b"x")
     mirror_dependencies(live, tester)
     assert (tester / "Experts" / "Project" / "X.ex5").is_file()
+
+
+def test_lock_wait_acquires_after_release(tmp_path):
+    import threading
+    import time
+
+    released, waits = threading.Event(), []
+
+    def hold():
+        with ws.tester_lock(tmp_path):
+            time.sleep(1.5)
+            released.set()
+
+    t = threading.Thread(target=hold)
+    t.start()
+    time.sleep(0.2)
+    with ws.tester_lock(tmp_path, wait=True, on_wait=lambda: waits.append(1)):
+        assert released.is_set()
+    t.join()
+    assert waits == [1]

@@ -118,6 +118,8 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--terminal-path", default=None, help="Live terminal64.exe or its folder. Overrides [mt5] terminal_path.")
     p.add_argument("--data-path", default=None, help="Live terminal data folder. Overrides [mt5] data_path.")
     p.add_argument("--config", default=None, help="Path to config TOML (default: per-OS user config dir).")
+    p.add_argument("--wait", action="store_true",
+                   help="If another backtest holds the tester, wait for it instead of exiting 2.")
     p.add_argument("--out", default=None,
                    help="Copy the report and write the JSON into this folder; printed paths name the copies.")
     p.add_argument("--json", action="store_true",
@@ -166,6 +168,10 @@ def _read_report(path: Path) -> int:
     return 0
 
 
+def _announce_wait() -> None:
+    print("waiting for another backtest to finish...", file=sys.stderr)
+
+
 def _deliver(out_dir: Path | None, reports: list[Path]) -> list[Path]:
     """Copy the reports into --out; the copies are what the caller is told about."""
     if out_dir is None:
@@ -196,7 +202,7 @@ def _main(argv: list[str]) -> int:
     if args.setup:
         paths = _locate(args, cfg)
         check_tester_path(tester, paths.install_dir, paths.data_dir)
-        with tester_lock(tester):
+        with tester_lock(tester, wait=args.wait, on_wait=_announce_wait):
             setup_tester(paths.install_dir, paths.data_dir, tester)
             write_origin(tester, paths.install_dir, paths.data_dir)
         print(host_paths(f"tester: {tester}"))
@@ -223,7 +229,7 @@ def _main(argv: list[str]) -> int:
         return _fail(f"no tester install at {tester}: run mt5-mcp backtest --setup first")
 
     ea = Path(os.path.abspath(args.ea))
-    with tester_lock(tester):  # held from the origin check on, so a --setup cannot swap it mid-run
+    with tester_lock(tester, wait=args.wait, on_wait=_announce_wait):  # held from the origin check on, so a --setup cannot swap it mid-run
         install, data = read_origin(tester)  # no re-discovery: same tree setup copied from
         if args.terminal_path or args.data_path:
             # The tester keeps setup's logins, so other paths would mix two terminals.

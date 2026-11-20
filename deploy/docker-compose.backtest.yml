@@ -14,6 +14,10 @@
 # work as arguments and come back in the output. PUID/PGID make the files there
 # yours; they only take effect on a fresh volume (an existing one would need a
 # recursive chown).
+# Own project name: sharing "deploy" with docker-compose.yml makes compose call the live
+# container an orphan and suggest --remove-orphans, which would delete it.
+name: mt5-backtest
+
 services:
   mt5-backtest:
     build:
@@ -44,3 +48,4 @@ services:
 
 volumes:
   mt5-backtest-config:
+    name: mt5-backtest-config  # fixed, so a project rename never orphans the logged-in volume

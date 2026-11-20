@@ -36,3 +36,12 @@ def test_several_paths_over_lines():
 
 def test_root():
     assert host_paths("Z:\\") == "/"
+
+
+def test_two_z_paths_on_one_line():
+    assert host_paths(r"copy Z:\w\a b.htm to Z:\w\out") == "copy /w/a b.htm to /w/out"
+
+
+def test_oserror_repr_with_doubled_backslashes():
+    err = str(FileNotFoundError(2, "No such file or directory", "Z:\\w\\src\\x.set"))
+    assert host_paths(err) == "[Errno 2] No such file or directory: '/w/src/x.set'"

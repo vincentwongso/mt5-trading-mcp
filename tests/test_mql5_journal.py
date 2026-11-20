@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from mt5_mcp.mql5.journal import LogLine, journal_block, parse_lines, read_new, snapshot_logs, summarize
+from mt5_mcp.mql5.journal import LogLine, journal_block, parse_lines, read_new, run_cause, snapshot_logs, summarize
 
 J = Path(__file__).parent / "fixtures" / "mql5" / "journal"
 
@@ -40,7 +40,7 @@ def test_normal_run_started_no_errors():
 
 def test_optimization_never_judged():
     j = summarize(_lines("optimization.log"), [], ea_stem="OptInit", optimization=True)
-    assert j["started"] is None and j["crashed"] is False and j["ea_lines"] == []
+    assert j["started"] is None and j["crashed"] is None and j["ea_lines"] == []
     assert len(j["errors"]) == 5  # odd P rejected by OnInit, informational only
 
 
@@ -114,3 +114,31 @@ def test_read_new_seeks_instead_of_reading_whole_files(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "read_bytes", whole)
     lines, files = read_new(tmp_path, before)
     assert [x.message for x in lines] == ["new line"] and len(files) == 1
+
+
+def test_optimization_crashed_is_unknown():
+    j = summarize([], [], ea_stem="MyEA", optimization=True)
+    assert j["crashed"] is None
+
+
+def _line(level, source, message):
+    return LogLine(level, source, message)
+
+
+def test_run_cause_names_the_tester_error_with_its_context():
+    lines = [
+        _line(1, "Network", "'1': connection to Broker-Demo lost"),
+        _line(0, "Tester", "EURUSD: preliminary downloading of history ticks canceled"),
+        _line(3, "Tester", "no history data, stop testing"),
+    ]
+    assert run_cause(lines) == ("no history data, stop testing (EURUSD: preliminary downloading of history "
+                                "ticks canceled; connection to the trade server was lost)")
+
+
+def test_run_cause_without_a_tester_error_is_none():
+    assert run_cause([_line(1, "Network", "'1': connection to Broker-Demo lost"),
+                      _line(0, "Tester", "automatic testing finished")]) is None
+
+
+def test_run_cause_without_context_is_just_the_error():
+    assert run_cause([_line(2, "Tester", "cannot load expert")]) == "cannot load expert"

@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **Backtest `error` field** - every backtest JSON says why a run failed (`null` on success), and `--json` prints it on every exit 2 after the tester ran, including a rejected `.set`, a timeout and a run with no usable report.
+- **`compile --no-install`** prints `built: <path>`.
+
+### Fixed
+- **Docker volume upgrades hanging** - a volume from an older image waited forever on a hidden Wine-Mono prompt after the Wine 11.10 upgrade, hanging every `docker exec ... mt5-mcp`; the image now installs the Wine-Mono it needs (11.1.0).
+- **Backtest failure messages** - the message leads with the tester's own reason (e.g. a cancelled tick download), and the log lines shown are only this run's.
+- **`backtest --wait`** no longer retries forever on a lock error that is not another backtest.
+- **Smaller fixes** - a failed start outranks a `.set` mismatch; optimisation journals report `crashed: null`; NaN/Infinity are written as `null`; `--read` refuses a `.forward.xml` and run flags; host paths survive two paths on one line and OSError messages; relative compile diagnostics in Docker use `/`; `MT5_MCP_SERVE` accepts `false`/`off`/`no`; the backtest compose no longer assumes 12 CPUs.
+
 ## [1.8.3] - 2026-11-21
 
 ### Added

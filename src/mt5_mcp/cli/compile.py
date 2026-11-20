@@ -134,6 +134,7 @@ def _main(argv: list[str]) -> int:
     if ex5 is None:
         return _fail(f"clean build but no fresh .ex5 found for {source}")
     if args.no_install:
+        print(host_paths(f"built: {ex5}"))
         return 0
     # Already inside a kind folder (source lives there, or a Shared Project).
     if any(ex5.is_relative_to(mql5 / f) for f in KIND_FOLDERS.values()):

@@ -23,7 +23,7 @@ for a in "$@"; do
 done
 
 # Windows Python writes CRLF; strip CR from each stream so stdout stays clean JSON.
-wine 'C:\Python311\python.exe' -m mt5_mcp "${args[@]}" 2> >(tr -d '\r' >&2) | tr -d '\r'
-rc=${PIPESTATUS[0]}
-wait  # let the stderr filter drain
+# The group keeps the stderr filter a child of this shell, so `wait` drains it.
+{ wine 'C:\Python311\python.exe' -m mt5_mcp "${args[@]}" | tr -d '\r'; rc=${PIPESTATUS[0]}; } 2> >(tr -d '\r' >&2)
+wait
 exit "$rc"

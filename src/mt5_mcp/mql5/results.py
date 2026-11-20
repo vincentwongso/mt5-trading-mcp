@@ -8,6 +8,7 @@ in `metrics`.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -71,11 +72,13 @@ def costs(deals: list[Deal]) -> dict:
             "swap": round(sum(d.swap for d in deals), 2)}
 
 
-def single_document(settings: dict, result: SingleResult, journal: dict | None, report: Path) -> dict:
+def single_document(settings: dict, result: SingleResult, journal: dict | None, report: Path,
+                    error: str | None = None) -> dict:
     curve = balance_curve(result.deals)
     return {
         "schema": SCHEMA,
         "kind": "single",
+        "error": error,
         "settings": {**settings, "inputs": result.inputs},
         "metrics": result.metrics,
         "costs": costs(result.deals),
@@ -87,12 +90,34 @@ def single_document(settings: dict, result: SingleResult, journal: dict | None, 
     }
 
 
-def optimization_document(settings: dict, rows: list[PassRow], journal: dict | None, report: Path) -> dict:
+def optimization_document(settings: dict, rows: list[PassRow], journal: dict | None, report: Path,
+                          error: str | None = None) -> dict:
     passes = [{"rank": i, "pass": r.pass_no, "back": r.back, "forward": r.forward, "inputs": r.inputs}
               for i, r in enumerate(rows, 1)]
-    return {"schema": SCHEMA, "kind": "optimization", "settings": settings, "passes": passes,
+    return {"schema": SCHEMA, "kind": "optimization", "error": error, "settings": settings, "passes": passes,
             "journal": journal, "report": host_paths(str(report))}
 
 
+def failure_document(kind: str, settings: dict, error: str, journal: dict | None, report: Path | None) -> dict:
+    """A run with no usable report: what was asked, why it failed, and the journal."""
+    return {"schema": SCHEMA, "kind": kind, "error": error, "settings": settings, "journal": journal,
+            "report": host_paths(str(report)) if report else None}
+
+
+def _finite(x):  # noqa: ANN001, ANN202
+    if isinstance(x, float) and not math.isfinite(x):
+        return None
+    if isinstance(x, dict):
+        return {k: _finite(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_finite(v) for v in x]
+    return x
+
+
+def to_json(doc: dict) -> str:
+    """Strict JSON: NaN and Infinity (e.g. a profit factor with no losses) become null."""
+    return json.dumps(_finite(doc), indent=1, allow_nan=False)
+
+
 def write_document(doc: dict, path: Path) -> None:
-    path.write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8")
+    path.write_text(to_json(doc) + "\n", encoding="utf-8")

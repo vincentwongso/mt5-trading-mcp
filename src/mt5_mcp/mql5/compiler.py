@@ -7,6 +7,7 @@ failure), and `/inc:` must point at the data folder's `MQL5` directory.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import time
@@ -128,7 +129,9 @@ def format_diagnostic(d: Diagnostic, cwd: Path) -> str:
     path = d.path
     if cwd != Path(cwd.anchor):  # relative to a drive root says no more, and under Wine hides the host path
         try:
-            path = str(Path(d.path).relative_to(cwd))
+            rel = Path(d.path).relative_to(cwd)
+            # Through the Docker wrapper the caller's folder is a host folder, so use its separator.
+            path = rel.as_posix() if os.environ.get("MT5_MCP_HOST_PATHS") == "1" else str(rel)
         except ValueError:
             pass
     return f"{path}:{d.line}:{d.col}: {d.severity} {d.code}: {d.message}"

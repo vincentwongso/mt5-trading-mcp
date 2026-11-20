@@ -282,17 +282,79 @@ def test_lock_wait_acquires_after_release(tmp_path):
     import threading
     import time
 
-    released, waits = threading.Event(), []
+    held, released, waits = threading.Event(), threading.Event(), []
 
     def hold():
         with ws.tester_lock(tmp_path):
+            held.set()
             time.sleep(1.5)
             released.set()
 
     t = threading.Thread(target=hold)
     t.start()
-    time.sleep(0.2)
+    held.wait()
     with ws.tester_lock(tmp_path, wait=True, on_wait=lambda: waits.append(1)):
         assert released.is_set()
     t.join()
     assert waits == [1]
+
+
+def test_lock_wait_gives_up_on_a_non_contention_error(tmp_path, monkeypatch):
+    import errno
+
+    def broken(f):
+        raise OSError(errno.EBADF, "Bad file descriptor")
+
+    def no_retry(_):
+        raise AssertionError("retried a lock error that is not contention")
+
+    monkeypatch.setattr(ws, "_try_lock", broken)
+    monkeypatch.setattr(ws.time, "sleep", no_retry)
+    with pytest.raises(OSError, match="Bad file descriptor"):
+        with ws.tester_lock(tmp_path, wait=True):
+            pass
+
+
+def test_lock_wait_retries_wines_errno_zero(tmp_path, monkeypatch):
+    # Under Wine, msvcrt.locking reports contention as errno 0 (probed 2026-11-21).
+    calls = []
+
+    def busy_once(f):
+        calls.append(1)
+        if len(calls) == 1:
+            raise OSError(0, "Error")
+
+    monkeypatch.setattr(ws, "_try_lock", busy_once)
+    monkeypatch.setattr(ws.time, "sleep", lambda _: None)
+    with ws.tester_lock(tmp_path, wait=True):
+        pass
+    assert len(calls) == 2
+
+
+def test_lock_of_a_killed_holder_is_free(tmp_path):
+    import subprocess
+    import sys
+    import time
+
+    code = ("import sys, time; from pathlib import Path; from mt5_mcp.mql5 import workspace as ws\n"
+            "with ws.tester_lock(Path(sys.argv[1])):\n    print('locked', flush=True); time.sleep(60)")
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+    p = subprocess.Popen([sys.executable, "-c", code, str(tmp_path)], stdout=subprocess.PIPE, text=True, env=env)
+    try:
+        assert p.stdout.readline().strip() == "locked"
+        with pytest.raises(ws.LockHeld):
+            with ws.tester_lock(tmp_path):
+                pass
+        p.kill()
+        p.wait()
+        deadline = time.monotonic() + 10  # Windows frees a dead process's lock asynchronously
+        while True:
+            try:
+                with ws.tester_lock(tmp_path):
+                    break
+            except ws.LockHeld:
+                if time.monotonic() > deadline:
+                    raise
+                time.sleep(0.1)
+    finally:
+        p.kill()

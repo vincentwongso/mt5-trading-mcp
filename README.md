@@ -106,13 +106,11 @@ agent at `http://127.0.0.1:8765/mcp`. Wire it to OpenClaw in one command:
 openclaw mcp set mt5-mcp '{"url":"http://127.0.0.1:8765/mcp","transport":"streamable-http"}'
 ```
 
-Known issue: fresh installs. The current MT5 installer's terminal refuses to
-start under Wine ("A debugger has been found running", or a silent exit).
-Recovery: copy a working `terminal64.exe` (build 6230, 28 Sep 2026) into
-`/config/.wine/drive_c/Program Files/MetaTrader 5/` with `docker cp` (runs as
-root; the boot script makes the binary read-only, so a copy as `abc` fails),
-or `rm -f` the old file first. Then `chown abc:abc` it and restart the
-container.
+The image runs Wine 11.10 staging, which runs current MT5 builds (Wine 10 could
+not run builds newer than 28 Sep 2026). The terminal is no longer pinned, so
+MT5's LiveUpdate keeps it current. To build and backtest EAs on Linux, use the
+backtest container in `deploy/docker-compose.backtest.yml` (see
+[docs/agents.md](docs/agents.md)).
 
 Full walkthrough:
 **[docs/installation.md](https://github.com/vincentwongso/mt5-trading-mcp/blob/main/docs/installation.md)**.

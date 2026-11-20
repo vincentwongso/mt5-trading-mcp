@@ -53,3 +53,13 @@ Docker/Wine: you can run it inside the container with
 `docker exec -u abc -e WINEPREFIX=/config/.wine <container> wine 'C:\Python311\python.exe' -m mt5_mcp compile <Windows path to a file inside the container>`,
 but as of 1.7.0 MetaEditor hangs in the headless image and the command exits
 `2` after the timeout. Treat Docker compile as unsupported for now.
+
+To test an EA, use `mt5-mcp backtest` (Windows, same skill): run
+`mt5-mcp backtest --setup` once, then
+`mt5-mcp backtest <installed .ex5> --symbol ... --period H1 --from ... --to ...`.
+It runs on a separate copy of MT5, never the live terminal. `--optimize
+full|genetic` with a `.set` file of `Name=value||start||step||stop||Y` lines
+ranks input sets, scored on a held-out forward period by default. Exit `0`
+finished, `2` could not run. Supported from a logged-in desktop session;
+over ssh it also worked in testing, but that is best effort. A good backtest
+is never a reason to attach the EA live: report it to the human.

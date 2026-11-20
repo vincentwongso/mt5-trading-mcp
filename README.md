@@ -158,6 +158,12 @@ code on that chart. Agents get the loop from the `mt5-mql5-build` skill.
 Exit codes: `0` built, `1` compile errors, `2` could not run. Under
 Wine/Docker MetaEditor currently hangs, so this is Windows only for now.
 
+`mt5-mcp backtest <ea.ex5>` then runs the Strategy Tester on that build
+(single run, or `--optimize full|genetic` with a forward test on by default)
+and prints a short summary or a ranked table of input sets. It runs on a
+separate copy of MT5 made once with `mt5-mcp backtest --setup`, so your live
+terminal is never touched. Windows only, from a logged-in desktop session.
+
 ## For AI agents
 
 **If you've been handed this repository to install and run, follow the runbook

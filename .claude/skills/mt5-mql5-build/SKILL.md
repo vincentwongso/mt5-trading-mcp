@@ -71,10 +71,12 @@ The program type is detected from the code (`--kind` overrides):
 
 Runs the Strategy Tester on a separate copy of MT5, so the user's live
 terminal is never touched. The copy is logged into the user's own account,
-which may be real money. Nothing can trade from it: no charts are copied, and
+which may be real money. No EA can trade from it: no charts are copied, and
 every run switches algo trading off (`[Experts] Enabled=0`,
-`AllowLiveTrading=0`). Those two settings are the only guard, so tell the user
-before running `--setup` against a real-money login.
+`AllowLiveTrading=0`). That only stops automated trading. While a test runs
+the terminal window is a normal login, so anyone could still place a manual
+order in it. Tell the user before running `--setup` against a real-money
+login.
 
 Report labels must be in English: with another terminal language a run exits
 `2` saying so.
@@ -121,7 +123,9 @@ Where the EA and its compiled files come from:
 `--model ohlc` (default, 1-minute OHLC) is fast enough to iterate; confirm a
 final candidate with `--model real` (real ticks). A month of H1 takes seconds;
 full grids take minutes. `--timeout` defaults to 600 seconds, so raise it for
-long optimisations and keep your shell's own timeout above it.
+long optimisations. A run that is retried (see below) can take up to twice
+`--timeout`, so keep your shell's own timeout above `2 x --timeout` plus a
+minute; otherwise the shell can kill the CLI before it stops the terminal.
 
 If the terminal exits cleanly without writing a report (seen on the first
 run that downloads a symbol's history), the run is retried once and says so on

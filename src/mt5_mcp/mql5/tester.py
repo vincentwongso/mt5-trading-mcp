@@ -38,6 +38,11 @@ class RunSpec:
     report: str  # relative to the tester folder, no extension
 
 
+def deposit_text(deposit: float) -> str:
+    """The deposit as the ini sends it: two decimals, no trailing zeros or exponent."""
+    return f"{deposit:.2f}".rstrip("0").rstrip(".")
+
+
 def build_ini(spec: RunSpec, *, disable_live: bool = True) -> str:
     lines = [
         "[Tester]",
@@ -47,7 +52,7 @@ def build_ini(spec: RunSpec, *, disable_live: bool = True) -> str:
         f"Model={MODELS[spec.model]}",
         f"FromDate={spec.date_from:%Y.%m.%d}",
         f"ToDate={spec.date_to:%Y.%m.%d}",
-        f"Deposit={spec.deposit:.2f}".rstrip("0").rstrip("."),
+        f"Deposit={deposit_text(spec.deposit)}",
         f"Currency={spec.currency}",
         f"Leverage={spec.leverage}",
     ]

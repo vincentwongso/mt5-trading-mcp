@@ -19,7 +19,6 @@ from mt5_mcp.config import load_config
 from mt5_mcp.mql5.compiler import CompileTimeout, run_supervised
 from mt5_mcp.mql5.report import (
     ReportError,
-    _num,
     format_single,
     format_table,
     merge_passes,
@@ -36,6 +35,7 @@ from mt5_mcp.mql5.tester import (
     RunSpec,
     build_ini,
     check_inputs,
+    deposit_text,
     ini_value,
     parse_forward,
     parse_set,
@@ -213,7 +213,7 @@ def _main(argv: list[str]) -> int:
 
     # Results are only comparable under the same settings, so every summary leads with them.
     settings = (f"settings: {args.symbol} {args.period} {args.date_from}..{args.date_to} model={args.model} "
-                f"deposit={_num(args.deposit)} {args.currency} leverage=1:{args.leverage}")
+                f"deposit={deposit_text(args.deposit)} {args.currency} leverage=1:{args.leverage}")
     if args.optimize:
         settings += f" optimize={args.optimize} criterion={args.criterion} forward={args.forward}"
 

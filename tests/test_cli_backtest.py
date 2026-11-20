@@ -326,3 +326,11 @@ def test_single_run_summary_starts_with_settings(env, capsys):
     assert bt(env, "--deposit", "2500.5", "--currency", "EUR", "--leverage", "30") == 0
     first = capsys.readouterr().out.splitlines()[0]
     assert first == "settings: EURUSD.z H1 2026-10-01..2026-11-01 model=ohlc deposit=2500.5 EUR leverage=1:30"
+
+
+def test_settings_deposit_matches_the_ini(env, capsys):
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--deposit", "2500.567") == 0
+    assert env["inis"][-1]["Deposit"] == "2500.57"
+    assert "deposit=2500.57 USD" in capsys.readouterr().out.splitlines()[0]

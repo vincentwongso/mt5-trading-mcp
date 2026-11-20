@@ -133,7 +133,7 @@ def format_diagnostic(d: Diagnostic, cwd: Path) -> str:
 
 
 class CompileTimeout(Exception):
-    pass
+    """A supervised process (MetaEditor or the tester terminal) timed out."""
 
 
 def build_command_line(metaeditor: Path, source: Path, inc_dir: Path, log: Path) -> str:
@@ -157,6 +157,21 @@ def run_metaeditor(
     The probe showed one process per compile and no children, so killing
     the PID is enough. The exit code is returned but means nothing.
     """
+    return run_supervised(cmdline, timeout_s=timeout_s, label="MetaEditor", popen=popen)
+
+
+def run_supervised(
+    cmdline: str,
+    *,
+    timeout_s: float,
+    label: str,
+    kill: Callable[[Any], None] | None = None,
+    popen: Callable[..., Any] = subprocess.Popen,
+) -> int:
+    """Run `cmdline`, return its exit code; it never outlives this call.
+
+    `kill(proc)` replaces `proc.kill()` (the tester terminal needs a tree kill).
+    """
     proc = popen(cmdline)
     deadline = time.monotonic() + timeout_s
     try:
@@ -166,8 +181,8 @@ def run_metaeditor(
                 return proc.wait(timeout=max(0.0, min(0.25, deadline - time.monotonic())))
             except subprocess.TimeoutExpired:
                 if time.monotonic() >= deadline:
-                    raise CompileTimeout(f"MetaEditor did not finish in {timeout_s:g}s; killed.") from None
+                    raise CompileTimeout(f"{label} did not finish in {timeout_s:g}s; killed.") from None
     finally:
         if proc.poll() is None:
-            proc.kill()
+            (kill or (lambda p: p.kill()))(proc)
             proc.wait()

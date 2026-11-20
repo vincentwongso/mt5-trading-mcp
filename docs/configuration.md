@@ -21,7 +21,7 @@ The full config schema is defined by the Pydantic models in
 ```toml
 [mt5]
 terminal_path = "C:\\Program Files\\MetaTrader 5\\terminal64.exe"
-# data_path = ""  # terminal data folder (holds MQL5\) for `mt5-mcp compile`; empty = auto-detect
+# data_path = ""  # terminal data folder (holds MQL5\) for `mt5-mcp compile` / `backtest --setup`; empty = auto-detect
 
 [policy]
 auto_approve_notional = "1000.00"      # arm the consent gate: at or above this, place_order returns an ApprovalPreview (0 = default = gate off, orders auto-execute)
@@ -104,3 +104,11 @@ The idempotency DB and audit JSONL log default to
 
 Both are overridable in `config.toml` under `[idempotency] path` and
 `[audit] path`.
+
+`mt5-mcp backtest --setup` creates the Strategy Tester copy in the same
+folder, under `tester\` (override with `--tester-path` on every call; there
+is no config key). It holds a copy of the MT5 program files plus the live
+terminal's saved logins (`accounts.dat`, `common.ini`, `servers.dat`), so
+treat it like the terminal's own data folder. Set `[mt5] terminal_path` when
+you backtest on the machine that runs the MCP server: without it the server
+can attach to the tester terminal while a test runs.

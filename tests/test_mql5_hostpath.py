@@ -1,4 +1,16 @@
+import pytest
+
 from mt5_mcp.mql5.hostpath import host_paths
+
+
+@pytest.fixture(autouse=True)
+def _wrapper(monkeypatch):
+    monkeypatch.setenv("MT5_MCP_HOST_PATHS", "1")  # set by deploy/mt5-mcp in the Docker image
+
+
+def test_native_windows_z_drive_is_left_alone(monkeypatch):
+    monkeypatch.delenv("MT5_MCP_HOST_PATHS")
+    assert host_paths(r"json: Z:\proj\out\x.json") == r"json: Z:\proj\out\x.json"
 
 
 def test_z_path_becomes_posix():

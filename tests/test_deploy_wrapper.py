@@ -19,7 +19,7 @@ pytestmark = pytest.mark.skipif(
 
 FAKE_WINE = """#!/bin/bash
 printf '%s\\0' "$@" > "$FAKE_DIR/args"
-printf '%s|%s|%s' "$WINEPREFIX" "$WINEDEBUG" "$DISPLAY" > "$FAKE_DIR/env"
+printf '%s|%s|%s|%s' "$WINEPREFIX" "$WINEDEBUG" "$DISPLAY" "$MT5_MCP_HOST_PATHS" > "$FAKE_DIR/env"
 printf 'out\\r\\n'
 printf 'err\\r\\n' >&2
 exit "${FAKE_RC:-0}"
@@ -37,8 +37,9 @@ def run(tmp_path):
         env = {"PATH": f"{bin_dir}:{os.environ['PATH']}", "FAKE_DIR": str(tmp_path), "FAKE_RC": str(rc)}
         p = subprocess.run(["bash", str(WRAPPER), *args], env=env, capture_output=True, text=True)
         argv = (tmp_path / "args").read_text().split("\0")[:-1]
-        prefix, debug, display = (tmp_path / "env").read_text().split("|")
-        return SimpleNamespace(args=argv, env={"WINEPREFIX": prefix, "WINEDEBUG": debug, "DISPLAY": display},
+        prefix, debug, display, host = (tmp_path / "env").read_text().split("|")
+        return SimpleNamespace(args=argv, env={"WINEPREFIX": prefix, "WINEDEBUG": debug, "DISPLAY": display,
+                                               "MT5_MCP_HOST_PATHS": host},
                                stdout=p.stdout, stderr=p.stderr, returncode=p.returncode)
 
     return _run
@@ -52,7 +53,8 @@ def test_translates_absolute_paths_only(run):
 
 
 def test_sets_wine_env(run):
-    assert run(["--version"]).env == {"WINEPREFIX": "/config/.wine", "WINEDEBUG": "-all", "DISPLAY": ":1"}
+    assert run(["--version"]).env == {"WINEPREFIX": "/config/.wine", "WINEDEBUG": "-all", "DISPLAY": ":1",
+                                      "MT5_MCP_HOST_PATHS": "1"}
 
 
 def test_strips_cr_and_keeps_streams(run):

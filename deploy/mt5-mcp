@@ -10,7 +10,8 @@ if [ "$(id -u)" = 0 ]; then
     exec s6-setuidgid abc "$0" "$@"
 fi
 
-export WINEPREFIX=/config/.wine WINEDEBUG=-all DISPLAY=:1
+# MT5_MCP_HOST_PATHS: the CLI prints Z: paths back as host paths.
+export WINEPREFIX=/config/.wine WINEDEBUG=-all DISPLAY=:1 MT5_MCP_HOST_PATHS=1
 
 args=()
 for a in "$@"; do

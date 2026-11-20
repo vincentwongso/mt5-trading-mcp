@@ -67,7 +67,8 @@ def test_optimization_document_ranks_like_table():
     assert "deals" not in doc
 
 
-def test_document_report_field_is_host_path():
+def test_document_report_field_is_host_path(monkeypatch):
+    monkeypatch.setenv("MT5_MCP_HOST_PATHS", "1")
     r = parse_single_html(_read("single_deals.htm"))
     assert single_document({}, r, None, Path(r"Z:\o\r.htm"))["report"] == "/o/r.htm"
     rows = merge_passes(parse_opt_xml(_read("opt_full_fwd.xml")), None)

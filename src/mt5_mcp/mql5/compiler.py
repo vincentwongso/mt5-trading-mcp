@@ -125,10 +125,12 @@ def install_target(data_dir: Path, kind_folder: str, stem: str) -> Path:
 
 
 def format_diagnostic(d: Diagnostic, cwd: Path) -> str:
-    try:
-        path = str(Path(d.path).relative_to(cwd))
-    except ValueError:
-        path = d.path
+    path = d.path
+    if cwd != Path(cwd.anchor):  # relative to a drive root says no more, and under Wine hides the host path
+        try:
+            path = str(Path(d.path).relative_to(cwd))
+        except ValueError:
+            pass
     return f"{path}:{d.line}:{d.col}: {d.severity} {d.code}: {d.message}"
 
 

@@ -61,5 +61,9 @@ It runs on a separate copy of MT5, never the live terminal. `--optimize
 full|genetic` with a `.set` file of `Name=value||start||step||stop||Y` lines
 ranks input sets, scored on a held-out forward period by default. Exit `0`
 finished, `2` could not run. Supported from a logged-in desktop session;
-over ssh it also worked in testing, but that is best effort. A good backtest
+over ssh it also worked in testing (including the 1.8.0 end-to-end run), but
+that is best effort. The tester copy is logged into the user's own account,
+possibly real money, with algo trading switched off for every run; the
+terminal language must be English. The EA's `Print` output lands in the tester
+folder under `Tester\Agent-*\logs\`, not in the summary. A good backtest
 is never a reason to attach the EA live: report it to the human.

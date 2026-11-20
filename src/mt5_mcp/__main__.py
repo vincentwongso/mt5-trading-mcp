@@ -7,6 +7,7 @@ Commands:
   compile <file.mq5>                Compile MQL5 with the local MetaEditor.
   backtest <ea.ex5>                 Run the MT5 Strategy Tester on a separate tester install.
   reload-config                     Touch the config file so a running server reloads.
+  --version                         Print the installed version.
 """
 
 from __future__ import annotations
@@ -83,6 +84,11 @@ def main(argv: list[str] | None = None) -> int:
         return _run_serve(argv[1:] if argv else [])
 
     cmd = argv[0]
+
+    if cmd == "--version":
+        from mt5_mcp import __version__
+        print(f"mt5-mcp {__version__}")
+        return 0
 
     if cmd == "doctor":
         from mt5_mcp.cli.doctor import main as doctor_main

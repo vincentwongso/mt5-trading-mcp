@@ -70,8 +70,14 @@ The program type is detected from the code (`--kind` overrides):
 ## Backtest with `mt5-mcp backtest`
 
 Runs the Strategy Tester on a separate copy of MT5, so the user's live
-terminal is never touched. The copy is logged into the same account, but no
-charts or EAs are copied into it and live algo trading is switched off.
+terminal is never touched. The copy is logged into the user's own account,
+which may be real money. Nothing can trade from it: no charts are copied, and
+every run switches algo trading off (`[Experts] Enabled=0`,
+`AllowLiveTrading=0`). Those two settings are the only guard, so tell the user
+before running `--setup` against a real-money login.
+
+Report labels must be in English: with another terminal language a run exits
+`2` saying so.
 
 1. Once per machine (and again after an MT5 update, when a run says so):
    ```
@@ -84,8 +90,10 @@ charts or EAs are copied into it and live algo trading is switched off.
    ```
    mt5-mcp backtest <installed .ex5> --symbol EURUSD --period H1 --from 2026-01-01 --to 2026-11-01
    ```
-   Prints `net_profit`, `profit_factor`, `max_drawdown_pct`, `trades`,
-   `win_rate_pct`, `sharpe`, ... one `key: value` per line, then `report:`.
+   Prints a `settings:` line (symbol, period, dates, model, deposit,
+   leverage), then `net_profit` (in the deposit currency), `profit_factor`,
+   `max_drawdown_pct`, `trades`, `win_rate_pct`, `sharpe`, ... one
+   `key: value` per line, then `report:`. Quote the settings with the numbers.
    Use the broker's real symbol name (check with the MCP `get_symbols` tool).
 3. Inputs go in an MT5 `.set` file (`--set file.set`): `Name=value` per
    line. To optimise an input use `Name=value||start||step||stop||Y`, e.g.
@@ -98,10 +106,26 @@ charts or EAs are copied into it and live algo trading is switched off.
    columns: a pass that only shines in the back period is overfit.
    `--forward 1/2|1/4|YYYY-MM-DD` moves the split, `--forward off` disables it.
 
+Where the EA and its compiled files come from:
+- An EA inside the live `MQL5\Experts` tree runs from its own folder in the
+  tester, so a library kept next to it (`#import "MyLib.ex5"`) loads there too.
+  An EA from anywhere else is copied to the tester's `Experts\Agent\`.
+- Before each run the tester's compiled Experts, Indicators and Libraries are
+  synced from the live terminal, and any `.ex5` there with no live original is
+  deleted. Don't put files into the tester copy by hand; build them live.
+- The EA's `Print` output and init errors are not in the summary. They are in
+  the tester folder under `Tester\Agent-*\logs\`. Read them when `trades: 0`
+  or a run looks wrong.
+- Reports stay in the tester folder's `reports\` and are never pruned.
+
 `--model ohlc` (default, 1-minute OHLC) is fast enough to iterate; confirm a
 final candidate with `--model real` (real ticks). A month of H1 takes seconds;
 full grids take minutes. `--timeout` defaults to 600 seconds, so raise it for
 long optimisations and keep your shell's own timeout above it.
+
+If the terminal exits cleanly without writing a report (seen on the first
+run that downloads a symbol's history), the run is retried once and says so on
+stderr.
 
 Exit codes: `0` finished (zero trades is still `0`: read `trades`), `2` could
 not run. A `2` prints why, often with the tester's log tail: not set up, MT5

@@ -19,6 +19,7 @@ from mt5_mcp.config import load_config
 from mt5_mcp.mql5.compiler import CompileTimeout, run_supervised
 from mt5_mcp.mql5.report import (
     ReportError,
+    _num,
     format_single,
     format_table,
     merge_passes,
@@ -210,11 +211,18 @@ def _main(argv: list[str]) -> int:
     if not out.is_file():
         return _fail(f"no report written ({out}); the run failed:\n{log_tail(tester)}")
 
+    # Results are only comparable under the same settings, so every summary leads with them.
+    settings = (f"settings: {args.symbol} {args.period} {args.date_from}..{args.date_to} model={args.model} "
+                f"deposit={_num(args.deposit)} {args.currency} leverage=1:{args.leverage}")
+    if args.optimize:
+        settings += f" optimize={args.optimize} criterion={args.criterion} forward={args.forward}"
+
     if not args.optimize:
         result = parse_single_html(out.read_bytes())
         problem = check_inputs(set_file, result.inputs, optimized_names=None) if set_file else None
         if problem:
             return _fail(problem)
+        print(settings)
         print(format_single(result, out))
         return 0
 
@@ -231,5 +239,6 @@ def _main(argv: list[str]) -> int:
     if set_file and set_file.fixed:
         # The optimisation report lists only optimised inputs.
         print(f"note: fixed inputs not checked in optimisation runs: {', '.join(set_file.fixed)}", file=sys.stderr)
+    print(settings)
     print(format_table(merge_passes(back, forward), args.top, out))
     return 0

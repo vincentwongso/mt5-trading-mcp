@@ -77,3 +77,11 @@ def test_backtest_routes_remaining_argv():
     with patch("mt5_mcp.cli.backtest.main", return_value=0) as m:
         assert main(["backtest", "--setup"]) == 0
     m.assert_called_once_with(["--setup"])
+
+
+def test_version_flag_prints_package_version(capsys):
+    from mt5_mcp import __version__
+    from mt5_mcp.__main__ import main
+
+    assert main(["--version"]) == 0
+    assert capsys.readouterr().out.strip() == f"mt5-mcp {__version__}"

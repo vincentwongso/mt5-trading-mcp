@@ -299,7 +299,7 @@ fi
 # Match gmag11's pattern: the autostart script returns, leaving the terminal
 # supervisor, socat, and the serve supervisor running under the desktop session.
 if [ "$serve" = 0 ]; then
-    log "Bootstrap complete; terminal running, mt5-mcp server off (MT5_MCP_SERVE=0); CLI via mt5-mcp."
+    log "Bootstrap complete; terminal running, mt5-mcp server off (MT5_MCP_SERVE=${MT5_MCP_SERVE}); CLI via mt5-mcp."
 elif [ "$token_ok" = 1 ]; then
     log "Bootstrap complete; terminal + mt5-mcp running. VNC web UI for one-time login."
 else

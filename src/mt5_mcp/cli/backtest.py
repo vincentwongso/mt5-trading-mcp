@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import tempfile
 from datetime import date, datetime, timezone
@@ -117,6 +118,8 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--terminal-path", default=None, help="Live terminal64.exe or its folder. Overrides [mt5] terminal_path.")
     p.add_argument("--data-path", default=None, help="Live terminal data folder. Overrides [mt5] data_path.")
     p.add_argument("--config", default=None, help="Path to config TOML (default: per-OS user config dir).")
+    p.add_argument("--out", default=None,
+                   help="Copy the report and write the JSON into this folder; printed paths name the copies.")
     p.add_argument("--json", action="store_true",
                    help="Print the run's JSON (settings, metrics, deals, balance, drawdowns, journal) instead of the summary.")
     p.add_argument("--read", metavar="REPORT", default=None,
@@ -163,6 +166,14 @@ def _read_report(path: Path) -> int:
     return 0
 
 
+def _deliver(out_dir: Path | None, reports: list[Path]) -> list[Path]:
+    """Copy the reports into --out; the copies are what the caller is told about."""
+    if out_dir is None:
+        return reports
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return [Path(shutil.copy2(r, out_dir / r.name)) for r in reports]
+
+
 def _with_lines(text: str, *extra: str | None) -> str:
     """Insert lines just before the final `report:` line."""
     lines = text.splitlines()
@@ -172,6 +183,9 @@ def _with_lines(text: str, *extra: str | None) -> str:
 def _main(argv: list[str]) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.out and (args.read or args.setup):
+        parser.error("--out goes with a run, not --setup or --read")
+    out_dir = Path(os.path.abspath(args.out)) if args.out else None
     if args.read:
         if args.ea or args.setup:
             parser.error("--read takes a report only, not an .ex5 or --setup")
@@ -264,7 +278,7 @@ def _main(argv: list[str]) -> int:
     if not out.is_file():
         return _fail(f"no report written ({out}); the run failed:\n{log_tail(tester)}")
 
-    json_path = base.with_name(base.name + ".json")
+    json_path = (out_dir or base.parent) / (base.name + ".json")
 
     # Results are only comparable under the same settings, so every summary leads with them.
     settings = {"symbol": args.symbol, "period": args.period, "from": str(args.date_from), "to": str(args.date_to),
@@ -277,6 +291,7 @@ def _main(argv: list[str]) -> int:
 
     if not args.optimize:
         result = parse_single_html(out.read_bytes())
+        out = _deliver(out_dir, [out])[0]
         doc = single_document(settings, result, journal, out)
         write_document(doc, json_path)
         if args.json:
@@ -310,6 +325,7 @@ def _main(argv: list[str]) -> int:
             return _fail(f"no forward report written ({fwd}):\n{log_tail(tester)}")
         forward = parse_opt_xml(fwd.read_bytes())
     rows = merge_passes(back, forward)
+    out = _deliver(out_dir, [out, fwd] if forward is not None else [out])[0]
     doc = optimization_document(settings, rows, journal, out)
     write_document(doc, json_path)
     if args.json:

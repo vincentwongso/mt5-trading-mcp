@@ -474,3 +474,46 @@ def test_failed_run_text_mode_names_json_and_report(env, capsys):
     cap = capsys.readouterr()
     assert cap.out == ""
     assert re.search(r"^json: .+Z-MyEA\.json$", cap.err, re.M) and re.search(r"^report: .+Z-MyEA\.htm$", cap.err, re.M)
+
+
+OPT_SET = "MaximumRisk=0.02\nDecreaseFactor=3\nMovingPeriod=12||6||2||30||Y\nMovingShift=6||0||2||10||Y\n"
+
+
+def test_out_copies_report_and_json(env, capsys):
+    out = env["tmp"] / "out"
+    assert bt(env, "--out", str(out)) == 0
+    htm, js = list(out.glob("*.htm")), list(out.glob("*.json"))
+    assert len(htm) == 1 and len(js) == 1
+    assert json.loads(js[0].read_text(encoding="utf-8"))["report"] == str(htm[0])
+    text = capsys.readouterr().out
+    assert f"json: {js[0]}" in text and f"report: {htm[0]}" in text
+
+
+def test_out_optimization_copies_back_and_forward(env):
+    out = env["tmp"] / "out"
+    assert bt(env, "--optimize", "full", "--set", write_set(env, OPT_SET), "--out", str(out)) == 0
+    names = sorted(p.name for p in out.iterdir())
+    assert [n.endswith(".forward.xml") for n in names].count(True) == 1
+    assert [n.endswith(".xml") for n in names].count(True) == 2 and any(n.endswith(".json") for n in names)
+
+
+def test_out_failed_start_still_delivers_named_files(env, capsys):
+    env["single"], env["journal"] = "single_failinit.htm", "failinit.log"
+    out = env["tmp"] / "out"
+    assert bt(env, "--out", str(out)) == 2
+    named = [ln.split(": ", 1)[1] for ln in capsys.readouterr().err.splitlines() if ln.startswith(("json: ", "report: "))]
+    assert len(named) == 2 and all(Path(p).is_file() and Path(p).parent == out for p in named)
+
+
+def test_out_no_report_copies_nothing(env):
+    env["write"] = False
+    out = env["tmp"] / "out"
+    assert bt(env, "--out", str(out)) == 2
+    assert not out.exists() or not any(out.iterdir())
+
+
+@pytest.mark.parametrize("extra", [["--setup"], ["--read", "x.htm"]])
+def test_out_with_setup_or_read_is_usage_error(env, extra):
+    with pytest.raises(SystemExit) as e:
+        cli.main([*extra, "--out", str(env["tmp"] / "o"), "--tester-path", str(env["tester"])])
+    assert e.value.code == 2

@@ -88,10 +88,22 @@ def is_set_up(tester: Path) -> bool:
     return all((tester / p).is_file() for p in ("terminal64.exe", "Config/accounts.dat", _ORIGIN))
 
 
+_TESTER_BINARIES = ("terminal64.exe", "metatester64.exe")
+
+
 def build_matches(install: Path, tester: Path) -> bool:
-    # copy2 keeps the mtime, so any LiveUpdate on either side shows up here.
-    a, b = (install / "terminal64.exe").stat(), (tester / "terminal64.exe").stat()
-    return (a.st_size, a.st_mtime_ns) == (b.st_size, b.st_mtime_ns)
+    # copy2 keeps the mtime, so any LiveUpdate on either side shows up here. The agent binary
+    # counts too: LiveUpdate can move it while the terminal stays (seen with a pinned terminal).
+    for name in _TESTER_BINARIES:
+        if not (install / name).exists() and name != "terminal64.exe":
+            continue
+        try:
+            a, b = (install / name).stat(), (tester / name).stat()
+        except FileNotFoundError:
+            return False
+        if (a.st_size, a.st_mtime_ns) != (b.st_size, b.st_mtime_ns):
+            return False
+    return True
 
 
 def stage_ea(ex5: Path, tester: Path) -> str:

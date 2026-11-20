@@ -654,3 +654,14 @@ def test_out_keeps_the_back_report_when_the_forward_one_is_missing(env, capsys):
         cli.run_supervised = original
     xml = [p for p in out.glob("*.xml") if not p.name.endswith(".forward.xml")]
     assert len(xml) == 1 and f"report: {xml[0]}" in capsys.readouterr().err
+
+
+def test_tester_agent_update_alone_triggers_a_refresh(env, capsys):
+    # LiveUpdate can move metatester64.exe while terminal64.exe stays (the old Wine pin did exactly this).
+    agent = env["install"] / "metatester64.exe"
+    agent.write_bytes(b"agent v1")
+    setup(env)
+    agent.write_bytes(b"agent v2, newer build")
+    assert bt(env) == 0
+    assert "MT5 was updated; refreshed the tester install" in capsys.readouterr().err
+    assert (env["tester"] / "metatester64.exe").read_bytes() == b"agent v2, newer build"

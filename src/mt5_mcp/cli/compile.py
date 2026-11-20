@@ -11,6 +11,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from mt5_mcp.config import load_config
@@ -90,6 +91,8 @@ def _main(argv: list[str]) -> int:
     print(f"data folder: {paths.data_dir}", file=sys.stderr)
 
     mql5 = paths.data_dir / "MQL5"
+    previous = built_ex5(source, mql5, since=0)  # what a clean build will replace in place
+    started = time.time()
     tmp = Path(tempfile.mkdtemp(prefix="mt5-compile-"))
     try:
         log_path = tmp / "compile.log"
@@ -112,14 +115,18 @@ def _main(argv: list[str]) -> int:
     print(f"Result: {_plural(log.errors, 'error')}, {_plural(log.warnings or 0, 'warning')}")
     if log.errors:
         return 1
+
+    ex5 = built_ex5(source, mql5, since=started)
+    # Already inside a kind folder (source lives there, or a Shared Project):
+    # MetaEditor replaced it in place, even with --no-install.
+    in_place = ex5 is not None and any(ex5.is_relative_to(mql5 / f) for f in KIND_FOLDERS.values())
+    if in_place and previous == ex5:
+        print(f"replacing existing: {ex5}", file=sys.stderr)
     if args.no_install:
         return 0
-
-    ex5 = built_ex5(source, mql5)
     if ex5 is None:
-        return _fail(f"clean build but no .ex5 found for {source}")
-    # Already inside a kind folder (source lives there, or a Shared Project).
-    if any(ex5.is_relative_to(mql5 / folder) for folder in KIND_FOLDERS.values()):
+        return _fail(f"clean build but no fresh .ex5 found for {source}")
+    if in_place:
         print(f"installed: {ex5}")
         return 0
     kind = KIND_FOLDERS[args.kind] if args.kind else detect_kind(read_source(source))

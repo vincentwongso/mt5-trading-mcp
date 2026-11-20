@@ -92,22 +92,27 @@ def read_source(path: Path) -> str:
 def detect_kind(source_text: str) -> str:
     code = _NOISE.sub("", source_text)
     for pattern, folder in _KIND_RULES:
-        if pattern.search(code):
-            return folder
+        for m in pattern.finditer(code):
+            # Only global handlers count, not methods defined inside a class.
+            if code.count("{", 0, m.start()) == code.count("}", 0, m.start()):
+                return folder
     return "Experts"
 
 
-def built_ex5(source: Path, mql5: Path) -> Path | None:
-    """Where MetaEditor wrote the .ex5, or None.
+def built_ex5(source: Path, mql5: Path, *, since: float) -> Path | None:
+    """The newest .ex5 for `source` written at or after `since`, or None.
 
     Next to the source, except for MQL5/Shared Projects/<rel>, which builds
     to MQL5/<Kind>/Shared Projects/<rel> (seen on Windows, 2026-11-20).
+    `since` filters out stale builds from earlier runs; pass 0 to accept any.
     """
     candidates = [source.with_suffix(".ex5")]
     if source.is_relative_to(mql5 / "Shared Projects"):
         rel = source.relative_to(mql5).with_suffix(".ex5")
         candidates += [mql5 / folder / rel for folder in KIND_FOLDERS.values()]
-    return next((c for c in candidates if c.is_file()), None)
+    # 1 s slack for coarse filesystem timestamps.
+    fresh = [(c.stat().st_mtime, c) for c in candidates if c.is_file() and c.stat().st_mtime >= since - 1.0]
+    return max(fresh)[1] if fresh else None
 
 
 def install_target(data_dir: Path, kind_folder: str, stem: str) -> Path:

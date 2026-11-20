@@ -225,3 +225,19 @@ def test_default_timeout_is_60(env):
     finally:
         cli.run_metaeditor = orig
     assert seen == [60.0]
+
+
+def test_in_place_rebuild_announces_replacement(env, capsys):
+    experts = env["data"] / "MQL5" / "Experts" / "Mine"
+    experts.mkdir(parents=True)
+    (experts / "clean_ea.ex5").write_bytes(b"OLD")
+    assert run(env, "clean_ea.mq5", src_dir=experts) == 0
+    assert f"replacing existing: {experts / 'clean_ea.ex5'}" in capsys.readouterr().err
+
+
+def test_in_place_rebuild_with_no_install_still_announces(env, capsys):
+    experts = env["data"] / "MQL5" / "Experts" / "Mine"
+    experts.mkdir(parents=True)
+    (experts / "clean_ea.ex5").write_bytes(b"OLD")
+    assert run(env, "clean_ea.mq5", "--no-install", src_dir=experts) == 0
+    assert f"replacing existing: {experts / 'clean_ea.ex5'}" in capsys.readouterr().err

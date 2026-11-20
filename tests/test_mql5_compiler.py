@@ -101,6 +101,9 @@ def test_format_absolute_outside_cwd(tmp_path):
     ('string s = "#property library"; void OnTick(){}', "Experts"),
     ('string u = "http://x"; int OnCalculate(const int a){return a;}', "Indicators"),
     ('string c = "/*"; int OnCalculate(const int a){return a;}', "Indicators"),
+    ("class CWorker { public: void OnStart() {} }; void OnTick() {}", "Experts"),
+    ("class CInd { int OnCalculate(const int a) { return a; } }; void OnTick() {}", "Experts"),
+    ("class C { void f() {} };\nvoid OnStart() {}", "Scripts"),
 ])
 def test_detect_kind(src, kind):
     assert detect_kind(src) == kind
@@ -216,7 +219,30 @@ def test_run_returns_exit_code_without_killing():
 def test_built_ex5_next_to_source(tmp_path):
     src = tmp_path / "a.mq5"
     src.with_suffix(".ex5").write_bytes(b"")
-    assert built_ex5(src, tmp_path / "MQL5") == tmp_path / "a.ex5"
+    assert built_ex5(src, tmp_path / "MQL5", since=0) == tmp_path / "a.ex5"
+
+
+def _write(path, mtime):
+    import os
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"")
+    os.utime(path, (mtime, mtime))
+
+
+def test_built_ex5_ignores_stale_outputs(tmp_path):
+    mql5 = tmp_path / "MQL5"
+    src = mql5 / "Shared Projects" / "p" / "a.mq5"
+    _write(src.with_suffix(".ex5"), 1000)                                     # stale, adjacent
+    _write(mql5 / "Experts" / "Shared Projects" / "p" / "a.ex5", 1000)       # stale, other kind
+    fresh = mql5 / "Indicators" / "Shared Projects" / "p" / "a.ex5"
+    _write(fresh, 5000)
+    assert built_ex5(src, mql5, since=4000) == fresh
+
+
+def test_built_ex5_all_stale_is_none(tmp_path):
+    src = tmp_path / "a.mq5"
+    _write(src.with_suffix(".ex5"), 1000)
+    assert built_ex5(src, tmp_path / "MQL5", since=4000) is None
 
 
 @pytest.mark.parametrize("kind", ["Experts", "Indicators"])
@@ -226,11 +252,11 @@ def test_built_ex5_shared_projects_lands_in_kind_folder(tmp_path, kind):
     out = mql5 / kind / "Shared Projects" / "p" / "sub" / "a.ex5"
     out.parent.mkdir(parents=True)
     out.write_bytes(b"")
-    assert built_ex5(src, mql5) == out
+    assert built_ex5(src, mql5, since=0) == out
 
 
 def test_built_ex5_missing(tmp_path):
-    assert built_ex5(tmp_path / "a.mq5", tmp_path / "MQL5") is None
+    assert built_ex5(tmp_path / "a.mq5", tmp_path / "MQL5", since=0) is None
 
 
 def test_run_waits_in_short_slices():

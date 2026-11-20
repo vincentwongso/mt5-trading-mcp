@@ -40,6 +40,13 @@ def test_tiny_drawdowns_dropped():
 
 
 def test_deposit_only():
+    deposit = parse_single_html(_read("single_deals.htm")).deals[:1]  # the balance row alone
+    assert deposit[0].type == "balance"
+    assert balance_curve(deposit) == [{"time": "2026-09-01T00:00:00", "balance": 10000.0}]
+    assert drawdowns(balance_curve(deposit)) == [] and costs(deposit) == {"commission": 0.0, "swap": 0.0}
+
+
+def test_no_deals():
     r = parse_single_html(_read("single_failinit.htm"))
     assert drawdowns(balance_curve(r.deals)) == [] and costs(r.deals) == {"commission": 0.0, "swap": 0.0}
 

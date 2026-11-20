@@ -44,7 +44,8 @@ services:
       - mt5-backtest-config:/config
       - ${MT5_WORK_DIR:?set MT5_WORK_DIR in the env file}:${MT5_WORK_DIR}
     # Leave cores for the live container; the tester starts one agent per core.
-    cpuset: "${BT_CPUSET:-0-11}"
+    # Empty (the default) = all CPUs; a range the host lacks stops the container starting.
+    cpuset: "${BT_CPUSET:-}"
     restart: unless-stopped
 
 volumes:

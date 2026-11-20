@@ -1,9 +1,10 @@
 """`mt5-mcp backtest` - run the MT5 Strategy Tester on a separate tester install.
 
 Exit codes: 0 finished and report parsed (zero trades included), 2 could not
-run (not set up, MT5 updated, lock held, timeout, no fresh report, inputs not
-applied) or, for a single run, the EA failed to start or crashed. There is no
-exit 1.
+run (not set up, refreshing the tester after an MT5 update failed, lock held,
+timeout, no fresh report, unreadable report, inputs not applied) or, for a
+single run, the EA failed to start or crashed. There is no exit 1. After the
+tester ran, the JSON's `error` says why (null on success).
 """
 
 from __future__ import annotations

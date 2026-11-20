@@ -65,7 +65,8 @@ The program type is detected from the code (`--kind` overrides):
 - `replacing existing: <path>` on stderr means another build with the same
   file name was already installed there (possibly from another project). If
   that EA might be attached to a chart, tell the user.
-- `--no-install` leaves the `.ex5` next to the source only.
+- `--no-install` leaves the `.ex5` next to the source only and prints
+  `built: <path>`.
 
 ## Backtest with `mt5-mcp backtest`
 
@@ -126,8 +127,12 @@ check where the result came from:
 - `journal`: this run's tester log: `started` (`null` if the log does not
   say), `crashed` and `crash_error` (the line that stopped it), `errors`, and
   `ea_lines` (the EA's own `Print` output). Read it whenever `trades` is 0 or
-  a result looks wrong. `--json` still prints the document when the run exits
-  `2` because the EA failed to start or crashed.
+  a result looks wrong.
+- `error`: `null` when the run succeeded, otherwise the same reason as the
+  first stderr line. On every exit `2` after the tester ran (failed start,
+  crash, `.set` mismatch, no report, unreadable report) `--json` still prints
+  a document and writes it; with no usable report it has only `settings`,
+  `error`, `journal` and `report`. Check `error` before reading `metrics`.
 Times are the broker's time as the report prints it, not UTC.
 `mt5-mcp backtest --read <report.htm|.xml>` prints the JSON for an old report
 (no journal) and writes nothing.
@@ -160,11 +165,12 @@ run that downloads a symbol's history), the run is retried once and says so on
 stderr.
 
 Exit codes: `0` finished (zero trades is still `0`: read `trades` and the
-`journal:` block), `2` could not run or the EA failed. A `2` prints why, often
-with the tester's log: not set up, refreshing the tester after an MT5 update
+`journal:` block), `2` could not run or the EA failed. A `2` prints why on its
+first line, then this run's tester log lines: not set up, refreshing the tester after an MT5 update
 failed (re-run `--setup`), another backtest running (use `--wait`), timeout,
-no report written, a report MT5 filled with `n/a` (the tester log lines under
-it say why, e.g. `no history data` for real ticks), `EA failed to start` (`OnInit`
+no report written, a report MT5 filled with `n/a` (the first line is the
+tester's reason, e.g. `no history data, stop testing (... ticks canceled;
+connection to the trade server was lost)` for real ticks), `EA failed to start` (`OnInit`
 returned an error), `EA hit a runtime error` (for example array out of range;
 the numbers only cover the part before the crash), or an input in your `.set`
 the EA does not have (MT5 silently
@@ -185,9 +191,11 @@ docker exec mt5-backtest mt5-mcp backtest /home/me/mt5-work/src/MyEA.ex5 --symbo
 ```
 Exit codes are the same as on Windows. `--setup` is run once by whoever set up
 the container. For runs longer than your tool timeout, start it in the
-background and wait for the exit file (`-u abc` makes the files yours):
+background and wait for the exit file (`-u abc` makes the files yours). DIR
+and every path must be inside the shared work folder, and DIR must exist
+before the redirects open it:
 ```
-docker exec -d -u abc mt5-backtest sh -c 'mt5-mcp backtest ... --out DIR --json > DIR/run.json 2> DIR/run.err; echo $? > DIR/run.exit'
+mkdir -p DIR && docker exec -d -u abc mt5-backtest sh -c 'mt5-mcp backtest ... --out DIR --json > DIR/run.json 2> DIR/run.err; echo $? > DIR/run.exit'
 ```
 Paths inside the container (`C:\users\abc\...`, `C:\Program Files\...`) are
 not on the host; use `--out` to get files out.

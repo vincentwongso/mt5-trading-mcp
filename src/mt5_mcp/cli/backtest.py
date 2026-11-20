@@ -232,11 +232,13 @@ def _main(argv: list[str]) -> int:
     if args.optimize and not (set_file and set_file.optimized):
         return _fail("nothing to optimise: mark inputs with ||Y in the .set (--set)")
 
-    if not is_set_up(tester):
-        return _fail(f"no tester install at {tester}: run mt5-mcp backtest --setup first")
+    if out_dir:
+        out_dir.mkdir(parents=True, exist_ok=True)  # an unusable --out must fail before a long run, not after
 
     ea = Path(os.path.abspath(args.ea))
     with tester_lock(tester, wait=args.wait, on_wait=_announce_wait):  # held from the origin check on, so a --setup cannot swap it mid-run
+        if not is_set_up(tester):  # under the lock: a refresh removes origin.json while it copies
+            return _fail(f"no tester install at {tester}: run mt5-mcp backtest --setup first")
         install, data = read_origin(tester)  # no re-discovery: same tree setup copied from
         if args.terminal_path or args.data_path:
             # The tester keeps setup's logins, so other paths would mix two terminals.

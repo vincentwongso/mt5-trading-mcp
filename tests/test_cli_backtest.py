@@ -587,3 +587,32 @@ def test_unreadable_report_shows_the_journal_errors(env, monkeypatch, capsys):
     assert bt(env) == 2
     err = capsys.readouterr().err
     assert "not a number in report: 'n/a'" in err and "tester stopped because OnInit" in err
+
+
+def test_out_unusable_dir_fails_before_the_run(env, capsys):
+    setup(env)
+    not_a_dir = env["tmp"] / "file"
+    not_a_dir.write_text("x")
+    assert bt(env, "--out", str(not_a_dir)) == 2
+    assert env["calls"] == []  # the terminal never started
+
+
+def test_wait_through_an_automatic_refresh_sees_the_setup(env):
+    # A refresh deletes origin.json while it copies; a queued run must check after the lock, not before.
+    setup(env)
+    origin = env["tester"] / "origin.json"
+    saved = origin.read_bytes()
+    locked = threading.Event()
+
+    def refresh():
+        with ws.tester_lock(env["tester"]):
+            origin.unlink()
+            locked.set()
+            time.sleep(1.0)
+            origin.write_bytes(saved)
+
+    t = threading.Thread(target=refresh)
+    t.start()
+    locked.wait()
+    assert bt(env, "--wait", setup_first=False) == 0
+    t.join()

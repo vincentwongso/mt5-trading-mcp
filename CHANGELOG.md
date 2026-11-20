@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.8.4] - 2026-11-21
+
 ### Added
 - **Backtest `error` field** - every backtest JSON says why a run failed (`null` on success), and `--json` prints it on every exit 2 after the tester ran, including a rejected `.set`, a timeout and a run with no usable report.
 - **`compile --no-install`** prints `built: <path>`.

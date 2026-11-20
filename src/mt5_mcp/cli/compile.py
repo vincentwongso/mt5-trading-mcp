@@ -7,6 +7,7 @@ Exit codes: 0 compiled (warnings allowed) and installed, 1 compile errors,
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import shutil
 import sys
@@ -45,6 +46,14 @@ def _program_files() -> list[Path]:
     return [Path(p) for p in dict.fromkeys(os.environ.get(k, "") for k in keys) if p]
 
 
+def _seconds(value: str) -> float:
+    # nan/inf would disable the kill deadline in run_metaeditor.
+    t = float(value)
+    if not math.isfinite(t) or t <= 0:
+        raise argparse.ArgumentTypeError(f"must be a positive number of seconds, got {value}")
+    return t
+
+
 def _fail(msg: str) -> int:
     print(msg, file=sys.stderr)
     return 2
@@ -71,7 +80,7 @@ def _main(argv: list[str]) -> int:
     parser.add_argument("source", help="Path to the .mq5 file.")
     parser.add_argument("--kind", choices=list(KIND_FOLDERS), help="Override program type detection.")
     parser.add_argument("--no-install", action="store_true", help="Leave the .ex5 next to the source only.")
-    parser.add_argument("--timeout", type=float, default=60.0, help="Seconds before MetaEditor is killed (default 60).")
+    parser.add_argument("--timeout", type=_seconds, default=60.0, help="Seconds before MetaEditor is killed (default 60).")
     parser.add_argument("--terminal-path", default=None, help="terminal64.exe or its folder. Overrides [mt5] terminal_path.")
     parser.add_argument("--data-path", default=None, help="Terminal data folder (holds MQL5/). Overrides [mt5] data_path.")
     parser.add_argument("--config", default=None, help="Path to config TOML (default: per-OS user config dir).")

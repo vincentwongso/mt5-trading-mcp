@@ -267,3 +267,11 @@ def test_dotdot_source_path_is_normalised(env, monkeypatch, capsys):
     dotted = Path("..") / ".." / ".." / "work" / "clean_ea.mq5"
     assert cli.main([str(dotted), "--config", str(env["cfg"])]) == 0
     assert (experts / "Agent" / "clean_ea.ex5").exists()
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf", "-1", "0"])
+def test_non_positive_or_non_finite_timeout_rejected(env, bad):
+    with pytest.raises(SystemExit) as exc:
+        run(env, "clean_ea.mq5", "--timeout", bad)
+    assert exc.value.code == 2
+    assert env["cmdlines"] == []

@@ -19,6 +19,7 @@ from pathlib import Path
 from mt5_mcp.cli.compile import _fail, _program_files, _seconds
 from mt5_mcp.config import load_config
 from mt5_mcp.mql5.compiler import CompileTimeout, run_supervised
+from mt5_mcp.mql5.hostpath import host_paths
 from mt5_mcp.mql5.journal import journal_block, read_new, snapshot_logs, summarize
 from mt5_mcp.mql5.report import (
     ReportError,
@@ -184,7 +185,7 @@ def _main(argv: list[str]) -> int:
         with tester_lock(tester):
             setup_tester(paths.install_dir, paths.data_dir, tester)
             write_origin(tester, paths.install_dir, paths.data_dir)
-        print(f"tester: {tester}")
+        print(host_paths(f"tester: {tester}"))
         if not cfg.mt5.terminal_path:
             # Probed: MetaTrader5.initialize() with no path attaches to a running tester terminal.
             print("warning: set [mt5] terminal_path, or the MCP server may attach to the tester "
@@ -298,7 +299,7 @@ def _main(argv: list[str]) -> int:
         if not args.json:
             show = block if result.metrics["trades"] == 0 or j["errors"] else None
             print(line)
-            print(_with_lines(format_single(result, out), show, f"json: {json_path}"))
+            print(host_paths(_with_lines(format_single(result, out), show, f"json: {json_path}")))
         return 0
 
     back = parse_opt_xml(out.read_bytes())
@@ -321,5 +322,5 @@ def _main(argv: list[str]) -> int:
         print(f"note: fixed inputs not checked in optimisation runs: {', '.join(set_file.fixed)}", file=sys.stderr)
     if not args.json:
         print(line)
-        print(_with_lines(format_table(rows, args.top, out), f"json: {json_path}"))
+        print(host_paths(_with_lines(format_table(rows, args.top, out), f"json: {json_path}")))
     return 0

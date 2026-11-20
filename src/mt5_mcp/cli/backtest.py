@@ -168,6 +168,13 @@ def _read_report(path: Path) -> int:
     return 0
 
 
+def _unreadable(exc: ReportError, journal: dict | None, tester: Path) -> int:
+    """A report MT5 filled with 'n/a' (e.g. no tick history): the reason is in the tester log."""
+    errors = (journal or {}).get("errors") or []
+    return _fail("\n".join([str(exc), *(f"  error: {e}" for e in errors[:5])]) if errors
+                 else f"{exc}\n{log_tail(tester)}")
+
+
 def _announce_wait() -> None:
     print("waiting for another backtest to finish...", file=sys.stderr)
 
@@ -267,6 +274,10 @@ def _main(argv: list[str]) -> int:
         base = tester / report.replace("\\", "/")
         # Success is this run's uniquely named report, never the exit code.
         out = base.with_name(base.name + (".xml" if args.optimize else ".htm"))
+        if args.optimize:
+            # An identical re-run is served from this cache and writes no forward report.
+            for cached in (tester / "Tester" / "cache").glob("*.opt"):
+                cached.unlink(missing_ok=True)
         before = snapshot_logs(tester)  # once, so a retried run's lines are kept too
         with tempfile.TemporaryDirectory(prefix="mt5-backtest-") as tmp:
             ini = Path(tmp) / "backtest.ini"
@@ -305,7 +316,10 @@ def _main(argv: list[str]) -> int:
         line += f" optimize={args.optimize} criterion={args.criterion} forward={args.forward}"
 
     if not args.optimize:
-        result = parse_single_html(out.read_bytes())
+        try:
+            result = parse_single_html(out.read_bytes())
+        except ReportError as exc:
+            return _unreadable(exc, journal, tester)
         out = _deliver(out_dir, [out])[0]
         doc = single_document(settings, result, journal, out)
         write_document(doc, json_path)
@@ -332,7 +346,10 @@ def _main(argv: list[str]) -> int:
             print(host_paths(_with_lines(format_single(result, out), show, f"json: {json_path}")))
         return 0
 
-    back = parse_opt_xml(out.read_bytes())
+    try:
+        back = parse_opt_xml(out.read_bytes())
+    except ReportError as exc:
+        return _unreadable(exc, journal, tester)
     forward = None
     if args.forward != "off":
         fwd = base.with_name(base.name + ".forward.xml")

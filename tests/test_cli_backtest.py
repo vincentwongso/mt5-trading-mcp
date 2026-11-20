@@ -563,3 +563,27 @@ def test_wait_runs_after_lock_released_exit0(env, capsys):
     assert bt(env, "--wait") == 0
     t.join()
     assert capsys.readouterr().err.count("waiting for another backtest to finish...") == 1
+
+
+def test_optimization_clears_mt5_cache_before_run(env):
+    # An identical re-run is served from Tester/cache without a forward report (seen 2026-11-20).
+    setup(env)
+    cache = env["tester"] / "Tester" / "cache"
+    cache.mkdir(parents=True)
+    (cache / "EA.EURUSD.z.H1.1.2.10.ABC.opt").write_bytes(b"cached")
+    (cache / "EA.EURUSD.z.H1.1_2.1.DEF.tst").write_bytes(b"single")
+    assert bt(env, "--optimize", "full", "--set", write_set(env, OPT_SET)) == 0
+    assert not any(cache.glob("*.opt")) and any(cache.glob("*.tst"))
+
+
+def test_unreadable_report_shows_the_journal_errors(env, monkeypatch, capsys):
+    # A real-ticks run without history writes 'n/a' cells; the reason is in the tester log.
+    env["journal"] = "failinit.log"
+
+    def bad(_):
+        raise cli.ReportError("not a number in report: 'n/a'")
+
+    monkeypatch.setattr(cli, "parse_single_html", bad)
+    assert bt(env) == 2
+    err = capsys.readouterr().err
+    assert "not a number in report: 'n/a'" in err and "tester stopped because OnInit" in err

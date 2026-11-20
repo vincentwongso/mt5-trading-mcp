@@ -4,8 +4,9 @@
 #
 #   cp deploy/.env.backtest.example deploy/.env.backtest   # fill it in
 #   docker compose -f deploy/docker-compose.backtest.yml --env-file deploy/.env.backtest up -d
-#   # first boot installs MT5 + Wine-Python (a few minutes); log the terminal in
-#   # once at http://127.0.0.1:${VNC_PORT} unless the env file has the password, then:
+#   # first boot installs MT5 + Wine-Python (a few minutes). Log the terminal in
+#   # once (VNC at http://127.0.0.1:${VNC_PORT}, or the README's fresh-volume
+#   # steps); the env credentials alone do not log in here (no MCP server). Then:
 #   docker exec mt5-backtest mt5-mcp backtest --setup
 #   docker exec mt5-backtest mt5-mcp backtest "$MT5_WORK_DIR/src/MyEA.ex5" --symbol EURUSD \
 #       --period H1 --from 2026-01-01 --to 2026-06-01 --out "$MT5_WORK_DIR/out" --json

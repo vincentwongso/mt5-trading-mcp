@@ -278,6 +278,15 @@ if [ "$token_ok" = 1 ] && [ "$serve" = 1 ]; then
     done &
 fi
 
+if [ "$token_ok" = 1 ] && [ "$serve" = 0 ]; then
+    # The serve loop is what retries a failed or outdated install; without it the
+    # CLI (`docker exec ... mt5-mcp`) would stay missing until a restart.
+    while mt5_mcp_needs_install; do
+        sleep "$install_retry_secs"
+        install_mt5_mcp retry
+    done &
+fi
+
 # Match gmag11's pattern: the autostart script returns, leaving the terminal
 # supervisor, socat, and the serve supervisor running under the desktop session.
 if [ "$serve" = 0 ]; then

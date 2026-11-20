@@ -278,3 +278,41 @@ def test_ea_inside_live_experts_keeps_its_folder_and_siblings(env):
 def test_ea_outside_live_tree_is_staged_after_mirroring(env):
     assert bt(env) == 0
     assert (env["tester"] / "MQL5" / "Experts" / "Agent" / "MyEA.ex5").is_file()
+
+
+def _flaky(env, monkeypatch, *, codes):
+    """A terminal that exits with codes[i] and writes the report only from the second launch."""
+    real = cli.run_supervised
+
+    def run(cmdline, **kw):
+        i = len(env["calls"])
+        env["write"] = i >= 1
+        real(cmdline, **kw)
+        return codes[min(i, len(codes) - 1)]
+
+    monkeypatch.setattr(cli, "run_supervised", run)
+
+
+def test_clean_exit_without_report_is_retried_once(env, monkeypatch, capsys):
+    setup(env)
+    capsys.readouterr()
+    _flaky(env, monkeypatch, codes=[0])
+    assert bt(env) == 0
+    assert len(env["calls"]) == 2
+    cap = capsys.readouterr()
+    assert "net_profit:" in cap.out and "running it once more" in cap.err
+
+
+def test_failed_exit_without_report_is_not_retried(env, monkeypatch, capsys):
+    setup(env)
+    _flaky(env, monkeypatch, codes=[3294954941])
+    assert bt(env) == 2
+    assert len(env["calls"]) == 1
+
+
+def test_no_report_after_retry_exit2(env, capsys):
+    setup(env)
+    env["write"] = False
+    assert bt(env) == 2
+    assert len(env["calls"]) == 2
+    assert "no report" in capsys.readouterr().err

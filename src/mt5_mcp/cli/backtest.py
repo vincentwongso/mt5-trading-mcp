@@ -189,18 +189,24 @@ def _main(argv: list[str]) -> int:
             optimize=args.optimize, criterion=args.criterion, forward=args.forward,
             set_name=set_name, report=report,
         )
+        base = tester / report.replace("\\", "/")
+        # Success is this run's uniquely named report, never the exit code.
+        out = base.with_name(base.name + (".xml" if args.optimize else ".htm"))
         with tempfile.TemporaryDirectory(prefix="mt5-backtest-") as tmp:
             ini = Path(tmp) / "backtest.ini"
             write_ini(ini, build_ini(spec))
             cmdline = f'"{tester / "terminal64.exe"}" /portable /config:"{ini}"'
-            try:
-                run_supervised(cmdline, timeout_s=args.timeout, label="terminal", kill=kill_tree)
-            except CompileTimeout as exc:
-                return _fail(f"{exc}\n{log_tail(tester)}")
+            for attempt in (1, 2):
+                try:
+                    code = run_supervised(cmdline, timeout_s=args.timeout, label="terminal", kill=kill_tree)
+                except CompileTimeout as exc:
+                    return _fail(f"{exc}\n{log_tail(tester)}")
+                if out.is_file() or code != 0 or attempt == 2:
+                    break
+                # Seen on Windows: the first run that downloads M1 history finishes the test
+                # and exits 0 without writing the report; the same run again writes it.
+                print("note: the terminal exited without writing a report; running it once more", file=sys.stderr)
 
-    base = tester / report.replace("\\", "/")
-    # Success is this run's uniquely named report, never the exit code.
-    out = base.with_name(base.name + (".xml" if args.optimize else ".htm"))
     if not out.is_file():
         return _fail(f"no report written ({out}); the run failed:\n{log_tail(tester)}")
 

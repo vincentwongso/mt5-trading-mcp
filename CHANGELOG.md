@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-11-20
+
+### Added
+- **`mt5-mcp backtest <ea.ex5>`** - runs the MT5 Strategy Tester and prints net profit, profit factor, drawdown, trades, win rate, Sharpe and more. Exit 0 report parsed, 2 could not run. Windows only, logged-in desktop session.
+- **Optimiser** - `--optimize full|genetic` with `||Y` inputs in the `.set` prints passes ranked by a held-out forward period (on by default, `--forward 1/3`; `off`, `1/2`, `1/4` or a date).
+- **Separate tester install** - `mt5-mcp backtest --setup` makes a portable copy logged into the live account but with no charts, so no EA starts in it and the live terminal is never touched. Live trading is switched off for every run. Set `[mt5] terminal_path`, or the MCP server can attach to the tester terminal while a test runs.
+- **Inputs check** - a run whose `.set` names an input the EA lacks, or whose values were not applied, exits 2 instead of returning a result for other inputs.
+
 ## [1.7.0] - 2026-11-20
 
 ### Added

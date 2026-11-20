@@ -31,7 +31,8 @@
 # the environment (see config.py / server.py). Two ways the terminal ends up
 # logged in:
 #   * Programmatic: creds present -> mt5-mcp calls initialize(login=,password=,
-#     server=). Fully headless if the broker/terminal allow it.
+#     server=). Fully headless if the broker/terminal allow it. Only the
+#     server does this, so with MT5_MCP_SERVE=0 use the VNC login.
 #   * One-time VNC login: open the KasmVNC web UI once, log the terminal in;
 #     the session persists in /config. mt5-mcp's connect retry loop then
 #     attaches on its next attempt.
@@ -54,7 +55,11 @@ MT5_CMD_OPTIONS="${MT5_CMD_OPTIONS:-}"
 term_pat='^C:.*terminal64\.exe'
 term_pid=""
 
-mono_url="https://dl.winehq.org/wine/wine-mono/10.3.0/wine-mono-10.3.0-x86.msi"
+# The version this image's Wine asks for. An older one makes Wine's prefix update
+# (first start after a Wine upgrade) wait forever on a hidden install prompt,
+# and every later wine command, `mt5-mcp` included, waits behind it.
+mono_version="11.1.0"
+mono_url="https://dl.winehq.org/wine/wine-mono/${mono_version}/wine-mono-${mono_version}-x86.msi"
 python_url="https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe"
 mt5setup_url="https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe"
 
@@ -79,7 +84,8 @@ log() { echo "[mt5-mcp-boot] $*"; }
 
 # Sets $installed; returns 0 when mt5-trading-mcp must be (re)installed.
 mt5_mcp_needs_install() {
-    installed="$($wine_executable "$python_win" -m pip show mt5-trading-mcp 2>/dev/null | tr -d '\r' | sed -n 's/^Version: //p')"
+    # Not `pip show`: it takes minutes under Wine.
+    installed="$($wine_executable "$python_win" -c "import importlib.metadata as m; print(m.version('mt5-trading-mcp'))" 2>/dev/null | tr -d '\r')"
     [ -z "$installed" ] || { [ -n "$pin" ] && [ "$installed" != "$pin" ]; }
 }
 
@@ -146,9 +152,12 @@ check_terminal() {
 }
 
 # --- 1. Wine-Mono --------------------------------------------------------
-if [ ! -e "/config/.wine/drive_c/windows/mono" ]; then
-    log "[1/6] Installing Wine-Mono..."
+mono_have="$(grep -a -A2 '"DisplayName"="Wine Mono Runtime"' /config/.wine/system.reg 2>/dev/null \
+    | sed -n 's/^"DisplayVersion"="\(.*\)"/\1/p' | head -1)"
+if [ "$mono_have" != "$mono_version" ]; then
+    log "[1/6] Installing Wine-Mono ${mono_version}${mono_have:+ (replacing ${mono_have})}..."
     curl -L -o /config/.wine/drive_c/mono.msi "$mono_url"
+    # mscoree=d also keeps the prefix update this command triggers from prompting.
     WINEDLLOVERRIDES=mscoree=d $wine_executable msiexec /i /config/.wine/drive_c/mono.msi /qn
     rm -f /config/.wine/drive_c/mono.msi
 else
@@ -249,7 +258,7 @@ fi
 # MT5_MCP_SERVE=0 (the backtest container): no server, no bridge. The CLI is
 # all it needs, and an unauthenticated server there could trade the account.
 serve=1
-[ "${MT5_MCP_SERVE:-1}" = 0 ] && serve=0
+case "${MT5_MCP_SERVE:-1}" in 0|[Ff][Aa][Ll][Ss][Ee]|[Oo][Ff][Ff]|[Nn][Oo]) serve=0 ;; esac
 
 if [ "$token_ok" = 1 ] && [ "$serve" = 1 ]; then
     container_ip="$(hostname -i 2>/dev/null | awk '{print $1}')"

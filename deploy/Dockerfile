@@ -27,13 +27,6 @@ RUN rm -f /etc/apt/sources.list.d/winehq*.sources /etc/apt/sources.list.d/winehq
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Replace the stock bootstrap (3.9 32-bit Python + the broken mt5linux `-w`
-# launcher) with our headless-MCP version. The KasmVNC desktop autostart
-# already points at /Metatrader/start.sh, so this swaps the behaviour cleanly
-# while keeping the base's MT5-install + terminal-launch + VNC machinery.
-COPY deploy/start.sh /Metatrader/start.sh
-RUN chmod +x /Metatrader/start.sh
-
 # Wine 10 cannot run MT5 builds newer than 28 Sep 2026 (their anti-debug check
 # trips); WineHQ staging 11.10 runs the current build, MetaEditor and the tester
 # (probed 2026-11-20; MetaQuotes' own mt5linux.sh uses staging too). Pinned so a
@@ -52,6 +45,14 @@ RUN mkdir -pm755 /etc/apt/keyrings \
     && rm -f /etc/apt/sources.list.d/winehq*.sources /etc/apt/keyrings/winehq-archive.key \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Replace the stock bootstrap (3.9 32-bit Python + the broken mt5linux `-w`
+# launcher) with our headless-MCP version (after the Wine layer, so script edits
+# don't re-download Wine). The KasmVNC desktop autostart
+# already points at /Metatrader/start.sh, so this swaps the behaviour cleanly
+# while keeping the base's MT5-install + terminal-launch + VNC machinery.
+COPY deploy/start.sh /Metatrader/start.sh
+RUN chmod +x /Metatrader/start.sh
 
 # `docker exec <container> mt5-mcp compile|backtest ...` with host paths.
 COPY --chmod=755 deploy/mt5-mcp /usr/local/bin/mt5-mcp

@@ -185,3 +185,49 @@ def test_opt_input_named_like_a_metric_does_not_overwrite_it():
 def test_single_input_keeps_repeated_spaces():
     raw = _read("single_types.htm").decode("utf-16").replace("Note=abc def", "Note=abc  def")
     assert parse_single_html(raw.encode("utf-16")).inputs["Note"] == "abc  def"
+
+
+def test_deals_parsed_with_empty_cells_kept():
+    r = parse_single_html(_read("single_deals.htm"))
+    assert len(r.deals) == 97  # deposit row + deals 2..97
+    d0, d1, d2 = r.deals[:3]
+    assert d0.type == "balance" and d0.profit == 10000.0 and d0.balance == 10000.0 and d0.direction == ""
+    assert d0.price is None and d0.order is None
+    assert (d1.time, d1.deal, d1.type, d1.direction, d1.volume, d1.price, d1.order) == \
+        ("2026-09-02T17:00:00", 2, "buy", "in", 0.17, 1.16046, 2)
+    assert (d2.commission, d2.swap, d2.profit, d2.balance) == (-0.60, -5.85, 31.11, 10024.06)
+    assert r.deals[-1].comment == "end of test" and r.deals[-1].balance == 10267.78
+
+
+def test_header_fields():
+    h = parse_single_html(_read("single_deals.htm")).header
+    assert h == {"expert": "MA", "symbol": "EURUSD", "period": "H1", "from": "2026-09-01",
+                 "to": "2026-11-01", "currency": "USD", "deposit": "10000", "leverage": "1:100"}
+
+
+def test_sl_tp_joined_from_orders():
+    r = parse_single_html(_read("single_sltp.htm"))
+    opened = r.deals[1]
+    assert (opened.deal, opened.order, opened.sl, opened.tp) == (2, 2, 1.15681, 1.16981)
+    stopped = r.deals[4]
+    assert (stopped.direction, stopped.comment, stopped.sl, stopped.tp) == ("out", "sl 1.15863", None, None)
+
+
+def test_orders_partial_volume_and_canceled_state():
+    r = parse_single_html(_read("single_sltp.htm"))  # includes a cancelled limit (order 3, no deal)
+    assert [d.order for d in r.deals] == [None, 2, 4, 5, 6, 7]
+    assert [d.volume for d in r.deals[1:]] == [0.1, 0.2, 0.05, 0.05, 0.2]
+    assert r.deals[-1].balance == 10061.65
+
+
+def test_missing_deals_header_raises():
+    text = _read("single_deals.htm").decode("utf-16").replace("<b>Balance</b>", "<b>Saldo</b>")
+    with pytest.raises(ReportError, match="Balance"):
+        parse_single_html(text.encode("utf-16"))
+
+
+def test_failed_runs_still_parse_with_zero_metrics():
+    # FailInit never started, so not even the deposit row; ArrayErr started and has it.
+    for name, types in (("single_failinit.htm", []), ("single_arrayerr.htm", ["balance"])):
+        r = parse_single_html(_read(name))
+        assert r.metrics["trades"] == 0 and [d.type for d in r.deals] == types

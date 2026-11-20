@@ -183,9 +183,7 @@ def test_refresh_failure_exit2_with_hint(env, monkeypatch, capsys):
 def test_refresh_happens_after_waiting_for_the_lock(env, capsys):
     setup(env)
     _touch_live(env)
-    t = threading.Thread(target=_hold, args=(env["tester"], 1.0))
-    t.start()
-    time.sleep(0.2)
+    t = _held(env["tester"], 1.0)
     assert bt(env, "--wait") == 0
     t.join()
     assert "refreshed the tester install" in capsys.readouterr().err
@@ -549,16 +547,24 @@ def test_out_with_setup_or_read_is_usage_error(env, extra):
     assert e.value.code == 2
 
 
-def _hold(tester, secs):
+def _hold(tester, secs, held):
     with ws.tester_lock(tester):
+        held.set()
         time.sleep(secs)
+
+
+def _held(tester, secs):
+    """A thread holding the tester lock for `secs`; returns once it has the lock."""
+    held = threading.Event()
+    t = threading.Thread(target=_hold, args=(tester, secs, held))
+    t.start()
+    held.wait()
+    return t
 
 
 def test_wait_runs_after_lock_released_exit0(env, capsys):
     setup(env)
-    t = threading.Thread(target=_hold, args=(env["tester"], 1.5))
-    t.start()
-    time.sleep(0.2)
+    t = _held(env["tester"], 1.5)
     assert bt(env, "--wait") == 0
     t.join()
     assert capsys.readouterr().err.count("waiting for another backtest to finish...") == 1

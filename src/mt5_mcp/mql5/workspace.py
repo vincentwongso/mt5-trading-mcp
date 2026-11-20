@@ -8,6 +8,7 @@ program files and three login files are copied, never data folders.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import shutil
@@ -151,6 +152,11 @@ def new_report_name(stem: str, now: datetime) -> str:
     return f"reports\\{now:%Y%m%dT%H%M%S%f}Z-{stem}"
 
 
+# Lock held by another process: fcntl says EAGAIN/EWOULDBLOCK, Windows msvcrt
+# EACCES/EDEADLOCK, Wine's msvcrt errno 0 (probed 2026-11-21).
+_CONTENTION = frozenset({0, errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK, errno.EDEADLK, 36})
+
+
 @contextmanager
 def tester_lock(tester: Path, *, wait: bool = False, on_wait: Callable[[], None] | None = None) -> Iterator[None]:
     tester.mkdir(parents=True, exist_ok=True)
@@ -160,7 +166,9 @@ def tester_lock(tester: Path, *, wait: bool = False, on_wait: Callable[[], None]
             try:
                 _try_lock(f)
                 break
-            except OSError:
+            except OSError as exc:
+                if exc.errno not in _CONTENTION:
+                    raise  # e.g. a bad handle or disk error: waiting would loop forever
                 if not wait:
                     raise LockHeld("another backtest is running") from None
                 if on_wait:

@@ -101,6 +101,8 @@ write_cfg() {
         mkdir -p "$(dirname "$cfg")" || exit 1
         {
             printf '[screenshot]\ntemplate = "agent_light.tpl"\n'
+            # Explicit, so the server never attaches to a backtest's tester terminal.
+            printf '\n[mt5]\nterminal_path = %s\n' "'C:\Program Files\MetaTrader 5\terminal64.exe'"
             if [ -n "${MT5_MCP_AUTH_TOKEN:-}" ]; then
                 printf '\n[transport.http]\nauth_token = "%s"\n' "$MT5_MCP_AUTH_TOKEN"
             fi
@@ -184,8 +186,8 @@ if [ -e "$mt5file" ]; then
     else
         log "WARNING: could not write startup.ini"
     fi
-    # LiveUpdate must not replace it: builds newer than 28 Sep do not start under Wine.
-    chmod a-w "$mt5file"
+    # Older images pinned it read-only; LiveUpdate must be able to replace it.
+    chmod u+w "$mt5file"
     log "terminal64.exe sha256 $(sha256sum "$mt5file" | cut -c1-8)"
     log "[3/6] Starting the MetaTrader 5 terminal supervisor..."
     while true; do

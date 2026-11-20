@@ -32,7 +32,7 @@ from mt5_mcp.mql5.terminal import LocateError, locate_terminal
 
 _EPILOG = (
     "Clean builds install to <data>/MQL5/<Kind>/Agent/<name>.ex5 (libraries: "
-    "MQL5/Libraries/). Reinstalling an EA that is attached to a live chart "
+    "MQL5/Libraries/); a source already under MQL5/<Kind>/ builds in place. Reinstalling an EA that is attached to a live chart "
     "reloads the new code on that chart."
 )
 

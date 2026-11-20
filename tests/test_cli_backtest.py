@@ -100,9 +100,11 @@ def test_optimize_prints_table_ranked_by_forward_exit0(env, capsys):
     capsys.readouterr()
     assert bt(env, "--optimize", "full", "--set", s, "--top", "3") == 0
     lines = capsys.readouterr().out.splitlines()
-    assert lines[0].split()[:3] == ["rank", "pass", "fwd_result"]
-    assert lines[1].split()[:2] == ["1", "68"]
-    assert len(lines) == 1 + 3 + 1
+    assert lines[0] == ("settings: EURUSD.z H1 2026-10-01..2026-11-01 model=ohlc deposit=10000 USD "
+                        "leverage=1:100 optimize=full criterion=balance forward=1/3")
+    assert lines[1].split()[:3] == ["rank", "pass", "fwd_result"]
+    assert lines[2].split()[:2] == ["1", "68"]
+    assert len(lines) == 1 + 1 + 3 + 1
 
 
 def test_ini_has_forward_third_by_default_with_optimize(env):
@@ -278,3 +280,57 @@ def test_ea_inside_live_experts_keeps_its_folder_and_siblings(env):
 def test_ea_outside_live_tree_is_staged_after_mirroring(env):
     assert bt(env) == 0
     assert (env["tester"] / "MQL5" / "Experts" / "Agent" / "MyEA.ex5").is_file()
+
+
+def _flaky(env, monkeypatch, *, codes):
+    """A terminal that exits with codes[i] and writes the report only from the second launch."""
+    real = cli.run_supervised
+
+    def run(cmdline, **kw):
+        i = len(env["calls"])
+        env["write"] = i >= 1
+        real(cmdline, **kw)
+        return codes[min(i, len(codes) - 1)]
+
+    monkeypatch.setattr(cli, "run_supervised", run)
+
+
+def test_clean_exit_without_report_is_retried_once(env, monkeypatch, capsys):
+    setup(env)
+    capsys.readouterr()
+    _flaky(env, monkeypatch, codes=[0])
+    assert bt(env) == 0
+    assert len(env["calls"]) == 2
+    cap = capsys.readouterr()
+    assert "net_profit:" in cap.out and "running it once more" in cap.err
+
+
+def test_failed_exit_without_report_is_not_retried(env, monkeypatch, capsys):
+    setup(env)
+    _flaky(env, monkeypatch, codes=[3294954941])
+    assert bt(env) == 2
+    assert len(env["calls"]) == 1
+
+
+def test_no_report_after_retry_exit2(env, capsys):
+    setup(env)
+    env["write"] = False
+    assert bt(env) == 2
+    assert len(env["calls"]) == 2
+    assert "no report" in capsys.readouterr().err
+
+
+def test_single_run_summary_starts_with_settings(env, capsys):
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--deposit", "2500.5", "--currency", "EUR", "--leverage", "30") == 0
+    first = capsys.readouterr().out.splitlines()[0]
+    assert first == "settings: EURUSD.z H1 2026-10-01..2026-11-01 model=ohlc deposit=2500.5 EUR leverage=1:30"
+
+
+def test_settings_deposit_matches_the_ini(env, capsys):
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--deposit", "2500.567") == 0
+    assert env["inis"][-1]["Deposit"] == "2500.57"
+    assert "deposit=2500.57 USD" in capsys.readouterr().out.splitlines()[0]

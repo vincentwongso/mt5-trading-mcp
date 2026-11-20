@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **`mt5-mcp backtest` first run** - the first run that downloaded a symbol's history could finish the test, exit cleanly and write no report, giving exit 2. A clean exit with no report is now retried once.
+- **`mt5-mcp compile --help`** - now says that a source already under `MQL5\<Kind>\` builds in place instead of installing to `Agent\`.
+
+### Added
+- **Backtest settings line** - every summary and optimisation table starts with `settings:` (symbol, period, dates, model, deposit, currency, leverage; plus optimiser, criterion and forward split), so runs can be told apart and compared.
+- **`mt5-mcp --version`**.
+
 ## [1.8.0] - 2026-11-20
 
 ### Added

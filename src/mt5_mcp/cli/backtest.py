@@ -35,6 +35,7 @@ from mt5_mcp.mql5.tester import (
     RunSpec,
     build_ini,
     check_inputs,
+    deposit_text,
     ini_value,
     parse_forward,
     parse_set,
@@ -189,26 +190,39 @@ def _main(argv: list[str]) -> int:
             optimize=args.optimize, criterion=args.criterion, forward=args.forward,
             set_name=set_name, report=report,
         )
+        base = tester / report.replace("\\", "/")
+        # Success is this run's uniquely named report, never the exit code.
+        out = base.with_name(base.name + (".xml" if args.optimize else ".htm"))
         with tempfile.TemporaryDirectory(prefix="mt5-backtest-") as tmp:
             ini = Path(tmp) / "backtest.ini"
             write_ini(ini, build_ini(spec))
             cmdline = f'"{tester / "terminal64.exe"}" /portable /config:"{ini}"'
-            try:
-                run_supervised(cmdline, timeout_s=args.timeout, label="terminal", kill=kill_tree)
-            except CompileTimeout as exc:
-                return _fail(f"{exc}\n{log_tail(tester)}")
+            for attempt in (1, 2):
+                try:
+                    code = run_supervised(cmdline, timeout_s=args.timeout, label="terminal", kill=kill_tree)
+                except CompileTimeout as exc:
+                    return _fail(f"{exc}\n{log_tail(tester)}")
+                if out.is_file() or code != 0 or attempt == 2:
+                    break
+                # Seen on Windows: the first run that downloads M1 history finishes the test
+                # and exits 0 without writing the report; the same run again writes it.
+                print("note: the terminal exited without writing a report; running it once more", file=sys.stderr)
 
-    base = tester / report.replace("\\", "/")
-    # Success is this run's uniquely named report, never the exit code.
-    out = base.with_name(base.name + (".xml" if args.optimize else ".htm"))
     if not out.is_file():
         return _fail(f"no report written ({out}); the run failed:\n{log_tail(tester)}")
+
+    # Results are only comparable under the same settings, so every summary leads with them.
+    settings = (f"settings: {args.symbol} {args.period} {args.date_from}..{args.date_to} model={args.model} "
+                f"deposit={deposit_text(args.deposit)} {args.currency} leverage=1:{args.leverage}")
+    if args.optimize:
+        settings += f" optimize={args.optimize} criterion={args.criterion} forward={args.forward}"
 
     if not args.optimize:
         result = parse_single_html(out.read_bytes())
         problem = check_inputs(set_file, result.inputs, optimized_names=None) if set_file else None
         if problem:
             return _fail(problem)
+        print(settings)
         print(format_single(result, out))
         return 0
 
@@ -225,5 +239,6 @@ def _main(argv: list[str]) -> int:
     if set_file and set_file.fixed:
         # The optimisation report lists only optimised inputs.
         print(f"note: fixed inputs not checked in optimisation runs: {', '.join(set_file.fixed)}", file=sys.stderr)
+    print(settings)
     print(format_table(merge_passes(back, forward), args.top, out))
     return 0

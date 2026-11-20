@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -15,6 +16,7 @@ from mt5_mcp.mql5.compiler import CompileTimeout
 from mt5_mcp.mql5.terminal import TerminalPaths
 
 FIX = Path(__file__).parent / "fixtures" / "mql5" / "reports"
+JOURNAL = Path(__file__).parent / "fixtures" / "mql5" / "journal"
 
 
 def _ini(cmdline: str) -> dict[str, str]:
@@ -43,7 +45,7 @@ def env(tmp_path, monkeypatch):
     paths = TerminalPaths(install, install / "metaeditor64.exe", data)
     monkeypatch.setattr(cli, "locate_terminal", lambda **kw: paths)
     state = {"single": "single_en.htm", "opt": "opt_full_fwd.xml", "fwd": "opt_full_fwd.forward.xml",
-             "write": True, "calls": [], "inis": []}
+             "write": True, "calls": [], "inis": [], "journal": "normal.log"}
 
     def fake_run(cmdline, *, timeout_s, label, kill=None):
         state["calls"].append(cmdline)
@@ -52,6 +54,10 @@ def env(tmp_path, monkeypatch):
         if state["write"] == "timeout":
             raise CompileTimeout(f"{label} did not finish in {timeout_s:g}s; killed.")
         if state["write"]:
+            log = tester / "Tester" / "Agent-127.0.0.1-3000" / "logs" / "20261120.log"
+            log.parent.mkdir(parents=True, exist_ok=True)
+            with open(log, "ab") as f:  # the agent log collects every run of the day
+                f.write((JOURNAL / state["journal"]).read_bytes())
             out = tester / ini["Report"].replace("\\", "/")
             if ini["Optimization"] == "0":
                 shutil.copy(FIX / state["single"], out.with_name(out.name + ".htm"))
@@ -104,7 +110,7 @@ def test_optimize_prints_table_ranked_by_forward_exit0(env, capsys):
                         "leverage=1:100 optimize=full criterion=balance forward=1/3")
     assert lines[1].split()[:3] == ["rank", "pass", "fwd_result"]
     assert lines[2].split()[:2] == ["1", "68"]
-    assert len(lines) == 1 + 1 + 3 + 1
+    assert len(lines) == 1 + 1 + 3 + 1 + 1  # settings, header, 3 rows, json, report
 
 
 def test_ini_has_forward_third_by_default_with_optimize(env):
@@ -334,3 +340,93 @@ def test_settings_deposit_matches_the_ini(env, capsys):
     assert bt(env, "--deposit", "2500.567") == 0
     assert env["inis"][-1]["Deposit"] == "2500.57"
     assert "deposit=2500.57 USD" in capsys.readouterr().out.splitlines()[0]
+
+
+def test_single_run_writes_json_and_prints_path(env, capsys):
+    env["single"] = "single_deals.htm"
+    assert bt(env) == 0
+    out = capsys.readouterr().out
+    path = Path(re.search(r"^json: (.+)$", out, re.M)[1])
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    assert doc["kind"] == "single" and doc["settings"]["symbol"] == "EURUSD.z" and doc["journal"]["started"] is True
+    assert doc["settings"]["deposit"] == 10000.0 and doc["settings"]["leverage"] == 100
+    assert path.parent == env["tester"] / "reports" and path.name.endswith("Z-MyEA.json")
+    assert out.index("json: ") < out.index("report: ")
+    assert "journal:" not in out
+
+
+def test_json_flag_prints_only_the_document(env, capsys):
+    env["single"] = "single_deals.htm"
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--json") == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert len(doc["deals"]) == 97
+
+
+def test_failinit_exit2_with_journal(env, capsys):
+    env["single"], env["journal"] = "single_failinit.htm", "failinit.log"
+    assert bt(env) == 2
+    err = capsys.readouterr().err
+    assert "EA failed to start" in err and "OnInit returns non-zero code 1" in err and "journal:" in err
+
+
+def test_crash_exit2_json_still_written_and_printed(env, capsys):
+    env["single"], env["journal"] = "single_arrayerr.htm", "arrayerr.log"
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--json") == 2
+    cap = capsys.readouterr()
+    assert json.loads(cap.out)["journal"]["crashed"] is True
+    assert "EA hit a runtime error" in cap.err and "array out of range" in cap.err
+    assert list((env["tester"] / "reports").glob("*.json"))
+
+
+def test_zero_trades_shows_journal_block_exit0(env, capsys):
+    env["single"], env["journal"] = "single_failinit.htm", "notrade.log"
+    env["ea"] = env["tmp"] / "NoTrade.ex5"  # journal lines are matched by the EA's file name
+    env["ea"].write_bytes(b"EX5")
+    assert bt(env) == 0
+    out = capsys.readouterr().out
+    assert "journal:" in out and out.index("journal:") < out.index("report: ")
+
+
+def test_optimization_journal_never_changes_exit(env, capsys):
+    env["journal"] = "failinit.log"
+    s = write_set(env, "MovingPeriod=12||6||2||30||Y\nMovingShift=6||0||2||10||Y\n")
+    assert bt(env, "--optimize", "full", "--set", s) == 0
+    doc = json.loads(next((env["tester"] / "reports").glob("*.json")).read_text(encoding="utf-8"))
+    assert doc["kind"] == "optimization" and doc["journal"]["started"] is None
+    assert doc["settings"]["criterion"] == "balance" and doc["passes"][0]["pass"] == 68
+
+
+def test_json_flag_prints_nothing_when_no_report(env, capsys):
+    env["write"] = False
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--json") == 2
+    assert capsys.readouterr().out == ""
+
+
+def test_read_prints_json_and_writes_nothing(capsys, tmp_path):
+    report = tmp_path / "r.htm"
+    shutil.copy(FIX / "single_deals.htm", report)
+    assert cli.main(["--read", str(report)]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["journal"] is None and doc["settings"]["symbol"] == "EURUSD"
+    assert doc["settings"]["from"] == "2026-09-01" and doc["settings"]["deposit"] == 10000.0
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["r.htm"]
+
+
+def test_read_optimization_xml_uses_forward_file(capsys, tmp_path):
+    shutil.copy(FIX / "opt_full_fwd.xml", tmp_path / "o.xml")
+    shutil.copy(FIX / "opt_full_fwd.forward.xml", tmp_path / "o.forward.xml")
+    assert cli.main(["--read", str(tmp_path / "o.xml")]) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["kind"] == "optimization" and doc["passes"][0]["forward"]["result"] == 10133.20
+
+
+def test_read_with_ea_is_an_error(env):
+    with pytest.raises(SystemExit) as e:
+        cli.main([str(env["ea"]), "--read", str(FIX / "single_deals.htm")])
+    assert e.value.code == 2

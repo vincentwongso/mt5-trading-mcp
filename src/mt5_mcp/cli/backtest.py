@@ -2,12 +2,14 @@
 
 Exit codes: 0 finished and report parsed (zero trades included), 2 could not
 run (not set up, MT5 updated, lock held, timeout, no fresh report, inputs not
-applied). There is no exit 1.
+applied) or, for a single run, the EA failed to start or crashed. There is no
+exit 1.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import tempfile
@@ -17,6 +19,7 @@ from pathlib import Path
 from mt5_mcp.cli.compile import _fail, _program_files, _seconds
 from mt5_mcp.config import load_config
 from mt5_mcp.mql5.compiler import CompileTimeout, run_supervised
+from mt5_mcp.mql5.journal import journal_block, read_new, snapshot_logs, summarize
 from mt5_mcp.mql5.report import (
     ReportError,
     format_single,
@@ -25,6 +28,7 @@ from mt5_mcp.mql5.report import (
     parse_opt_xml,
     parse_single_html,
 )
+from mt5_mcp.mql5.results import optimization_document, single_document, write_document
 from mt5_mcp.mql5.terminal import LocateError, locate_terminal
 from mt5_mcp.mql5.tester import (
     CRITERIA,
@@ -112,6 +116,10 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--terminal-path", default=None, help="Live terminal64.exe or its folder. Overrides [mt5] terminal_path.")
     p.add_argument("--data-path", default=None, help="Live terminal data folder. Overrides [mt5] data_path.")
     p.add_argument("--config", default=None, help="Path to config TOML (default: per-OS user config dir).")
+    p.add_argument("--json", action="store_true",
+                   help="Print the run's JSON (settings, metrics, deals, balance, drawdowns, journal) instead of the summary.")
+    p.add_argument("--read", metavar="REPORT", default=None,
+                   help="Print the JSON for an existing .htm or .xml report, without running anything.")
     return p
 
 
@@ -128,9 +136,45 @@ def _same_dir(a: Path, b: Path) -> bool:
     return os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
 
 
+def _dump(doc: dict) -> None:
+    print(json.dumps(doc, indent=1))
+
+
+def _read_report(path: Path) -> int:
+    """Rebuild the JSON from an old report. Prints only: a run's journal can't be recaptured."""
+    raw = path.read_bytes()
+    if path.suffix.lower() == ".xml":
+        fwd = path.with_name(path.stem + ".forward.xml")
+        rows = merge_passes(parse_opt_xml(raw), parse_opt_xml(fwd.read_bytes()) if fwd.is_file() else None)
+        keys = ("symbol", "period", "from", "to", "model", "deposit", "currency", "leverage",
+                "optimize", "criterion", "forward")
+        _dump(optimization_document(dict.fromkeys(keys), rows, None, path))
+        return 0
+    r = parse_single_html(raw)
+    h = r.header
+    lev = h.get("leverage") or ""
+    settings = {
+        "symbol": h.get("symbol"), "period": h.get("period"), "from": h.get("from"), "to": h.get("to"),
+        "model": None, "deposit": float(h["deposit"]) if h.get("deposit") else None,
+        "currency": h.get("currency"), "leverage": int(lev.split(":")[1]) if lev.startswith("1:") else None,
+    }
+    _dump(single_document(settings, r, None, path))
+    return 0
+
+
+def _with_lines(text: str, *extra: str | None) -> str:
+    """Insert lines just before the final `report:` line."""
+    lines = text.splitlines()
+    return "\n".join([*lines[:-1], *(e for e in extra if e), lines[-1]])
+
+
 def _main(argv: list[str]) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.read:
+        if args.ea or args.setup:
+            parser.error("--read takes a report only, not an .ex5 or --setup")
+        return _read_report(Path(args.read))
     tester = Path(os.path.abspath(args.tester_path)) if args.tester_path else default_tester_dir()
     cfg = load_config(Path(args.config) if args.config else None)
 
@@ -193,6 +237,7 @@ def _main(argv: list[str]) -> int:
         base = tester / report.replace("\\", "/")
         # Success is this run's uniquely named report, never the exit code.
         out = base.with_name(base.name + (".xml" if args.optimize else ".htm"))
+        before = snapshot_logs(tester)  # once, so a retried run's lines are kept too
         with tempfile.TemporaryDirectory(prefix="mt5-backtest-") as tmp:
             ini = Path(tmp) / "backtest.ini"
             write_ini(ini, build_ini(spec))
@@ -211,19 +256,40 @@ def _main(argv: list[str]) -> int:
     if not out.is_file():
         return _fail(f"no report written ({out}); the run failed:\n{log_tail(tester)}")
 
+    lines, files = read_new(tester, before)
+    journal = summarize(lines, files, ea_stem=ea.stem, optimization=bool(args.optimize))
+    json_path = base.with_name(base.name + ".json")
+
     # Results are only comparable under the same settings, so every summary leads with them.
-    settings = (f"settings: {args.symbol} {args.period} {args.date_from}..{args.date_to} model={args.model} "
-                f"deposit={deposit_text(args.deposit)} {args.currency} leverage=1:{args.leverage}")
+    settings = {"symbol": args.symbol, "period": args.period, "from": str(args.date_from), "to": str(args.date_to),
+                "model": args.model, "deposit": args.deposit, "currency": args.currency, "leverage": args.leverage}
+    line = (f"settings: {args.symbol} {args.period} {args.date_from}..{args.date_to} model={args.model} "
+            f"deposit={deposit_text(args.deposit)} {args.currency} leverage=1:{args.leverage}")
     if args.optimize:
-        settings += f" optimize={args.optimize} criterion={args.criterion} forward={args.forward}"
+        settings.update(optimize=args.optimize, criterion=args.criterion, forward=args.forward)
+        line += f" optimize={args.optimize} criterion={args.criterion} forward={args.forward}"
 
     if not args.optimize:
         result = parse_single_html(out.read_bytes())
+        doc = single_document(settings, result, journal, out)
+        write_document(doc, json_path)
+        if args.json:
+            _dump(doc)  # also on exit 2 below, so the agent gets the journal either way
         problem = check_inputs(set_file, result.inputs, optimized_names=None) if set_file else None
+        block = journal_block(journal)
+        if not problem and journal["started"] is False:
+            first = journal["errors"][0] if journal["errors"] else "the test never started"
+            problem = f"EA failed to start: {first}"
+        elif not problem and journal["crashed"]:
+            ea_errors = [e for e in journal["errors"] if e.startswith(f"{ea.stem} (")]
+            first = (ea_errors or journal["errors"] or ["critical error"])[0]
+            problem = f"EA hit a runtime error: {first}"
         if problem:
-            return _fail(problem)
-        print(settings)
-        print(format_single(result, out))
+            return _fail("\n".join(x for x in (problem, block if journal["started"] is False or journal["crashed"] else None) if x))
+        if not args.json:
+            show = block if result.metrics["trades"] == 0 or journal["errors"] else None
+            print(line)
+            print(_with_lines(format_single(result, out), show, f"json: {json_path}"))
         return 0
 
     back = parse_opt_xml(out.read_bytes())
@@ -233,12 +299,18 @@ def _main(argv: list[str]) -> int:
         if not fwd.is_file():
             return _fail(f"no forward report written ({fwd}):\n{log_tail(tester)}")
         forward = parse_opt_xml(fwd.read_bytes())
+    rows = merge_passes(back, forward)
+    doc = optimization_document(settings, rows, journal, out)
+    write_document(doc, json_path)
+    if args.json:
+        _dump(doc)
     problem = check_inputs(set_file, {}, optimized_names=back.inputs) if set_file else None
     if problem:
         return _fail(problem)
     if set_file and set_file.fixed:
         # The optimisation report lists only optimised inputs.
         print(f"note: fixed inputs not checked in optimisation runs: {', '.join(set_file.fixed)}", file=sys.stderr)
-    print(settings)
-    print(format_table(merge_passes(back, forward), args.top, out))
+    if not args.json:
+        print(line)
+        print(_with_lines(format_table(rows, args.top, out), f"json: {json_path}"))
     return 0

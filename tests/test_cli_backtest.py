@@ -131,11 +131,17 @@ def test_forward_off_uses_back_only(env, capsys):
     assert "fwd_result" not in capsys.readouterr().out
 
 
-def test_no_report_exit2_with_log_tail(env, capsys):
+def test_no_report_exit2_with_log_tail(env, monkeypatch, capsys):
     assert bt(env) == 0  # leaves an older report behind
-    (env["tester"] / "logs").mkdir(exist_ok=True)
-    (env["tester"] / "logs" / "20261120.log").write_bytes("tester EX5 not found".encode("utf-16"))
     env["write"] = False
+    original = cli.run_supervised
+
+    def run(cmdline, **kw):
+        (env["tester"] / "logs").mkdir(exist_ok=True)
+        (env["tester"] / "logs" / "20261120.log").write_bytes("tester EX5 not found".encode("utf-16"))
+        return original(cmdline, **kw)
+
+    monkeypatch.setattr(cli, "run_supervised", run)
     capsys.readouterr()
     assert bt(env) == 2
     err = capsys.readouterr().err
@@ -431,14 +437,6 @@ def test_optimization_journal_never_changes_exit(env, capsys):
     assert doc["settings"]["criterion"] == "balance" and doc["passes"][0]["pass"] == 68
 
 
-def test_json_flag_prints_nothing_when_no_report(env, capsys):
-    env["write"] = False
-    setup(env)
-    capsys.readouterr()
-    assert bt(env, "--json") == 2
-    assert capsys.readouterr().out == ""
-
-
 def test_read_prints_json_and_writes_nothing(capsys, tmp_path):
     report = tmp_path / "r.htm"
     shutil.copy(FIX / "single_deals.htm", report)
@@ -480,11 +478,11 @@ def test_unreadable_journal_keeps_a_finished_run(env, monkeypatch, capsys):
 def test_journal_read_while_lock_held(env, monkeypatch):
     real = cli.read_new
 
-    def check(tester, before):
+    def check(tester, before, logs=None):
         with pytest.raises(ws.LockHeld):
             with ws.tester_lock(tester):
                 pass
-        return real(tester, before)
+        return real(tester, before, logs)
 
     monkeypatch.setattr(cli, "read_new", check)
     assert bt(env) == 0
@@ -536,11 +534,12 @@ def test_out_failed_start_still_delivers_named_files(env, capsys):
     assert len(named) == 2 and all(Path(p).is_file() and Path(p).parent == out for p in named)
 
 
-def test_out_no_report_copies_nothing(env):
+def test_out_no_report_copies_only_the_error_json(env):
     env["write"] = False
     out = env["tmp"] / "out"
     assert bt(env, "--out", str(out)) == 2
-    assert not out.exists() or not any(out.iterdir())
+    [doc] = out.iterdir()
+    assert doc.suffix == ".json" and json.loads(doc.read_text(encoding="utf-8"))["error"]
 
 
 @pytest.mark.parametrize("extra", [["--setup"], ["--read", "x.htm"]])
@@ -665,3 +664,136 @@ def test_tester_agent_update_alone_triggers_a_refresh(env, capsys):
     assert bt(env) == 0
     assert "MT5 was updated; refreshed the tester install" in capsys.readouterr().err
     assert (env["tester"] / "metatester64.exe").read_bytes() == b"agent v2, newer build"
+
+
+def _term_log(lines):
+    """Terminal log lines (code, level, time, source, message) as MT5 writes them: UTF-16 with a BOM."""
+    return "\ufeff" + "".join(f"AB\t{lvl}\t10:00:00.000\t{src}\t{msg}\r\n" for lvl, src, msg in lines)
+
+
+NO_TICKS = [
+    (0, "Tester", 'EURUSD: "bases\\Broker-Demo\\ticks\\EURUSD\\202611.tkc" download'),
+    (1, "Network", "'123': connection to Broker-Demo lost"),
+    (0, "Tester", "EURUSD: preliminary downloading of history ticks canceled"),
+    (3, "Tester", "no history data, stop testing"),
+]
+
+
+def _unreadable_run(env, monkeypatch, lines):
+    """A run whose report is all 'n/a', with these lines added to the tester's terminal log."""
+    original = env.setdefault("fake_run", cli.run_supervised)  # not a previous call's wrapper
+
+    def run(cmdline, **kw):
+        rc = original(cmdline, **kw)
+        log = env["tester"] / "Tester" / "logs" / "20261120.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        text = _term_log(lines)
+        with open(log, "ab") as f:  # the terminal log collects every run of the day
+            f.write((text if f.tell() == 0 else text.lstrip("\ufeff")).encode("utf-16-le"))
+        return rc
+
+    def bad(_):
+        raise cli.ReportError("not a number in report: 'n/a'")
+
+    monkeypatch.setattr(cli, "run_supervised", run)
+    monkeypatch.setattr(cli, "parse_single_html", bad)
+
+
+def test_unreadable_report_leads_with_the_testers_reason(env, monkeypatch, capsys):
+    _unreadable_run(env, monkeypatch, NO_TICKS)
+    assert bt(env) == 2
+    first = capsys.readouterr().err.splitlines()[0]
+    assert first == ("no history data, stop testing (EURUSD: preliminary downloading of history ticks canceled; "
+                     "connection to the trade server was lost)")
+
+
+def test_unreadable_report_json_has_the_error(env, monkeypatch, capsys):
+    _unreadable_run(env, monkeypatch, NO_TICKS)
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--json") == 2
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["kind"] == "single" and doc["error"].startswith("no history data")
+    assert doc["settings"]["symbol"] == "EURUSD" and doc["report"].endswith(".htm")
+    saved = next((env["tester"] / "reports").glob("*.json"))
+    assert json.loads(saved.read_text(encoding="utf-8"))["error"] == doc["error"]
+
+
+def test_failed_run_log_tail_has_only_this_runs_lines(env, monkeypatch, capsys):
+    _unreadable_run(env, monkeypatch, [(0, "Tester", "GBPUSD: lines of an earlier run")])
+    assert bt(env) == 2  # the earlier run
+    _unreadable_run(env, monkeypatch, [(0, "Tester", "EURUSD: this run")])
+    capsys.readouterr()
+    assert bt(env) == 2
+    err = capsys.readouterr().err
+    assert "EURUSD: this run" in err and "earlier run" not in err
+
+
+def test_no_report_json_flag_prints_the_error_document(env, capsys):
+    env["write"] = False
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--json") == 2
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["error"].startswith("no report written") and doc["kind"] == "single"
+
+
+def test_set_typo_json_has_the_error(env, capsys):
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--json", "--set", write_set(env, "MaximumRisk=0.02\nBogusInput=7\n")) == 2
+    doc = json.loads(capsys.readouterr().out)
+    assert "BogusInput" in doc["error"] and doc["metrics"]
+
+
+def test_successful_run_json_has_null_error(env, capsys):
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--json") == 0
+    assert json.loads(capsys.readouterr().out)["error"] is None
+
+
+def test_optimization_set_problem_json_has_the_error(env, capsys):
+    s = write_set(env, "BogusInput=1||1||1||3||Y\nMovingPeriod=12||6||2||30||Y\n")
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--json", "--optimize", "full", "--set", s) == 2
+    assert "BogusInput" in json.loads(capsys.readouterr().out)["error"]
+
+
+def test_failed_start_with_a_set_leads_with_the_start_failure(env, capsys):
+    env["single"], env["journal"] = "single_failinit.htm", "failinit.log"
+    assert bt(env, "--set", write_set(env, "BogusInput=7\n")) == 2
+    assert capsys.readouterr().err.startswith("EA failed to start:")
+
+
+def test_non_finite_numbers_are_written_as_null(env, monkeypatch, capsys):
+    real = cli.parse_single_html
+
+    def inf(raw):
+        r = real(raw)
+        r.metrics["profit_factor"] = float("inf")
+        return r
+
+    monkeypatch.setattr(cli, "parse_single_html", inf)
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--json") == 0
+    out = capsys.readouterr().out
+    assert "Infinity" not in out and json.loads(out)["metrics"]["profit_factor"] is None
+    saved = next((env["tester"] / "reports").glob("*.json")).read_text(encoding="utf-8")
+    assert "Infinity" not in saved
+
+
+def test_read_forward_xml_is_a_one_line_error(capsys, tmp_path):
+    shutil.copy(FIX / "opt_full_fwd.forward.xml", tmp_path / "o.forward.xml")
+    assert cli.main(["--read", str(tmp_path / "o.forward.xml")]) == 2
+    err = capsys.readouterr().err
+    assert "o.xml" in err and len(err.strip().splitlines()) == 1
+
+
+def test_read_with_run_flags_is_an_error(tmp_path):
+    shutil.copy(FIX / "single_deals.htm", tmp_path / "r.htm")
+    with pytest.raises(SystemExit) as e:
+        cli.main(["--read", str(tmp_path / "r.htm"), "--symbol", "EURUSD"])
+    assert e.value.code == 2

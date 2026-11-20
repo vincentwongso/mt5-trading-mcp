@@ -189,14 +189,26 @@ def _newest(folder: Path) -> Path | None:
     return max(logs, key=lambda p: p.stat().st_mtime) if logs else None
 
 
-def log_tail(tester: Path, n: int = 20) -> str:
+def terminal_logs(tester: Path) -> list[Path]:
+    """The tester terminal's own logs (downloads, connection, tester errors), not the agents'."""
+    return sorted(p for d in (tester / "logs", tester / "Tester" / "logs") if d.is_dir() for p in d.glob("*.log"))
+
+
+def log_tail(tester: Path, n: int = 20, since: dict[Path, int] | None = None) -> str:
+    """The newest terminal logs' last lines; with `since`, only lines written after those sizes."""
     parts = []
     for log in (_newest(tester / "logs"), _newest(tester / "Tester" / "logs")):
         if log is None:
             continue
-        raw = log.read_bytes()
-        text = raw.decode("utf-16", errors="replace") if b"\x00" in raw else raw.decode("utf-8", errors="replace")
-        lines = text.lstrip("﻿").splitlines()[-n:]
+        start = (since or {}).get(log, 0)
+        start -= start % 2  # UTF-16: never split a code unit
+        with open(log, "rb") as f:
+            f.seek(start)
+            raw = f.read()
+        if not raw:
+            continue
+        text = raw.decode("utf-16-le", errors="replace") if b"\x00" in raw else raw.decode("utf-8", errors="replace")
+        lines = text.lstrip("\ufeff").splitlines()[-n:]
         parts.append("\n".join([f"== {log}", *lines]))
     return "\n".join(parts)
 

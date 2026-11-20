@@ -25,7 +25,7 @@ class LogLine:
 
 
 def parse_lines(raw: bytes) -> list[LogLine]:
-    text = raw.decode("utf-16-le", errors="replace").lstrip("﻿")
+    text = raw.decode("utf-16-le", errors="replace").lstrip("\ufeff")
     out = []
     for line in text.splitlines():
         parts = line.split("\t")
@@ -43,14 +43,16 @@ def _logs(tester: Path) -> list[Path]:
     return sorted(tester.glob("Tester/Agent-*/logs/*.log"))
 
 
-def snapshot_logs(tester: Path) -> dict[Path, int]:
-    return {p: p.stat().st_size for p in _logs(tester)}
+def snapshot_logs(tester: Path, logs: list[Path] | None = None) -> dict[Path, int]:
+    return {p: p.stat().st_size for p in (_logs(tester) if logs is None else logs)}
 
 
-def read_new(tester: Path, before: dict[Path, int]) -> tuple[list[LogLine], list[str]]:
+def read_new(tester: Path, before: dict[Path, int],
+             logs: list[Path] | None = None) -> tuple[list[LogLine], list[str]]:
+    """Lines added since `before`; `logs` defaults to the agent logs."""
     lines: list[LogLine] = []
     files: list[str] = []
-    for log in _logs(tester):
+    for log in _logs(tester) if logs is None else logs:
         start = before.get(log, 0)
         start -= start % 2  # UTF-16: never split a code unit
         with open(log, "rb") as f:  # seek: old days' logs can be large and are unchanged
@@ -83,7 +85,7 @@ def summarize(lines: list[LogLine], files: list[str], *, ea_stem: str, optimizat
         errors = errors[:_MAX_ERRORS // 2] + errors[-(_MAX_ERRORS // 2):]
     if optimization:
         # Several agents and passes; EAs reject input sets on purpose, so nothing here is judged.
-        return {"started": None, "crashed": False, "crash_error": None, "errors": errors, "ea_lines": [],
+        return {"started": None, "crashed": None, "crash_error": None, "errors": errors, "ea_lines": [],
                 "lines": len(lines), "log_files": files}
     tester = [x.message for x in lines if x.source == "Tester"]
     # "returns non-zero code" (INIT_FAILED) and "reports incorrect input parameters" share this prefix.
@@ -115,3 +117,15 @@ def journal_block(j: dict) -> str | None:
     out += [f"  error: {e}" for e in j["errors"][:_BLOCK_ERRORS]]
     out += [f"  ea: {m}" for m in j["ea_lines"][-_BLOCK_EA_LINES:]]
     return "\n".join(out)
+
+
+def run_cause(lines: list[LogLine]) -> str | None:
+    """One line on why a run stopped, from the terminal's own log (e.g. a failed history download)."""
+    for i, x in enumerate(lines):
+        if x.source == "Tester" and x.level >= 2:
+            context = [y.message for y in lines[:i] if y.source == "Tester" and "canceled" in y.message][-1:]
+            if any(y.source == "Network" and "connection to" in y.message and y.message.endswith(" lost")
+                   for y in lines[:i]):
+                context.append("connection to the trade server was lost")
+            return x.message + (f" ({'; '.join(context)})" if context else "")
+    return None

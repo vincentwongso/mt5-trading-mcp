@@ -21,7 +21,7 @@ from mt5_mcp.cli.compile import _fail, _program_files, _seconds
 from mt5_mcp.config import load_config
 from mt5_mcp.mql5.compiler import CompileTimeout, run_supervised
 from mt5_mcp.mql5.hostpath import host_paths
-from mt5_mcp.mql5.journal import journal_block, read_new, snapshot_logs, summarize
+from mt5_mcp.mql5.journal import journal_block, read_new, run_cause, snapshot_logs, summarize
 from mt5_mcp.mql5.report import (
     ReportError,
     format_single,
@@ -30,7 +30,7 @@ from mt5_mcp.mql5.report import (
     parse_opt_xml,
     parse_single_html,
 )
-from mt5_mcp.mql5.results import optimization_document, single_document, write_document
+from mt5_mcp.mql5.results import failure_document, optimization_document, single_document, to_json, write_document
 from mt5_mcp.mql5.terminal import LocateError, locate_terminal
 from mt5_mcp.mql5.tester import (
     CRITERIA,
@@ -61,6 +61,7 @@ from mt5_mcp.mql5.workspace import (
     setup_tester,
     stage_ea,
     stage_set,
+    terminal_logs,
     tester_lock,
     write_origin,
 )
@@ -143,11 +144,14 @@ def _same_dir(a: Path, b: Path) -> bool:
 
 
 def _dump(doc: dict) -> None:
-    print(json.dumps(doc, indent=1))
+    print(to_json(doc))
 
 
 def _read_report(path: Path) -> int:
     """Rebuild the JSON from an old report. Prints only: a run's journal can't be recaptured."""
+    if path.name.lower().endswith(".forward.xml"):
+        main = path.name[: -len(".forward.xml")] + ".xml"
+        return _fail(f"read the main report instead: {path.with_name(main)} (its .forward.xml is read with it)")
     raw = path.read_bytes()
     if path.suffix.lower() == ".xml":
         fwd = path.with_name(path.stem + ".forward.xml")
@@ -168,11 +172,29 @@ def _read_report(path: Path) -> int:
     return 0
 
 
-def _unreadable(exc: ReportError, journal: dict | None, tester: Path, report: Path) -> int:
-    """A report MT5 filled with 'n/a' (e.g. no tick history): the reason is in the tester log."""
-    errors = (journal or {}).get("errors") or []
-    why = "\n".join(f"  error: {e}" for e in errors[:5]) if errors else log_tail(tester)
-    return _fail(f"{exc}\n{why}\nreport: {report}")
+class _Run:
+    """What a finished run left behind, for reporting a failure."""
+
+    def __init__(self, args: argparse.Namespace, settings: dict, json_path: Path, journal: dict | None,
+                 cause: str | None, tail: str) -> None:
+        self.args, self.settings, self.json_path = args, settings, json_path
+        self.journal, self.cause, self.tail = journal, cause, tail
+
+    def fail(self, error: str, detail: str | None, report: Path | None) -> int:
+        """Exit 2 with `error` first, and the same error in the JSON (written, and printed with --json)."""
+        doc = failure_document("optimization" if self.args.optimize else "single", self.settings, error,
+                               self.journal, report)
+        write_document(doc, self.json_path)
+        if self.args.json:
+            _dump(doc)
+        return _fail("\n".join(x for x in (error, detail, report and f"report: {report}") if x))
+
+    def unreadable(self, exc: ReportError, report: Path) -> int:
+        """A report MT5 filled with 'n/a' (e.g. no tick history): the reason is in the tester's logs."""
+        errors = (self.journal or {}).get("errors") or []
+        why = "\n".join(f"  error: {e}" for e in errors[:5]) if errors else self.tail
+        error = self.cause or (errors[0] if errors else str(exc))
+        return self.fail(error, "\n".join(x for x in (str(exc) if error != str(exc) else None, why) if x), report)
 
 
 def _announce_wait() -> None:
@@ -206,8 +228,9 @@ def _main(argv: list[str]) -> int:
         parser.error("--out goes with a run, not --setup or --read")
     out_dir = Path(os.path.abspath(args.out)) if args.out else None
     if args.read:
-        if args.ea or args.setup:
-            parser.error("--read takes a report only, not an .ex5 or --setup")
+        extra = [k for k, v in vars(args).items() if k not in ("read", "config") and v != parser.get_default(k)]
+        if extra:
+            parser.error(f"--read takes a report only, not {', '.join(extra)}")
         return _read_report(Path(args.read))
     tester = Path(os.path.abspath(args.tester_path)) if args.tester_path else default_tester_dir()
     cfg = load_config(Path(args.config) if args.config else None)
@@ -287,6 +310,7 @@ def _main(argv: list[str]) -> int:
             for cached in (tester / "Tester" / "cache").glob("*.opt"):
                 cached.unlink(missing_ok=True)
         before = snapshot_logs(tester)  # once, so a retried run's lines are kept too
+        term_before = snapshot_logs(tester, terminal_logs(tester))
         with tempfile.TemporaryDirectory(prefix="mt5-backtest-") as tmp:
             ini = Path(tmp) / "backtest.ini"
             write_ini(ini, build_ini(spec))
@@ -295,7 +319,7 @@ def _main(argv: list[str]) -> int:
                 try:
                     code = run_supervised(cmdline, timeout_s=args.timeout, label="terminal", kill=kill_tree)
                 except CompileTimeout as exc:
-                    return _fail(f"{exc}\n{log_tail(tester)}")
+                    return _fail(f"{exc}\n{log_tail(tester, since=term_before)}")
                 if out.is_file() or code != 0 or attempt == 2:
                     break
                 # Seen on Windows: the first run that downloads M1 history finishes the test
@@ -308,9 +332,11 @@ def _main(argv: list[str]) -> int:
         except OSError as exc:  # the report is the result; a missing journal must not lose it
             print(f"note: could not read the tester log ({exc}); the JSON has no journal", file=sys.stderr)
             journal = None
-
-    if not out.is_file():
-        return _fail(f"no report written ({out}); the run failed:\n{log_tail(tester)}")
+        try:
+            cause = run_cause(read_new(tester, term_before, terminal_logs(tester))[0])
+        except OSError:
+            cause = None
+        tail = log_tail(tester, since=term_before)
 
     json_path = (out_dir or base.parent) / (base.name + ".json")
 
@@ -322,25 +348,31 @@ def _main(argv: list[str]) -> int:
     if args.optimize:
         settings.update(optimize=args.optimize, criterion=args.criterion, forward=args.forward)
         line += f" optimize={args.optimize} criterion={args.criterion} forward={args.forward}"
+    run = _Run(args, settings, json_path, journal, cause, tail)
+
+    if not out.is_file():
+        return run.fail(f"no report written ({out.name}); the run failed" + (f": {cause}" if cause else ""),
+                        tail, None)
 
     if not args.optimize:
         out = _deliver(out_dir, [out])[0]  # before parsing: an unreadable report is still the evidence
         try:
             result = parse_single_html(out.read_bytes())
         except ReportError as exc:
-            return _unreadable(exc, journal, tester, out)
-        doc = single_document(settings, result, journal, out)
+            return run.unreadable(exc, out)
+        j = journal or {"started": None, "crashed": False, "crash_error": None, "errors": [], "ea_lines": []}
+        block = journal_block(j)
+        # A failed start explains any input mismatch too, so it comes first.
+        if j["started"] is False:
+            problem = f"EA failed to start: {j['errors'][0] if j['errors'] else 'the test never started'}"
+        elif j["crashed"]:
+            problem = f"EA hit a runtime error: {j['crash_error']}"
+        else:
+            problem = check_inputs(set_file, result.inputs, optimized_names=None) if set_file else None
+        doc = single_document(settings, result, journal, out, error=problem)
         write_document(doc, json_path)
         if args.json:
             _dump(doc)  # also on exit 2 below, so the agent gets the journal either way
-        problem = check_inputs(set_file, result.inputs, optimized_names=None) if set_file else None
-        j = journal or {"started": None, "crashed": False, "crash_error": None, "errors": [], "ea_lines": []}
-        block = journal_block(j)
-        if not problem and j["started"] is False:
-            first = j["errors"][0] if j["errors"] else "the test never started"
-            problem = f"EA failed to start: {first}"
-        elif not problem and j["crashed"]:
-            problem = f"EA hit a runtime error: {j['crash_error']}"
         if problem:
             paths = None if args.json else f"json: {json_path}\nreport: {out}"  # the full results stay readable
             return _fail("\n".join(x for x in (problem, block if j["started"] is False or j["crashed"] else None,
@@ -363,16 +395,17 @@ def _main(argv: list[str]) -> int:
         forward = None
         if want_fwd:
             if len(delivered) < 2:
-                return _fail(f"no forward report written ({fwd.name}):\n{log_tail(tester)}\nreport: {out}")
+                return run.fail(f"no forward report written ({fwd.name})" + (f": {cause}" if cause else ""),
+                                tail, out)
             forward = parse_opt_xml(delivered[1].read_bytes())
     except ReportError as exc:
-        return _unreadable(exc, journal, tester, out)
+        return run.unreadable(exc, out)
     rows = merge_passes(back, forward)
-    doc = optimization_document(settings, rows, journal, out)
+    problem = check_inputs(set_file, {}, optimized_names=back.inputs) if set_file else None
+    doc = optimization_document(settings, rows, journal, out, error=problem)
     write_document(doc, json_path)
     if args.json:
         _dump(doc)
-    problem = check_inputs(set_file, {}, optimized_names=back.inputs) if set_file else None
     if problem:
         return _fail(problem)
     if set_file and set_file.fixed:

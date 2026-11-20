@@ -18,6 +18,7 @@ from mt5_mcp.mql5.compiler import (
     parse_log,
     read_source,
     run_metaeditor,
+    run_supervised,
 )
 
 FIX = Path(__file__).parent / "fixtures" / "mql5"
@@ -210,6 +211,25 @@ def test_run_kills_on_keyboard_interrupt():
     with pytest.raises(KeyboardInterrupt):
         run_metaeditor("cmd", timeout_s=5, popen=_popen(proc))
     assert proc.killed
+
+
+def test_run_supervised_label_in_timeout_message():
+    proc = FakeProc(wait_raises=subprocess.TimeoutExpired("t", 0.01))
+    with pytest.raises(CompileTimeout, match="terminal did not finish"):
+        run_supervised("cmd", timeout_s=0.01, label="terminal", popen=_popen(proc))
+
+
+def test_run_supervised_custom_kill_called_on_timeout():
+    proc = FakeProc(wait_raises=subprocess.TimeoutExpired("t", 0.01))
+    calls = []
+
+    def kill(p):
+        calls.append(p)
+        p.killed = True
+
+    with pytest.raises(CompileTimeout):
+        run_supervised("cmd", timeout_s=0.01, label="terminal", kill=kill, popen=_popen(proc))
+    assert calls == [proc]
 
 
 def test_run_returns_exit_code_without_killing():

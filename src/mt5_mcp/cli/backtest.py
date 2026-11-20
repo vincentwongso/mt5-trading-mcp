@@ -252,21 +252,22 @@ def _main(argv: list[str]) -> int:
                 # Seen on Windows: the first run that downloads M1 history finishes the test
                 # and exits 0 without writing the report; the same run again writes it.
                 print("note: the terminal exited without writing a report; running it once more", file=sys.stderr)
+        # Under the lock: the agent logs are shared, so a later run's lines must not land in this journal.
+        try:
+            lines, files = read_new(tester, before)
+            journal = summarize(lines, files, ea_stem=ea.stem, optimization=bool(args.optimize))
+        except OSError as exc:  # the report is the result; a missing journal must not lose it
+            print(f"note: could not read the tester log ({exc}); the JSON has no journal", file=sys.stderr)
+            journal = None
 
     if not out.is_file():
         return _fail(f"no report written ({out}); the run failed:\n{log_tail(tester)}")
 
-    try:
-        lines, files = read_new(tester, before)
-        journal = summarize(lines, files, ea_stem=ea.stem, optimization=bool(args.optimize))
-    except OSError as exc:  # the report is the result; a missing journal must not lose it
-        print(f"note: could not read the tester log ({exc}); the JSON has no journal", file=sys.stderr)
-        journal = None
     json_path = base.with_name(base.name + ".json")
 
     # Results are only comparable under the same settings, so every summary leads with them.
     settings = {"symbol": args.symbol, "period": args.period, "from": str(args.date_from), "to": str(args.date_to),
-                "model": args.model, "deposit": args.deposit, "currency": args.currency, "leverage": args.leverage}
+                "model": args.model, "deposit": float(deposit_text(args.deposit)), "currency": args.currency, "leverage": args.leverage}
     line = (f"settings: {args.symbol} {args.period} {args.date_from}..{args.date_to} model={args.model} "
             f"deposit={deposit_text(args.deposit)} {args.currency} leverage=1:{args.leverage}")
     if args.optimize:
@@ -288,7 +289,9 @@ def _main(argv: list[str]) -> int:
         elif not problem and j["crashed"]:
             problem = f"EA hit a runtime error: {j['crash_error']}"
         if problem:
-            return _fail("\n".join(x for x in (problem, block if j["started"] is False or j["crashed"] else None) if x))
+            paths = None if args.json else f"json: {json_path}\nreport: {out}"  # the full results stay readable
+            return _fail("\n".join(x for x in (problem, block if j["started"] is False or j["crashed"] else None,
+                                               paths) if x))
         if journal is not None and j["started"] is None:
             print("note: the tester log has no 'testing of ... started' line, so whether the EA started "
                   "is unknown; check trades and the journal", file=sys.stderr)

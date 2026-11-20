@@ -95,3 +95,22 @@ def test_crash_error_found_behind_many_earlier_errors():
     j = summarize(noise + lines, [], ea_stem="ArrayErr", optimization=False)
     assert j["crashed"] is True and "array out of range" in j["crash_error"]
     assert len(j["errors"]) == 50 and any("critical error" in e for e in j["errors"])
+
+
+def test_read_new_seeks_instead_of_reading_whole_files(tmp_path, monkeypatch):
+    logs = tmp_path / "Tester" / "Agent-127.0.0.1-3000" / "logs"
+    logs.mkdir(parents=True)
+    old = logs / "20261119.log"
+    old.write_bytes((J / "normal.log").read_bytes())
+    cur = logs / "20261120.log"
+    cur.write_bytes((J / "normal.log").read_bytes())
+    before = snapshot_logs(tmp_path)
+    with open(cur, "ab") as f:
+        f.write("CS\t0\t00:00:01.000\tTester\tnew line\r\n".encode("utf-16-le"))
+
+    def whole(self):
+        raise AssertionError("read the whole file")
+
+    monkeypatch.setattr(Path, "read_bytes", whole)
+    lines, files = read_new(tmp_path, before)
+    assert [x.message for x in lines] == ["new line"] and len(files) == 1

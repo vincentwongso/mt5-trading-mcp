@@ -444,3 +444,33 @@ def test_unreadable_journal_keeps_a_finished_run(env, monkeypatch, capsys):
     assert "net_profit:" in cap.out and "could not read the tester log" in cap.err
     doc = json.loads(next((env["tester"] / "reports").glob("*.json")).read_text(encoding="utf-8"))
     assert doc["journal"] is None
+
+
+def test_journal_read_while_lock_held(env, monkeypatch):
+    real = cli.read_new
+
+    def check(tester, before):
+        with pytest.raises(ws.LockHeld):
+            with ws.tester_lock(tester):
+                pass
+        return real(tester, before)
+
+    monkeypatch.setattr(cli, "read_new", check)
+    assert bt(env) == 0
+
+
+def test_json_deposit_matches_the_ini(env, capsys):
+    setup(env)
+    capsys.readouterr()
+    assert bt(env, "--deposit", "2500.567", "--json") == 0
+    assert json.loads(capsys.readouterr().out)["settings"]["deposit"] == 2500.57
+
+
+def test_failed_run_text_mode_names_json_and_report(env, capsys):
+    env["single"], env["journal"] = "single_failinit.htm", "failinit.log"
+    setup(env)
+    capsys.readouterr()
+    assert bt(env) == 2
+    cap = capsys.readouterr()
+    assert cap.out == ""
+    assert re.search(r"^json: .+Z-MyEA\.json$", cap.err, re.M) and re.search(r"^report: .+Z-MyEA\.htm$", cap.err, re.M)

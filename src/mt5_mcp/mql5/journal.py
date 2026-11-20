@@ -53,7 +53,9 @@ def read_new(tester: Path, before: dict[Path, int]) -> tuple[list[LogLine], list
     for log in _logs(tester):
         start = before.get(log, 0)
         start -= start % 2  # UTF-16: never split a code unit
-        raw = log.read_bytes()[start:]
+        with open(log, "rb") as f:  # seek: old days' logs can be large and are unchanged
+            f.seek(start)
+            raw = f.read()
         if raw:
             lines += parse_lines(raw)
             files.append("\\".join(log.relative_to(tester).parts))

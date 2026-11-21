@@ -900,3 +900,20 @@ def test_optimization_writes_no_ea_log(env):
     assert bt(env, "--optimize", "full", "--set", write_set(env, OPT_SET), "--out", str(out)) == 0
     assert not list(out.glob("*.ea.log"))
     assert json.loads(next(out.glob("*.json")).read_text(encoding="utf-8"))["journal"]["ea_log"] is None
+
+
+def test_timed_out_run_keeps_its_journal_and_ea_log(env, monkeypatch, capsys):
+    setup(env)
+    env["journal"] = _ea_log(env["tmp"], "new.log", 3, "bar")
+    real = cli.run_supervised
+
+    def run(cmdline, **kw):  # the EA prints, then the terminal is killed
+        real(cmdline, **kw)
+        raise CompileTimeout("terminal did not finish in 5s; killed.")
+
+    monkeypatch.setattr(cli, "run_supervised", run)
+    capsys.readouterr()
+    assert bt(env, "--json", "--timeout", "5") == 2
+    doc = json.loads(capsys.readouterr().out)
+    assert "did not finish" in doc["error"] and len(doc["journal"]["ea_lines"]) == 3
+    assert Path(doc["journal"]["ea_log"]).read_text(encoding="utf-8").count("bar") == 3

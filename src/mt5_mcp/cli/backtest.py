@@ -335,13 +335,14 @@ def _main(argv: list[str]) -> int:
             ini = Path(tmp) / "backtest.ini"
             write_ini(ini, build_ini(spec))
             cmdline = f'"{tester / "terminal64.exe"}" /portable /config:"{ini}"'
+            timed_out = None
             for attempt in (1, 2):
                 run_before = snapshot_logs(tester)
                 try:
                     code = run_supervised(cmdline, timeout_s=args.timeout, label="terminal", kill=kill_tree)
                 except CompileTimeout as exc:
-                    cause, tail = _diagnostics(tester, term_before)
-                    return _Run(args, settings, json_path, None, cause, tail).fail(str(exc), tail, None)
+                    timed_out = exc  # failed, but the journal and EA log below are still collected
+                    break
                 if out.is_file() or code != 0 or attempt == 2:
                     break
                 # Seen on Windows: the first run that downloads M1 history finishes the test
@@ -368,6 +369,8 @@ def _main(argv: list[str]) -> int:
         cause, tail = _diagnostics(tester, term_before)
 
     run = _Run(args, settings, json_path, journal, cause, tail)
+    if timed_out:
+        return run.fail(str(timed_out), tail, None)
 
     if not out.is_file():
         return run.fail(f"no report written ({out.name}); the run failed" + (f": {cause}" if cause else ""),

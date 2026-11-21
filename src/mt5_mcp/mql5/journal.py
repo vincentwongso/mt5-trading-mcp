@@ -78,6 +78,11 @@ def _crash_error(lines: list[LogLine], ea_stem: str) -> str | None:
     return None
 
 
+def ea_messages(lines: list[LogLine], ea_stem: str) -> list[str]:
+    """The EA's own Print output, in order."""
+    return [x.message for x in lines if x.source.startswith(f"{ea_stem} (")]
+
+
 def summarize(lines: list[LogLine], files: list[str], *, ea_stem: str, optimization: bool) -> dict:
     errors = [_fmt(x) for x in lines if x.level != 0]
     if len(errors) > _MAX_ERRORS:
@@ -86,12 +91,12 @@ def summarize(lines: list[LogLine], files: list[str], *, ea_stem: str, optimizat
     if optimization:
         # Several agents and passes; EAs reject input sets on purpose, so nothing here is judged.
         return {"started": None, "crashed": None, "crash_error": None, "errors": errors, "ea_lines": [],
-                "lines": len(lines), "log_files": files}
+                "ea_log": None, "lines": len(lines), "log_files": files}
     tester = [x.message for x in lines if x.source == "Tester"]
     # "returns non-zero code" (INIT_FAILED) and "reports incorrect input parameters" share this prefix.
     stopped = any("tester stopped because OnInit" in m for m in tester)
     began = any("testing of " in m and " started" in m for m in tester)
-    ea = [x.message for x in lines if x.source.startswith(f"{ea_stem} (")]
+    ea = ea_messages(lines, ea_stem)
     crash = _crash_error(lines, ea_stem)
     return {
         # None: no start line at all (log unreadable or reworded), so it is unknown, not a failure.
@@ -99,7 +104,8 @@ def summarize(lines: list[LogLine], files: list[str], *, ea_stem: str, optimizat
         "crashed": crash is not None,
         "crash_error": crash,
         "errors": errors,
-        "ea_lines": ea[-_MAX_EA_LINES:],
+        "ea_lines": ea[-_MAX_EA_LINES:],  # a preview; the caller writes every line to ea_log
+        "ea_log": None,
         "lines": len(lines),
         "log_files": files,
     }

@@ -126,8 +126,10 @@ check where the result came from:
 - `costs`: total commission and swap.
 - `journal`: this run's tester log: `started` (`null` if the log does not
   say), `crashed` and `crash_error` (the line that stopped it), `errors`, and
-  `ea_lines` (the EA's own `Print` output). Read it whenever `trades` is 0 or
-  a result looks wrong.
+  `ea_lines` (the last 200 lines of the EA's own `Print` output). `ea_log` is
+  the path of a `.ea.log` file beside the JSON with every EA line of this run
+  (`null` for optimisation or when the EA printed nothing). Read it whenever
+  `trades` is 0 or a result looks wrong.
 - `error`: `null` when the run succeeded, otherwise the same reason stderr leads
   with. On every exit `2` after the tester ran (failed start,
   crash, `.set` mismatch, no report, unreadable report) `--json` still prints

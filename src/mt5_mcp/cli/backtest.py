@@ -21,7 +21,7 @@ from mt5_mcp.cli.compile import _fail, _program_files, _seconds
 from mt5_mcp.config import load_config
 from mt5_mcp.mql5.compiler import CompileTimeout, run_supervised
 from mt5_mcp.mql5.hostpath import host_paths
-from mt5_mcp.mql5.journal import journal_block, read_new, run_cause, snapshot_logs, summarize
+from mt5_mcp.mql5.journal import ea_messages, journal_block, read_new, run_cause, snapshot_logs, summarize
 from mt5_mcp.mql5.report import (
     ReportError,
     format_single,
@@ -122,7 +122,8 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--wait", action="store_true",
                    help="If another backtest holds the tester, wait for it instead of exiting 2.")
     p.add_argument("--out", default=None,
-                   help="Copy the report and write the JSON into this folder; printed paths name the copies.")
+                   help="Copy the report and write the JSON and the EA's full log (.ea.log) into this folder; "
+                        "printed paths name the copies.")
     p.add_argument("--json", action="store_true",
                    help="Print the run's JSON (settings, metrics, deals, balance, drawdowns, journal) instead of the summary.")
     p.add_argument("--read", metavar="REPORT", default=None,
@@ -334,12 +335,14 @@ def _main(argv: list[str]) -> int:
             ini = Path(tmp) / "backtest.ini"
             write_ini(ini, build_ini(spec))
             cmdline = f'"{tester / "terminal64.exe"}" /portable /config:"{ini}"'
+            timed_out = None
             for attempt in (1, 2):
+                run_before = snapshot_logs(tester)
                 try:
                     code = run_supervised(cmdline, timeout_s=args.timeout, label="terminal", kill=kill_tree)
                 except CompileTimeout as exc:
-                    cause, tail = _diagnostics(tester, term_before)
-                    return _Run(args, settings, json_path, None, cause, tail).fail(str(exc), tail, None)
+                    timed_out = exc  # failed, but the journal and EA log below are still collected
+                    break
                 if out.is_file() or code != 0 or attempt == 2:
                     break
                 # Seen on Windows: the first run that downloads M1 history finishes the test
@@ -352,9 +355,22 @@ def _main(argv: list[str]) -> int:
         except OSError as exc:  # the report is the result; a missing journal must not lose it
             print(f"note: could not read the tester log ({exc}); the JSON has no journal", file=sys.stderr)
             journal = None
+        if journal is not None and not args.optimize:
+            ea_log = json_path.with_name(base.name + ".ea.log")
+            try:
+                # A retry's first attempt already ran the EA; its lines would appear twice.
+                run_lines = lines if run_before == before else read_new(tester, run_before)[0]
+                if messages := ea_messages(run_lines, ea.stem):
+                    ea_log.write_text("".join(m + "\n" for m in messages), encoding="utf-8", newline="\n")
+                    journal["ea_log"] = host_paths(str(ea_log))
+            except OSError as exc:
+                print(f"note: could not write the EA log ({exc}); the JSON keeps the last 200 EA lines",
+                      file=sys.stderr)
         cause, tail = _diagnostics(tester, term_before)
 
     run = _Run(args, settings, json_path, journal, cause, tail)
+    if timed_out:
+        return run.fail(str(timed_out), tail, None)
 
     if not out.is_file():
         return run.fail(f"no report written ({out.name}); the run failed" + (f": {cause}" if cause else ""),

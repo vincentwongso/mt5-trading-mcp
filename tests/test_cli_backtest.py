@@ -839,3 +839,64 @@ def test_optimization_report_with_na_cells_gives_the_error_document(env, monkeyp
     capsys.readouterr()
     assert bt(env, "--json", "--optimize", "full", "--set", write_set(env, OPT_SET)) == 2
     assert json.loads(capsys.readouterr().out)["kind"] == "optimization"
+
+
+def _ea_log(tmp, name, n, prefix):
+    """An agent log with n Print lines from MyEA, UTF-16 like the real one."""
+    text = "".join(f"CS\t0\t00:00:00.000\tMyEA (EURUSD,H1)\t2026.01.01 00:00:00   {prefix} {i}\r\n" for i in range(n))
+    path = tmp / name
+    path.write_bytes(text.encode("utf-16-le"))
+    return str(path)
+
+
+def test_ea_log_holds_every_line_of_this_run_only(env):
+    setup(env)
+    log = env["tester"] / "Tester" / "Agent-127.0.0.1-3000" / "logs" / "20261120.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_bytes(Path(_ea_log(env["tmp"], "old.log", 5, "old")).read_bytes())  # an earlier run today
+    env["journal"] = _ea_log(env["tmp"], "new.log", 300, "bar")
+    out = env["tmp"] / "out"
+    assert bt(env, "--out", str(out)) == 0
+    [js] = out.glob("*.json")
+    j = json.loads(js.read_text(encoding="utf-8"))["journal"]
+    assert len(j["ea_lines"]) == 200
+    ea_log = Path(j["ea_log"])
+    assert ea_log.parent == out and ea_log.name == js.name.replace(".json", ".ea.log")
+    lines = ea_log.read_text(encoding="utf-8").splitlines()
+    assert lines == [f"2026.01.01 00:00:00   bar {i}" for i in range(300)]
+
+
+def test_ea_log_written_when_the_ea_fails_to_start(env):
+    env["single"], env["journal"] = "single_failinit.htm", "failinit.log"
+    env["ea"] = env["tmp"] / "FailInit.ex5"
+    env["ea"].write_bytes(b"EX5")
+    out = env["tmp"] / "out"
+    assert bt(env, "--out", str(out)) == 2
+    [ea_log] = out.glob("*.ea.log")
+    assert ea_log.read_text(encoding="utf-8")
+
+
+def test_retried_run_ea_log_keeps_only_the_last_attempt(env, monkeypatch):
+    setup(env)
+    env["journal"] = _ea_log(env["tmp"], "new.log", 3, "bar")
+    real = cli.run_supervised
+
+    def run(cmdline, **kw):  # the first launch runs the test but leaves no report
+        real(cmdline, **kw)
+        if len(env["calls"]) == 1:
+            report = env["tester"] / env["inis"][0]["Report"].replace("\\", "/")
+            report.with_name(report.name + ".htm").unlink()
+        return 0
+
+    monkeypatch.setattr(cli, "run_supervised", run)
+    out = env["tmp"] / "out"
+    assert bt(env, "--out", str(out)) == 0 and len(env["calls"]) == 2
+    [ea_log] = out.glob("*.ea.log")
+    assert ea_log.read_text(encoding="utf-8").splitlines() == [f"2026.01.01 00:00:00   bar {i}" for i in range(3)]
+
+
+def test_optimization_writes_no_ea_log(env):
+    out = env["tmp"] / "out"
+    assert bt(env, "--optimize", "full", "--set", write_set(env, OPT_SET), "--out", str(out)) == 0
+    assert not list(out.glob("*.ea.log"))
+    assert json.loads(next(out.glob("*.json")).read_text(encoding="utf-8"))["journal"]["ea_log"] is None

@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+- **Backtest `.ea.log`** - a single run writes every line the EA printed to `<report>.ea.log` beside the JSON (only this run's lines, the last attempt on a retry); `journal.ea_log` names it. `journal.ea_lines` stays a 200-line preview, which cut long runs short.
+
 ## [1.8.4] - 2026-11-21
 
 ### Added

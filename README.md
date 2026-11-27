@@ -138,7 +138,7 @@ cannot capture charts, this uses a small MQL5 Expert Advisor that runs inside
 a GUI terminal and calls `ChartScreenShot()`.
 
 See [Chart annotations](docs/tools.md#chart-annotations) for marking up
-support/resistance lines, trendlines and notes before capture.
+support/resistance lines, trendlines, Fibonacci retracements and notes before capture.
 
 Setup (one time):
 

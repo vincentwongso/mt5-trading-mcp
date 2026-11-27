@@ -46,6 +46,7 @@ up the chart before capture.
 | `text` | `time`, `price` | Note placed freely against price action; `text` required. |
 | `label` | `corner` | Note pinned to a chart corner, no coordinates needed; `text` required. |
 | `trendline` | `time1/price1`, `time2/price2` | Diagonal support/resistance; `text` optional. |
+| `fibo` | `time1/price1` (swing start, 100%), `time2/price2` (swing end, 0%) | Native MT5 Fibonacci retracement. `levels` are ratios (default `0, 0.236, 0.382, 0.5, 0.618, 0.786, 1`, max 16); `ray` (default true) extends them right. MT5 labels each level with its percentage and price; no `text`. |
 
 `role` sets the color and style: `resistance` (firebrick), `support` (navy),
 `note` (darkslate, default), `neutral` (dimgray dashed). These defaults are

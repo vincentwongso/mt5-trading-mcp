@@ -206,3 +206,40 @@ def test_round_prices_never_serialize_as_exponent_notation():
                   "time2": T, "price2": "1000", "role": "support"}]) == [
         f"A|trend|{int(T.timestamp())}|100|{int(T.timestamp())}|1000|{NAVY}|0|"
     ]
+
+
+def test_fibo_defaults_to_the_standard_retracement_set():
+    (a,) = validate_annotations([{"type": "fibo", "time1": T, "price1": "1.14686",
+                                  "time2": T, "price2": "1.20821"}])
+    assert a.levels == [Decimal(v) for v in
+                        ("0", "0.236", "0.382", "0.5", "0.618", "0.786", "1")]
+    assert a.ray is True
+
+
+def test_serializes_fibo_with_levels_and_ray():
+    e = int(T.timestamp())
+    assert _ser([{"type": "fibo", "time1": T, "price1": "1.14686",
+                  "time2": T, "price2": "1.20821"}]) == [
+        f"A|fibo|{e}|1.14686|{e}|1.20821|{DARKSLATE}|0|1|0,0.236,0.382,0.5,0.618,0.786,1"
+    ]
+    assert _ser([{"type": "fibo", "time1": T, "price1": "100", "time2": T,
+                  "price2": "200", "levels": ["0.5", "1.618"], "ray": False,
+                  "role": "support"}]) == [
+        f"A|fibo|{e}|100|{e}|200|{NAVY}|0|0|0.5,1.618"
+    ]
+
+
+@pytest.mark.parametrize("bad", [
+    {"price2": "1.14686"},                      # no swing
+    {"levels": []},                             # nothing to draw
+    {"levels": ["61.8"]},                       # percent, not ratio
+    {"levels": ["NaN"]},
+    {"levels": ["0.1"] * 17},                   # over the level cap
+    {"text": "fibo"},                           # labels come from MT5
+])
+def test_rejects_bad_fibo(bad):
+    ann = {"type": "fibo", "time1": T, "price1": "1.14686",
+           "time2": T, "price2": "1.20821", **bad}
+    with pytest.raises(MT5Error) as ei:
+        validate_annotations([ann])
+    assert ei.value.detail.code == "INVALID_ANNOTATION"

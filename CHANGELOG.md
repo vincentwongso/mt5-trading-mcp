@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ## [Unreleased]
 
 ### Added
-- **`fibo` chart annotation** - `get_chart_screenshot` draws MT5's native Fibonacci retracement (OBJ_FIBO) between two swing points, each level labelled with its percentage and price, instead of callers faking it with hlines. Needs the rebuilt `AgentScreenshot.ex5`; an older EA fails the capture with `ea_outdated` instead of silently leaving the fibo off, and the EA now rejects annotation kinds it does not know.
+- **`fibo` chart annotation** - `get_chart_screenshot` draws MT5's native Fibonacci retracement (OBJ_FIBO) between two swing points, each level labelled with its percentage and price, instead of callers faking it with hlines. Needs the rebuilt `AgentScreenshot.ex5`: an older one now fails the capture (`SCREENSHOT_FAILED`) instead of silently leaving the fibo off.
 
 ## [1.8.5] - 2026-11-21
 

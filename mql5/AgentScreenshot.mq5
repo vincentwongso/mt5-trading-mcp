@@ -225,7 +225,7 @@ void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES 
                double lp    = p2 + (p1 - p2) * ratio;
                ObjectSetDouble(cid, oname, OBJPROP_LEVELVALUE, k, ratio);
                ObjectSetInteger(cid, oname, OBJPROP_LEVELCOLOR, k, clr);
-               ObjectSetInteger(cid, oname, OBJPROP_LEVELSTYLE, k, STYLE_SOLID);
+               ObjectSetInteger(cid, oname, OBJPROP_LEVELSTYLE, k, style);
                ObjectSetInteger(cid, oname, OBJPROP_LEVELWIDTH, k, 1);
                // Written out rather than MT5's %$ macro so the label reads
                // the same on every build: "61.8% 1.17030".
@@ -236,6 +236,42 @@ void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES 
            }
         }
      }
+  }
+
+int MinFields(const string kind)
+  {
+   if(kind == "hline" || kind == "vline") return(5);
+   if(kind == "text")  return(6);
+   if(kind == "label") return(7);
+   if(kind == "trend") return(8);
+   if(kind == "fibo")  return(10);
+   return(-1);
+  }
+
+//+------------------------------------------------------------------+
+//| Rejects any annotation this EA cannot draw, before ChartOpen, so  |
+//| the capture fails loudly instead of returning a chart missing a   |
+//| level the agent will describe. Returns "" when all lines are OK.  |
+//| Sets usesFibo: the server reads "ok|2" as proof the EA drew it.   |
+//+------------------------------------------------------------------+
+string CheckAnnotations(const string &lines[], bool &usesFibo)
+  {
+   usesFibo = false;
+   for(int i = 0; i < ArraySize(lines); i++)
+     {
+      string f[];
+      int n = StringSplit(lines[i], '|', f);
+      if(n < 2 || f[0] != "A")
+         return("malformed annotation line " + IntegerToString(i));
+      int need = MinFields(f[1]);
+      if(need < 0)
+         return("unsupported annotation " + f[1]);
+      if(n < need || (f[1] == "fibo" && StringLen(f[9]) == 0))
+         return("malformed annotation " + f[1]);
+      if(f[1] == "fibo")
+         usesFibo = true;
+     }
+   return("");
   }
 
 string StripCR(const string s)
@@ -341,6 +377,14 @@ void ProcessRequest(const string reqName)
    if(tf == (ENUM_TIMEFRAMES)-1)
      {
       WriteDone(id, "err:bad timeframe " + tfName);
+      return;
+     }
+
+   bool   usesFibo = false;
+   string annErr   = CheckAnnotations(annLines, usesFibo);
+   if(StringLen(annErr) > 0)
+     {
+      WriteDone(id, "err:" + annErr);
       return;
      }
 
@@ -497,7 +541,9 @@ void ProcessRequest(const string reqName)
    ObjectsDeleteAll(cid, "agent_");
    ChartClose(cid);
 
-   WriteDone(id, ok ? "ok" : "err:ChartScreenShot returned false");
+   // Bare "ok" unless fibo was asked for: servers predating fibo accept only
+   // the exact string "ok", and they never send fibo.
+   WriteDone(id, ok ? (usesFibo ? "ok|2" : "ok") : "err:ChartScreenShot returned false");
   }
 
 void OnTimer()

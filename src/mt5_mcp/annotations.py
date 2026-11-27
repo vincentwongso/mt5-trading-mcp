@@ -18,8 +18,8 @@ from pydantic import (
     Field,
     TypeAdapter,
     ValidationError,
+    ValidationInfo,
     field_validator,
-    model_validator,
 )
 
 from mt5_mcp.adapter.conversions import utc_to_broker_epoch
@@ -178,11 +178,24 @@ class Fibo(_AnnotationBase):
                 )
         return v
 
-    @model_validator(mode="after")
-    def _check_swing(self) -> "Fibo":
-        if self.price1 == self.price2:
-            raise ValueError("price1 and price2 must differ: a Fibonacci needs a swing")
-        return self
+    # Field validators rather than a model validator, so the error names the
+    # field to change instead of just "fibo".
+    @field_validator("price2")
+    @classmethod
+    def _check_swing(cls, v: Decimal, info: ValidationInfo) -> Decimal:
+        if v == info.data.get("price1"):
+            raise ValueError("must differ from price1: a Fibonacci needs a swing")
+        return v
+
+    @field_validator("ray")
+    @classmethod
+    def _check_width(cls, v: bool, info: ValidationInfo) -> bool:
+        # OBJ_FIBO levels span only time1..time2 unless rayed right, so equal
+        # times with no ray draw zero-length levels.
+        t1, t2 = info.data.get("time1"), info.data.get("time2")
+        if not v and t1 is not None and t1 == t2:
+            raise ValueError("must be true when time1 equals time2: the levels would have no width")
+        return v
 
 
 Annotation = Annotated[

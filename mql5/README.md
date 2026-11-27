@@ -30,15 +30,20 @@ on every boot. No manual install is needed there.
 A compiled `AgentScreenshot.ex5` is committed next to the source, so you can
 copy it straight into `MQL5/Experts/` and skip the F7 compile in step 3.
 Prefer compiling it yourself (step 3) if you do not want to trust a prebuilt
-binary. The `.ex5` cannot be built on Linux/CI, so it is compiled on Windows
-with MetaEditor and must be recompiled and re-committed whenever
-`AgentScreenshot.mq5` changes.
+binary. The `.ex5` cannot be built in CI. Compile it with MetaEditor on
+Windows or with `mt5-mcp compile --no-install` inside the Docker image, and
+recompile and re-commit it whenever `AgentScreenshot.mq5` changes.
 
 **Upgrading from 1.5.0?** Re-copy `AgentScreenshot.ex5` (or recompile from
 source) before using annotations. A 1.5.0-era `.ex5` still runs and still
 takes screenshots, but it does not understand annotation lines, so it silently
 ignores every `annotations` entry and returns a clean, unannotated chart with
 no error.
+
+**Using `fibo` annotations?** They need the `.ex5` from the release that added
+them. An older EA cannot draw a Fibonacci, so the server refuses its capture
+with `SCREENSHOT_FAILED` (`details.reason: "ea_outdated"`) rather than return
+a chart without it. Re-copy or recompile the EA to fix it.
 
 **Do not save the EA into your default template.** Each capture opens a
 temporary chart with `ChartOpen`, which builds it from MT5's *Default*

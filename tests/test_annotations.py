@@ -21,6 +21,7 @@ from mt5_mcp.annotations import (
 from mt5_mcp.errors import MT5Error
 
 T = datetime(2026, 7, 19, 12, 0, tzinfo=timezone.utc)
+T2 = datetime(2026, 7, 19, 18, 0, tzinfo=timezone.utc)
 
 
 def test_none_and_empty_yield_empty_list():
@@ -222,10 +223,11 @@ def test_serializes_fibo_with_levels_and_ray():
                   "time2": T, "price2": "1.20821"}]) == [
         f"A|fibo|{e}|1.14686|{e}|1.20821|{DARKSLATE}|0|1|0,0.236,0.382,0.5,0.618,0.786,1"
     ]
-    assert _ser([{"type": "fibo", "time1": T, "price1": "100", "time2": T,
+    e2 = int(T2.timestamp())
+    assert _ser([{"type": "fibo", "time1": T, "price1": "100", "time2": T2,
                   "price2": "200", "levels": ["0.5", "1.618"], "ray": False,
                   "role": "support"}]) == [
-        f"A|fibo|{e}|100|{e}|200|{NAVY}|0|0|0.5,1.618"
+        f"A|fibo|{e}|100|{e2}|200|{NAVY}|0|0|0.5,1.618"
     ]
 
 
@@ -239,7 +241,26 @@ def test_serializes_fibo_with_levels_and_ray():
 ])
 def test_rejects_bad_fibo(bad):
     ann = {"type": "fibo", "time1": T, "price1": "1.14686",
-           "time2": T, "price2": "1.20821", **bad}
+           "time2": T2, "price2": "1.20821", **bad}
     with pytest.raises(MT5Error) as ei:
         validate_annotations([ann])
     assert ei.value.detail.code == "INVALID_ANNOTATION"
+
+
+@pytest.mark.parametrize("bad,field", [
+    ({"price2": "1.14686"}, "fibo.price2"),                 # no swing
+    ({"time2": T, "ray": False}, "fibo.ray"),               # zero-width levels
+])
+def test_fibo_swing_errors_name_the_field_to_change(bad, field):
+    ann = {"type": "fibo", "time1": T, "price1": "1.14686",
+           "time2": T2, "price2": "1.20821", **bad}
+    with pytest.raises(MT5Error) as ei:
+        validate_annotations([ann])
+    assert ei.value.detail.details["field"] == field
+
+
+def test_fibo_allows_one_bar_swing_when_rayed():
+    # Swing high and low inside one bar is real; the ray gives levels width.
+    (a,) = validate_annotations([{"type": "fibo", "time1": T, "price1": "1",
+                                  "time2": T, "price2": "2", "ray": True}])
+    assert a.ray is True

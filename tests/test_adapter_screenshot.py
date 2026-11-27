@@ -353,6 +353,7 @@ def test_fibo_with_bare_ok_means_the_ea_is_too_old(tmp_path):
         _capture_with_status(tmp_path, "ok", ["A|hline|1|0|0|", FIBO])
     assert ei.value.detail.code == "SCREENSHOT_FAILED"
     assert ei.value.detail.details["reason"] == "ea_outdated"
+    assert "draw fibo annotations" in ei.value.detail.message
     assert ei.value.detail.retryable is False
 
 

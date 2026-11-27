@@ -131,7 +131,8 @@ def capture_chart(
     # byte-identical to the pre-1.5.1 format and an already-deployed .ex5
     # keeps working.
     payload = "\r\n".join([header, *(annotation_lines or [])])
-    needs_new_ea = any(not ln.startswith(_LEGACY_KINDS) for ln in annotation_lines or [])
+    new_kinds = sorted({ln.split("|")[1] for ln in annotation_lines or []
+                        if not ln.startswith(_LEGACY_KINDS)})
     try:
         # newline="" disables Python's own newline translation, so the "\r\n"
         # already in payload reaches disk unmodified. Without it, a Windows
@@ -148,14 +149,14 @@ def capture_chart(
                 # new files; strip it so "ok"/"err:" compare correctly.
                 status = done.read_text(encoding="utf-16-le").lstrip("﻿").strip()
                 if _OK.fullmatch(status):
-                    if needs_new_ea and status == "ok":
+                    if new_kinds and status == "ok":
                         raise MT5Error(ErrorDetail(
                             code="SCREENSHOT_FAILED",
                             message=(
                                 "The AgentScreenshot EA in the terminal is too old to "
-                                "draw fibo annotations and captured the chart without "
-                                "them. Re-copy or recompile AgentScreenshot.ex5 "
-                                "(see mql5/README.md), then retry."
+                                f"draw {', '.join(new_kinds)} annotations and captured "
+                                "the chart without them. Re-copy or recompile "
+                                "AgentScreenshot.ex5 (see mql5/README.md), then retry."
                             ),
                             retryable=False,
                             requires_human=True,

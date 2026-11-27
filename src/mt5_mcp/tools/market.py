@@ -254,6 +254,11 @@ def register(mcp: FastMCP) -> None:
         - ``{"type": "label", "corner": "top_left", "text": "summary note"}``
         - ``{"type": "trendline", "time1": ..., "price1": 2590.0,
           "time2": ..., "price2": 2648.0, "role": "support"}``
+        - ``{"type": "fibo", "time1": <swing low bar>, "price1": 2590.0,
+          "time2": <swing high bar>, "price2": 2648.0}`` draws MT5's own
+          Fibonacci retracement: point 1 is 100%, point 2 is 0%. Optional
+          ``levels`` (ratios, default 0/0.236/0.382/0.5/0.618/0.786/1) and
+          ``ray`` (default true, extends the levels right).
 
         ``role`` is ``resistance`` (firebrick), ``support`` (navy), ``note``
         (darkslate, default) or ``neutral`` (dimgray dashed); these defaults

@@ -12,7 +12,15 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+)
 
 from mt5_mcp.adapter.conversions import utc_to_broker_epoch
 from mt5_mcp.errors import MT5Error
@@ -20,6 +28,15 @@ from mt5_mcp.types import ErrorDetail
 
 MAX_ANNOTATIONS = 16
 MAX_TEXT_LEN = 128
+MAX_FIBO_LEVELS = 16
+# Ratios beyond +/-10 (1000%) are far off any sensible chart; capping them
+# keeps a typo such as 61.8 (meant 0.618) from passing as a valid level.
+MAX_FIBO_RATIO = Decimal(10)
+# The standard retracement set, including 0.786, which MT5's own OBJ_FIBO
+# default omits. 0 and 1 are the swing's two ends.
+DEFAULT_FIBO_LEVELS: tuple[Decimal, ...] = tuple(
+    Decimal(v) for v in ("0", "0.236", "0.382", "0.5", "0.618", "0.786", "1")
+)
 
 Role = Literal["resistance", "support", "note", "neutral"]
 ColorName = Literal[
@@ -129,8 +146,60 @@ class TrendLine(_AnnotationBase):
     text: str | None = None
 
 
+class Fibo(_AnnotationBase):
+    """Native MT5 Fibonacci retracement (OBJ_FIBO) across one swing.
+
+    ``time1/price1`` is where the swing starts (the 100% level) and
+    ``time2/price2`` where it ends (the 0% level): low then high for a pullback
+    in an up-swing, high then low for a down-swing, the same way a trader drags
+    the tool. ``levels`` are ratios of the swing (0.618, not 61.8). Each level
+    is labelled on the chart with its percentage and price by MT5 itself.
+    """
+    type: Literal["fibo"]
+    time1: datetime
+    price1: Decimal
+    time2: datetime
+    price2: Decimal
+    levels: list[Decimal] = Field(
+        default_factory=lambda: list(DEFAULT_FIBO_LEVELS),
+        min_length=1,
+        max_length=MAX_FIBO_LEVELS,
+    )
+    ray: bool = True
+
+    @field_validator("levels")
+    @classmethod
+    def _check_levels(cls, v: list[Decimal]) -> list[Decimal]:
+        for lv in v:
+            if not lv.is_finite() or abs(lv) > MAX_FIBO_RATIO:
+                raise ValueError(
+                    f"each level must be a finite ratio within +/-{MAX_FIBO_RATIO} "
+                    "(0.618, not 61.8)"
+                )
+        return v
+
+    # Field validators rather than a model validator, so the error names the
+    # field to change instead of just "fibo".
+    @field_validator("price2")
+    @classmethod
+    def _check_swing(cls, v: Decimal, info: ValidationInfo) -> Decimal:
+        if v == info.data.get("price1"):
+            raise ValueError("must differ from price1: a Fibonacci needs a swing")
+        return v
+
+    @field_validator("ray")
+    @classmethod
+    def _check_width(cls, v: bool, info: ValidationInfo) -> bool:
+        # OBJ_FIBO levels span only time1..time2 unless rayed right, so equal
+        # times with no ray draw zero-length levels.
+        t1, t2 = info.data.get("time1"), info.data.get("time2")
+        if not v and t1 is not None and t1 == t2:
+            raise ValueError("must be true when time1 equals time2: the levels would have no width")
+        return v
+
+
 Annotation = Annotated[
-    Union[HLine, VLine, ChartText, ScreenLabel, TrendLine],
+    Union[HLine, VLine, ChartText, ScreenLabel, TrendLine, Fibo],
     Field(discriminator="type"),
 ]
 
@@ -229,6 +298,14 @@ def serialize_annotations(
             y = LABEL_BASE_Y + n * LABEL_STEP_Y
             cid = CORNER_ID[ann.corner]
             lines.append(f"A|label|{cid}|{LABEL_BASE_X}|{y}|{clr}|{text}")
+        elif ann.type == "fibo":
+            e1 = utc_to_broker_epoch(ann.time1, broker_offset_minutes)
+            e2 = utc_to_broker_epoch(ann.time2, broker_offset_minutes)
+            levels = ",".join(_num(lv) for lv in ann.levels)
+            lines.append(
+                f"A|fibo|{e1}|{_num(ann.price1)}|{e2}|{_num(ann.price2)}"
+                f"|{clr}|{_style(ann)}|{int(ann.ray)}|{levels}"
+            )
         else:  # trendline
             e1 = utc_to_broker_epoch(ann.time1, broker_offset_minutes)
             e2 = utc_to_broker_epoch(ann.time2, broker_offset_minutes)

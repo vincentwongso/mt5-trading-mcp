@@ -325,3 +325,55 @@ def test_no_bars_at_time_maps_to_dedicated_code(tmp_path):
         )
     assert ei.value.detail.code == "NO_BARS_AT_TIME"
     assert "no bars at" in ei.value.detail.message
+
+
+FIBO = "A|fibo|1|1.1|2|1.2|0|0|1|0,0.5,1"
+
+
+def _capture_with_status(tmp_path, status, lines):
+    d = _files_dir(tmp_path)
+    (d / "fixedid.png").write_bytes(b"PNGBYTES")
+    (d / "fixedid.done").write_text(status, encoding="utf-16-le")
+    return capture_chart(
+        _StubClient(tmp_path),
+        symbol="EURUSD",
+        timeframe_name="H1",
+        width=800,
+        height=600,
+        template=None,
+        annotation_lines=lines,
+        timeout_s=1.0,
+        id_factory=lambda: "fixedid",
+    )
+
+
+def test_fibo_with_bare_ok_means_the_ea_is_too_old(tmp_path):
+    # A pre-fibo EA skips the fibo line and still answers "ok".
+    with pytest.raises(MT5Error) as ei:
+        _capture_with_status(tmp_path, "ok", ["A|hline|1|0|0|", FIBO])
+    assert ei.value.detail.code == "SCREENSHOT_FAILED"
+    assert ei.value.detail.details["reason"] == "ea_outdated"
+    assert "draw fibo annotations" in ei.value.detail.message
+    assert ei.value.detail.retryable is False
+
+
+def test_fibo_with_protocol_ok_returns_png(tmp_path):
+    assert _capture_with_status(tmp_path, "ok|2", [FIBO]) == b"PNGBYTES"
+
+
+def test_legacy_annotations_still_accept_bare_ok(tmp_path):
+    assert _capture_with_status(tmp_path, "ok", ["A|hline|1|0|0|"]) == b"PNGBYTES"
+
+
+def test_ok_lookalike_status_is_an_error(tmp_path):
+    with pytest.raises(MT5Error):
+        _capture_with_status(tmp_path, "okay", [])
+
+
+@pytest.mark.parametrize("reason", ["unsupported annotation zigzag",
+                                    "malformed annotation fibo"])
+def test_annotation_rejections_are_not_retryable(tmp_path, reason):
+    with pytest.raises(MT5Error) as ei:
+        _capture_with_status(tmp_path, f"err:{reason}", [FIBO])
+    assert ei.value.detail.code == "SCREENSHOT_FAILED"
+    assert ei.value.detail.retryable is False

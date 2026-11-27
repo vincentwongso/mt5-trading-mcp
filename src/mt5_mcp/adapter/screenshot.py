@@ -8,18 +8,23 @@ it is preinstalled. The platform guard lives in the tool layer, not here, so thi
 unit-testable on any OS.
 
 Request payload (UTF-16-LE). Line 1 is the header; each following line is one
-annotation, fixed arity per type, label text always last:
+annotation, fixed arity per type, free text (or fibo's levels) always last:
     <id>|<symbol>|<timeframe>|<width>|<height>|<template>|<scale>|<end_time>|<bars>|<price_min>|<price_max>
     A|hline|<price>|<bgr>|<style>|<text>
     A|vline|<epoch>|<bgr>|<style>|<text>
     A|text|<epoch>|<price>|<bgr>|<text>
     A|label|<corner>|<xdist>|<ydist>|<bgr>|<text>
     A|trend|<epoch1>|<price1>|<epoch2>|<price2>|<bgr>|<style>|<text>
+    A|fibo|<epoch1>|<price1>|<epoch2>|<price2>|<bgr>|<style>|<ray 0/1>|<levels, comma-separated>
 The five viewport fields are omitted entirely when all are unset.
-Response file ``<id>.done`` contains ``ok`` or ``err:<reason>`` (UTF-16-LE).
+Response file ``<id>.done`` (UTF-16-LE) contains ``ok``, ``ok|<protocol>`` or
+``err:<reason>``. An EA that knows fibo answers ``ok|2`` to a request using it
+and rejects annotation kinds it does not know; older EAs answer a bare ``ok``
+and silently skip them.
 """
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -30,6 +35,12 @@ from mt5_mcp.errors import MT5Error
 from mt5_mcp.types import ErrorDetail
 
 _SUBDIR = "agent_screenshot"
+# Kinds every annotation-aware EA (1.5.1+) draws. Any other kind needs an EA
+# that answers ok|<protocol>, since older ones skip it and still say "ok".
+_LEGACY_KINDS = ("A|hline|", "A|vline|", "A|text|", "A|label|", "A|trend|")
+_OK = re.compile(r"ok(\|\d+)?")
+# EA rejections a retry cannot fix.
+_PERMANENT = ("unsupported annotation", "malformed annotation")
 
 
 def _files_dir(client: Any) -> Path:
@@ -120,6 +131,8 @@ def capture_chart(
     # byte-identical to the pre-1.5.1 format and an already-deployed .ex5
     # keeps working.
     payload = "\r\n".join([header, *(annotation_lines or [])])
+    new_kinds = sorted({ln.split("|")[1] for ln in annotation_lines or []
+                        if not ln.startswith(_LEGACY_KINDS)})
     try:
         # newline="" disables Python's own newline translation, so the "\r\n"
         # already in payload reaches disk unmodified. Without it, a Windows
@@ -135,7 +148,21 @@ def capture_chart(
                 # MQL5 FileWriteString(FILE_UNICODE) prepends a UTF-16 BOM to
                 # new files; strip it so "ok"/"err:" compare correctly.
                 status = done.read_text(encoding="utf-16-le").lstrip("﻿").strip()
-                if status == "ok":
+                if _OK.fullmatch(status):
+                    if new_kinds and status == "ok":
+                        raise MT5Error(ErrorDetail(
+                            code="SCREENSHOT_FAILED",
+                            message=(
+                                "The AgentScreenshot EA in the terminal is too old to "
+                                f"draw {', '.join(new_kinds)} annotations and captured "
+                                "the chart without them. Re-copy or recompile "
+                                "AgentScreenshot.ex5 (see mql5/README.md), then retry."
+                            ),
+                            retryable=False,
+                            requires_human=True,
+                            details={"symbol": symbol, "timeframe": timeframe_name,
+                                     "reason": "ea_outdated"},
+                        ))
                     if png.exists():
                         return png.read_bytes()
                     # status written just before the PNG is visible; keep polling
@@ -149,7 +176,8 @@ def capture_chart(
                     raise MT5Error(ErrorDetail(
                         code=code,
                         message=f"EA failed to capture {symbol} {timeframe_name}: {reason}",
-                        retryable=code == "SCREENSHOT_FAILED",
+                        retryable=(code == "SCREENSHOT_FAILED"
+                                   and not reason.startswith(_PERMANENT)),
                         requires_human=False,
                         details={"symbol": symbol, "timeframe": timeframe_name},
                     ))

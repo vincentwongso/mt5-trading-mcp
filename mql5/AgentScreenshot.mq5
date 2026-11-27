@@ -197,7 +197,81 @@ void DrawAnnotations(const long cid, const string symbol, const ENUM_TIMEFRAMES 
                MakeTextLabel(cid, lname, t2, p2, txt, clr, ANCHOR_LEFT_LOWER);
            }
         }
+      else if(kind == "fibo" && n >= 10)
+        {
+         // Point 1 is the swing start (100%), point 2 the swing end (0%),
+         // matching how MT5 lays out a Fibonacci dragged by hand.
+         datetime t1    = (datetime)StringToInteger(f[2]);
+         double   p1    = StringToDouble(f[3]);
+         datetime t2    = (datetime)StringToInteger(f[4]);
+         double   p2    = StringToDouble(f[5]);
+         color    clr   = (color)StringToInteger(f[6]);
+         int      style = (int)StringToInteger(f[7]);
+         bool     ray   = StringToInteger(f[8]) != 0;
+         string   lv[];
+         int      nl    = StringSplit(f[9], ',', lv);
+         if(nl < 1)
+            continue;
+         if(ObjectCreate(cid, oname, OBJ_FIBO, 0, t1, p1, t2, p2))
+           {
+            // The base (anchor) line between the two swing points.
+            StyleLine(cid, oname, clr, style);
+            ObjectSetInteger(cid, oname, OBJPROP_RAY_RIGHT, ray);
+            ObjectSetInteger(cid, oname, OBJPROP_LEVELS, nl);
+            int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+            for(int k = 0; k < nl; k++)
+              {
+               double ratio = StringToDouble(lv[k]);
+               double lp    = p2 + (p1 - p2) * ratio;
+               ObjectSetDouble(cid, oname, OBJPROP_LEVELVALUE, k, ratio);
+               ObjectSetInteger(cid, oname, OBJPROP_LEVELCOLOR, k, clr);
+               ObjectSetInteger(cid, oname, OBJPROP_LEVELSTYLE, k, style);
+               ObjectSetInteger(cid, oname, OBJPROP_LEVELWIDTH, k, 1);
+               // Written out rather than MT5's %$ macro so the label reads
+               // the same on every build: "61.8% 1.17030".
+               ObjectSetString(cid, oname, OBJPROP_LEVELTEXT, k,
+                               DoubleToString(ratio * 100.0, 1) + "% "
+                               + DoubleToString(lp, digits));
+              }
+           }
+        }
      }
+  }
+
+int MinFields(const string kind)
+  {
+   if(kind == "hline" || kind == "vline") return(5);
+   if(kind == "text")  return(6);
+   if(kind == "label") return(7);
+   if(kind == "trend") return(8);
+   if(kind == "fibo")  return(10);
+   return(-1);
+  }
+
+//+------------------------------------------------------------------+
+//| Rejects any annotation this EA cannot draw, before ChartOpen, so  |
+//| the capture fails loudly instead of returning a chart missing a   |
+//| level the agent will describe. Returns "" when all lines are OK.  |
+//| Sets usesFibo: the server reads "ok|2" as proof the EA drew it.   |
+//+------------------------------------------------------------------+
+string CheckAnnotations(const string &lines[], bool &usesFibo)
+  {
+   usesFibo = false;
+   for(int i = 0; i < ArraySize(lines); i++)
+     {
+      string f[];
+      int n = StringSplit(lines[i], '|', f);
+      if(n < 2 || f[0] != "A")
+         return("malformed annotation line " + IntegerToString(i));
+      int need = MinFields(f[1]);
+      if(need < 0)
+         return("unsupported annotation " + f[1]);
+      if(n < need || (f[1] == "fibo" && StringLen(f[9]) == 0))
+         return("malformed annotation " + f[1]);
+      if(f[1] == "fibo")
+         usesFibo = true;
+     }
+   return("");
   }
 
 string StripCR(const string s)
@@ -303,6 +377,14 @@ void ProcessRequest(const string reqName)
    if(tf == (ENUM_TIMEFRAMES)-1)
      {
       WriteDone(id, "err:bad timeframe " + tfName);
+      return;
+     }
+
+   bool   usesFibo = false;
+   string annErr   = CheckAnnotations(annLines, usesFibo);
+   if(StringLen(annErr) > 0)
+     {
+      WriteDone(id, "err:" + annErr);
       return;
      }
 
@@ -459,7 +541,9 @@ void ProcessRequest(const string reqName)
    ObjectsDeleteAll(cid, "agent_");
    ChartClose(cid);
 
-   WriteDone(id, ok ? "ok" : "err:ChartScreenShot returned false");
+   // Bare "ok" unless fibo was asked for: servers predating fibo accept only
+   // the exact string "ok", and they never send fibo.
+   WriteDone(id, ok ? (usesFibo ? "ok|2" : "ok") : "err:ChartScreenShot returned false");
   }
 
 void OnTimer()
